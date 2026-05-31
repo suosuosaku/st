@@ -2,7 +2,7 @@
 // 外部导入版。脚本运行在 Tavern Helper 脚本上下文，状态栏界面运行在同源 iframe 中。
 // 关键点：iframe 内部不得直接假设存在全局 Mvu；所有 MVU/API 访问都从父级 TH 脚本上下文桥接。
 $(() => {
-  const BUILD_ID = 'cangxuan-v1.0.6';
+  const BUILD_ID = 'cangxuan-v1.0.7';
   const INSTANCE_ID = `${BUILD_ID}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const ROOT_ID = 'cx-floating-status-root';
   const STYLE_ID = 'cx-floating-status-style';
@@ -454,6 +454,32 @@ $(() => {
     handle.addEventListener('pointercancel', endDrag);
   }
 
+  function bindToggleButton(root, toggle) {
+    toggle.type = 'button';
+    toggle.setAttribute('aria-expanded', String(root.classList.contains('is-open')));
+    toggle.setAttribute('aria-label', '苍玄界状态栏');
+    toggle.title = '苍玄界状态栏';
+    toggle.innerHTML = '<span class="cx-floating-status-glyph">灵</span>';
+    toggle.addEventListener('click', ev => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (root.dataset.cxDragged === '1') return;
+      const isOpen = root.classList.toggle('is-open');
+      toggle.setAttribute('aria-expanded', String(isOpen));
+    });
+    return toggle;
+  }
+
+  function replaceAndBindToggle(root, toggle) {
+    const hostDoc = getHostDocument();
+    const nextToggle = hostDoc.createElement('button');
+    nextToggle.id = TOGGLE_ID;
+    nextToggle.className = toggle?.className || '';
+    if (toggle?.style?.cssText) nextToggle.style.cssText = toggle.style.cssText;
+    if (toggle?.parentNode) toggle.replaceWith(nextToggle);
+    return bindToggleButton(root, nextToggle);
+  }
+
   function bridgeGlobals(win) {
     const bridge = {
       getGlobal: getOuterGlobal,
@@ -533,7 +559,8 @@ $(() => {
         existing.style.visibility = '';
         existing.style.opacity = '';
         ensureStyle();
-        installDrag(existing, existingToggle);
+        const reboundToggle = replaceAndBindToggle(existing, existingToggle);
+        installDrag(existing, reboundToggle);
         loadFrame(existingFrame).catch(error => console.warn('[苍玄界状态栏] 重载状态栏 iframe 失败', error));
         return existing;
       }
@@ -556,18 +583,7 @@ $(() => {
 
     const toggle = hostDoc.createElement('button');
     toggle.id = TOGGLE_ID;
-    toggle.type = 'button';
-    toggle.setAttribute('aria-expanded', 'false');
-    toggle.setAttribute('aria-label', '苍玄界状态栏');
-    toggle.title = '苍玄界状态栏';
-    toggle.innerHTML = '<span class="cx-floating-status-glyph">灵</span>';
-    toggle.addEventListener('click', ev => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      if (root.dataset.cxDragged === '1') return;
-      const isOpen = root.classList.toggle('is-open');
-      toggle.setAttribute('aria-expanded', String(isOpen));
-    });
+    bindToggleButton(root, toggle);
 
     root.appendChild(panel);
     root.appendChild(toggle);
