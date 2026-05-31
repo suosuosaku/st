@@ -1,11 +1,12 @@
 // 苍玄界：自动正则调度脚本
 // 参照“命定之诗”的自动正则思路：扫描最新楼层，按内容启用本局需要的角色卡正则。
 $(() => {
-  const BUILD_ID = 'cangxuan-auto-regex-v1.0.7';
+  const BUILD_ID = 'cangxuan-auto-regex-v1.0.8';
   const CHAT_VAR_ENABLED = 'cx_auto_regex_enabled_names';
   const CHAT_VAR_LAST_MESSAGE_ID = 'cx_auto_regex_last_message_id';
-  const SYNC_DELAY_MS = 180;
-  const BOOTSTRAP_SCAN_LIMIT = 80;
+  const SYNC_DELAY_MS = 650;
+  const BOOTSTRAP_SCAN_LIMIT = 12;
+  const INIT_GRACE_MS = 3500;
 
   const ALWAYS_ON = [
     '开场白',
@@ -36,6 +37,7 @@ $(() => {
   let syncTimer = null;
   let syncing = false;
   let pending = false;
+  const startedAt = Date.now();
 
   function getGlobal(name) {
     try {
@@ -146,6 +148,24 @@ $(() => {
     return [...found];
   }
 
+  function getRegexName(regex) {
+    return regex?.scriptName || regex?.script_name || regex?.name || '';
+  }
+
+  function getRegexEnabled(regex) {
+    if (!regex) return false;
+    if (typeof regex.disabled === 'boolean') return !regex.disabled;
+    if (typeof regex.enabled === 'boolean') return regex.enabled;
+    return false;
+  }
+
+  function setRegexEnabled(regex, enabled) {
+    if (!regex) return;
+    if ('disabled' in regex) regex.disabled = !enabled;
+    if ('enabled' in regex) regex.enabled = enabled;
+    if (!('disabled' in regex) && !('enabled' in regex)) regex.disabled = !enabled;
+  }
+
   function patchReplaceVariablesWatcher() {
     const original = getGlobal('replaceVariables');
     if (typeof original !== 'function' || original.__cxAutoRegexWrapped) return;
@@ -175,15 +195,18 @@ $(() => {
     if (typeof getTavernRegexesFn === 'function') {
       try {
         const current = getTavernRegexesFn({ type: 'character', name: 'current' }) || [];
-        const needsUpdate = current.some(regex => KNOWN_NAMES.has(regex.script_name) && regex.enabled !== enabledSet.has(regex.script_name));
+        const needsUpdate = current.some(regex => {
+          const name = getRegexName(regex);
+          return KNOWN_NAMES.has(name) && getRegexEnabled(regex) !== enabledSet.has(name);
+        });
         if (!needsUpdate) return;
       } catch (_) {}
     }
     await updateTavernRegexesWithFn(regexes => {
       for (const regex of regexes) {
-        const name = regex.script_name;
+        const name = getRegexName(regex);
         if (!KNOWN_NAMES.has(name)) continue;
-        regex.enabled = enabledSet.has(name);
+        setRegexEnabled(regex, enabledSet.has(name));
       }
       return regexes;
     }, { type: 'character', name: 'current' });
@@ -202,7 +225,7 @@ $(() => {
       const nextEnabled = [
         ...ALWAYS_ON,
         ...alreadyEnabled,
-        ...collectBootstrapRules(),
+        ...(reason === 'bootstrap' ? collectBootstrapRules() : []),
         ...collectTriggeredRules(text),
       ];
       persistEnabledNames(nextEnabled, latest?.message_id);
@@ -229,7 +252,6 @@ $(() => {
 
   async function init() {
     patchReplaceVariablesWatcher();
-    scheduleSync('init');
 
     const eventOnFn = getGlobal('eventOn');
     const tavernEvents = getGlobal('tavern_events');
@@ -241,7 +263,10 @@ $(() => {
         tavernEvents.MESSAGE_UPDATED,
         tavernEvents.CHAT_CHANGED,
         tavernEvents.GENERATION_ENDED,
-      ].filter(Boolean).forEach(eventName => eventOnFn(eventName, () => scheduleSync(eventName)));
+      ].filter(Boolean).forEach(eventName => eventOnFn(eventName, () => {
+        if (Date.now() - startedAt < INIT_GRACE_MS && eventName === tavernEvents.CHAT_CHANGED) return;
+        scheduleSync(eventName);
+      }));
     }
   }
 
