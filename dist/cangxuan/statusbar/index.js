@@ -2,6 +2,8 @@
 // 外部导入版。脚本运行在 Tavern Helper 脚本上下文，状态栏界面运行在同源 iframe 中。
 // 关键点：iframe 内部不得直接假设存在全局 Mvu；所有 MVU/API 访问都从父级 TH 脚本上下文桥接。
 $(() => {
+  const BUILD_ID = 'cangxuan-v1.0.3';
+  const INSTANCE_ID = `${BUILD_ID}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const ROOT_ID = 'cx-floating-status-root';
   const STYLE_ID = 'cx-floating-status-style';
   const PANEL_ID = 'cx-floating-status-panel';
@@ -64,6 +66,8 @@ $(() => {
         position: fixed;
         right: 18px;
         bottom: 18px;
+        width: 42px;
+        height: 42px;
         z-index: 99999;
         pointer-events: none;
         font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
@@ -143,6 +147,8 @@ $(() => {
         #${ROOT_ID} {
           right: 12px;
           bottom: 12px;
+          width: 38px;
+          height: 38px;
         }
         #${TOGGLE_ID} {
           width: 38px;
@@ -169,6 +175,14 @@ $(() => {
 
   function clampNumber(value, min, max) {
     return Math.max(min, Math.min(max, value));
+  }
+
+  function clampPosition(value, viewportSize, elementSize) {
+    const margin = 8;
+    const max = viewportSize - elementSize - margin;
+    if (!Number.isFinite(value)) return margin;
+    if (!Number.isFinite(max) || max <= margin) return margin;
+    return Math.round(clampNumber(value, margin, max));
   }
 
   function getViewportSize() {
@@ -199,8 +213,8 @@ $(() => {
     const { width, height } = getViewportSize();
     const rootWidth = rect.width || 42;
     const rootHeight = rect.height || 42;
-    const nextLeft = Math.round(clampNumber(left, 8, width - rootWidth - 8));
-    const nextTop = Math.round(clampNumber(top, 8, height - rootHeight - 8));
+    const nextLeft = clampPosition(left, width, rootWidth);
+    const nextTop = clampPosition(top, height, rootHeight);
     root.style.left = `${nextLeft}px`;
     root.style.top = `${nextTop}px`;
     root.style.right = 'auto';
@@ -263,6 +277,7 @@ $(() => {
     const bridge = {
       getGlobal: getOuterGlobal,
       getMvu: getMvuObj,
+      instanceId: INSTANCE_ID,
     };
     try {
       getHostWindow().__CX_TH__ = bridge;
@@ -311,6 +326,7 @@ $(() => {
 
   async function loadFrame(iframe) {
     await waitForMvuObj();
+    if (!iframe.isConnected) return;
     const statusHtml = decodeBase64Utf8(STATUS_HTML_BASE64);
     const win = iframe.contentWindow;
     const doc = iframe.contentDocument;
@@ -325,11 +341,17 @@ $(() => {
 
   function ensureFloatingStatus() {
     const hostDoc = getHostDocument();
-    if (hostDoc.getElementById(ROOT_ID)) return;
+    const existing = hostDoc.getElementById(ROOT_ID);
+    if (existing) {
+      existing.dataset.cxStatusInstance = INSTANCE_ID;
+      ensureStyle();
+      return existing;
+    }
     ensureStyle();
 
     const root = hostDoc.createElement('div');
     root.id = ROOT_ID;
+    root.dataset.cxStatusInstance = INSTANCE_ID;
 
     const panel = hostDoc.createElement('div');
     panel.id = PANEL_ID;
@@ -360,29 +382,55 @@ $(() => {
     hostDoc.body.appendChild(root);
     applyInitialPosition(root);
     installDrag(root, toggle);
-    loadFrame(iframe);
+    loadFrame(iframe).catch(error => console.warn('[苍玄界状态栏] 加载状态栏 iframe 失败', error));
+    return root;
   }
 
   function cleanupFloatingStatus() {
     const hostDoc = getHostDocument();
-    hostDoc.getElementById(ROOT_ID)?.remove();
-    hostDoc.getElementById(STYLE_ID)?.remove();
+    const root = hostDoc.getElementById(ROOT_ID);
+    if (root?.dataset.cxStatusInstance === INSTANCE_ID) root.remove();
+    const style = hostDoc.getElementById(STYLE_ID);
+    if (!hostDoc.getElementById(ROOT_ID) && style) style.remove();
     try {
-      delete getHostWindow().__CX_TH__;
+      if (getHostWindow().__CX_TH__?.instanceId === INSTANCE_ID) delete getHostWindow().__CX_TH__;
     } catch (_) {}
   }
 
-  ensureFloatingStatus();
+  function safeEnsureFloatingStatus() {
+    try {
+      return ensureFloatingStatus();
+    } catch (error) {
+      console.warn('[苍玄界状态栏] 挂载悬浮按钮失败', error);
+      return null;
+    }
+  }
+
+  safeEnsureFloatingStatus();
+
+  const watchdog = setInterval(() => {
+    const hostDoc = getHostDocument();
+    if (!hostDoc.getElementById(ROOT_ID) || !hostDoc.getElementById(STYLE_ID)) safeEnsureFloatingStatus();
+  }, 1500);
 
   const eventOnFn = getOuterGlobal('eventOn');
   const tavernEvents = getOuterGlobal('tavern_events');
   if (typeof eventOnFn === 'function' && tavernEvents) {
-    const ensureLater = () => setTimeout(ensureFloatingStatus, 200);
+    const ensureLater = () => setTimeout(safeEnsureFloatingStatus, 200);
     eventOnFn(tavernEvents.CHAT_CHANGED, ensureLater);
     eventOnFn(tavernEvents.MESSAGE_SWIPED, ensureLater);
     eventOnFn(tavernEvents.MESSAGE_UPDATED, ensureLater);
     eventOnFn(tavernEvents.GENERATION_ENDED, ensureLater);
   }
 
-  $(window).on('pagehide', cleanupFloatingStatus);
+  try {
+    getHostWindow().__CX_STATUS_WATCHDOG__ = watchdog;
+  } catch (_) {}
+
+  $(window).on('pagehide', () => {
+    clearInterval(watchdog);
+  });
+  try {
+    getHostWindow().addEventListener('beforeunload', cleanupFloatingStatus, { once: true });
+  } catch (_) {}
 });
