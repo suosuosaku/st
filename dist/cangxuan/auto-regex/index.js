@@ -1,7 +1,7 @@
 // 苍玄界：自动正则调度脚本
 // 参照“命定之诗”的自动正则思路：扫描最新楼层，按内容启用本局需要的角色卡正则。
 $(() => {
-  const BUILD_ID = 'cangxuan-auto-regex-v1.0.11';
+  const BUILD_ID = 'cangxuan-auto-regex-v1.0.19';
   const CHAT_VAR_ENABLED = 'cx_auto_regex_enabled_names';
   const CHAT_VAR_LAST_MESSAGE_ID = 'cx_auto_regex_last_message_id';
   const SYNC_DELAY_MS = 650;
@@ -13,14 +13,11 @@ $(() => {
     '对话美化（气泡版）',
     '心声美化',
     '[不发送]去除变量更新',
-    '只发送最新3楼的变量更新',
-    '状态栏美化',
     '防隐藏状态栏占位',
     '仅格式思维链',
     '对 AI 隐藏状态栏',
     '小索思考完成',
     '小索思考中',
-    '不发送插图',
     '天道审查美化',
   ];
 
