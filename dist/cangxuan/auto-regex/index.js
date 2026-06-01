@@ -1,7 +1,7 @@
 // 苍玄界：自动正则调度脚本
 // 参照“命定之诗”的自动正则思路：扫描最新楼层，按内容启用本局需要的角色卡正则。
 $(() => {
-  const BUILD_ID = 'cangxuan-auto-regex-v1.0.8';
+  const BUILD_ID = 'cangxuan-auto-regex-v1.0.11';
   const CHAT_VAR_ENABLED = 'cx_auto_regex_enabled_names';
   const CHAT_VAR_LAST_MESSAGE_ID = 'cx_auto_regex_last_message_id';
   const SYNC_DELAY_MS = 650;
@@ -12,8 +12,10 @@ $(() => {
     '开场白',
     '对话美化（气泡版）',
     '心声美化',
+    '[不发送]去除变量更新',
     '只发送最新3楼的变量更新',
     '状态栏美化',
+    '防隐藏状态栏占位',
     '仅格式思维链',
     '对 AI 隐藏状态栏',
     '小索思考完成',
@@ -30,7 +32,7 @@ $(() => {
     { name: '悬赏完成美化', quick: ['<赏令完成>'], pattern: /<赏令完成>/ },
     { name: '飞剑传书回信美化', quick: ['<飞剑回信>'], pattern: /<飞剑回信>/ },
     { name: '自由开局美化', quick: ['<自由开局>'], pattern: /<自由开局>/ },
-    { name: '插图', quick: ['<插图>'], pattern: /<插图>[^<\n\s]+(?:<\/插图>)?/ },
+    { name: '插图', quick: ['<插图>'], pattern: /<插图>[^<\n\s]+<\/插图>/ },
   ];
 
   const KNOWN_NAMES = new Set([...ALWAYS_ON, ...ADAPTIVE_RULES.map(rule => rule.name)]);
