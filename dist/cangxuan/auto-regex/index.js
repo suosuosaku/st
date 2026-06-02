@@ -1,10 +1,17 @@
 // 苍玄界：自动正则调度脚本
 // 扫描最新楼层，按内容启用本局需要的角色卡正则。
 $(() => {
-  const BUILD_ID = 'cangxuan-auto-regex-v1.0.24';
+  const BUILD_ID = 'cangxuan-auto-regex-v1.0.27';
   const CHAT_VAR_ENABLED = 'cx_auto_regex_enabled_names';
   const CHAT_VAR_LAST_MESSAGE_ID = 'cx_auto_regex_last_message_id';
+  const CUSTOM_ROLE_STORAGE_KEY = 'cx_status_custom_roles_v1';
+  const USER_AVATAR_STORAGE_KEY = 'cx_status_user_avatar_v1';
+  const CUSTOM_ROLE_SYNC_EVENT = 'cx-status-custom-role-sync';
+  const DIALOGUE_REGEX_NAME = '对话美化（气泡版）';
+  const AVATAR_BLOCK_START = '/* cx-auto-avatar:start */';
+  const AVATAR_BLOCK_END = '/* cx-auto-avatar:end */';
   const SYNC_DELAY_MS = 650;
+  const AVATAR_SYNC_DELAY_MS = 900;
   const INIT_GRACE_MS = 3500;
 
   const ALWAYS_ON = [
@@ -37,6 +44,10 @@ $(() => {
   let pending = false;
   let lastRerenderSignature = '';
   let shouldSyncLatest = false;
+  let avatarSyncTimer = null;
+  let avatarSyncing = false;
+  let pendingAvatarSync = false;
+  let lastAvatarSignature = '';
   const queuedMessageIds = new Set();
   const mutedMessageIds = new Map();
   const startedAt = Date.now();
@@ -241,6 +252,219 @@ $(() => {
     if (!('disabled' in regex) && !('enabled' in regex)) regex.disabled = !enabled;
   }
 
+  function getRegexReplaceString(regex) {
+    if (!regex) return '';
+    if (typeof regex.replace_string === 'string') return regex.replace_string;
+    if (typeof regex.replaceString === 'string') return regex.replaceString;
+    return '';
+  }
+
+  function setRegexReplaceString(regex, value) {
+    if (!regex) return;
+    if ('replace_string' in regex) regex.replace_string = value;
+    if ('replaceString' in regex) regex.replaceString = value;
+    if (!('replace_string' in regex) && !('replaceString' in regex)) regex.replace_string = value;
+  }
+
+  function readStorageItem(key) {
+    try {
+      const value = localStorage.getItem(key);
+      if (value !== null) return value;
+    } catch (_) {}
+    try {
+      if (window.parent && window.parent !== window) {
+        const value = window.parent.localStorage.getItem(key);
+        if (value !== null) return value;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  function asCleanText(value, maxLength = 160) {
+    return String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, maxLength);
+  }
+
+  function normalizeImageUrl(value) {
+    const url = asCleanText(value, 1600);
+    if (!url) return '';
+    if (/^(https?:|data:image\/|blob:)/i.test(url)) return url;
+    return '';
+  }
+
+  function normalizeCustomRole(role) {
+    if (!role || typeof role !== 'object') return null;
+    const name = asCleanText(role.name, 40);
+    const defaultImg = normalizeImageUrl(role.defaultImg || role.avatar || role.avatarUrl);
+    if (!name || !defaultImg) return null;
+    return { name, defaultImg };
+  }
+
+  function loadCustomRoles() {
+    try {
+      const parsed = JSON.parse(readStorageItem(CUSTOM_ROLE_STORAGE_KEY) || '[]');
+      if (!Array.isArray(parsed)) return [];
+      const roleMap = new Map();
+      parsed.forEach(role => {
+        const normalized = normalizeCustomRole(role);
+        if (normalized) roleMap.set(normalized.name, normalized);
+      });
+      return [...roleMap.values()];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function loadUserAvatarUrl() {
+    return normalizeImageUrl(readStorageItem(USER_AVATAR_STORAGE_KEY) || '');
+  }
+
+  function resolvePlayerName() {
+    const candidates = [];
+    try {
+      const macroFn = getGlobal('substitudeMacros');
+      if (typeof macroFn === 'function') candidates.push(macroFn('{{user}}'));
+    } catch (_) {}
+    try {
+      const st = getGlobal('SillyTavern');
+      if (st && typeof st.name1 === 'string') candidates.push(st.name1);
+      if (st && typeof st.getContext === 'function') {
+        const ctx = st.getContext();
+        if (ctx && typeof ctx.name1 === 'string') candidates.push(ctx.name1);
+      }
+    } catch (_) {}
+    try { candidates.push(getGlobal('name1')); } catch (_) {}
+    for (const value of candidates) {
+      const name = asCleanText(value, 40);
+      if (name && name !== '{{user}}' && name !== 'undefined' && name !== 'null') return name;
+    }
+    return '';
+  }
+
+  function cssAttrValue(value) {
+    return String(value ?? '').replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, ' ');
+  }
+
+  function cssUrlValue(value) {
+    return String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r?\n/g, '');
+  }
+
+  function stripAvatarBlock(text) {
+    return String(text || '').replace(/\/\* cx-auto-avatar:start \*\/[\s\S]*?\/\* cx-auto-avatar:end \*\/\s*/g, '');
+  }
+
+  function buildDialogueAvatarCss() {
+    const avatarMap = new Map();
+    loadCustomRoles().forEach(role => avatarMap.set(role.name, role.defaultImg));
+
+    const userAvatar = loadUserAvatarUrl();
+    if (userAvatar) {
+      avatarMap.set('{{user}}', userAvatar);
+      const playerName = resolvePlayerName();
+      if (playerName) avatarMap.set(playerName, userAvatar);
+    }
+
+    if (!avatarMap.size) return '';
+    const emptyAfterSelectors = [];
+    const imageRules = [];
+    for (const [name, url] of avatarMap.entries()) {
+      const selector = `.compact-dialogue[data-name="${cssAttrValue(name)}"] .compact-avatar`;
+      emptyAfterSelectors.push(`${selector}::after`);
+      imageRules.push(`${selector} { background-image: url('${cssUrlValue(url)}'); }`);
+    }
+
+    return [
+      AVATAR_BLOCK_START,
+      `${emptyAfterSelectors.join(',\n')} { content: ""; }`,
+      ...imageRules,
+      AVATAR_BLOCK_END,
+      '',
+    ].join('\n');
+  }
+
+  function mergeDialogueAvatarCss(replaceString) {
+    const clean = stripAvatarBlock(replaceString);
+    const block = buildDialogueAvatarCss();
+    if (!block) return clean;
+    if (clean.includes('</style>')) return clean.replace('</style>', `${block}</style>`);
+    return `${clean}\n<style>\n${block}</style>`;
+  }
+
+  async function syncDialogueAvatarRegex(reason = 'manual') {
+    if (avatarSyncing) {
+      pendingAvatarSync = true;
+      return;
+    }
+    avatarSyncing = true;
+    try {
+      const updateTavernRegexesWithFn = getGlobal('updateTavernRegexesWith');
+      const getTavernRegexesFn = getGlobal('getTavernRegexes');
+      if (typeof updateTavernRegexesWithFn !== 'function') return;
+
+      const customRoles = loadCustomRoles();
+      const signature = JSON.stringify({
+        roles: customRoles.map(role => [role.name, role.defaultImg]),
+        userAvatar: loadUserAvatarUrl(),
+        playerName: resolvePlayerName(),
+      });
+
+      if (signature === lastAvatarSignature && typeof getTavernRegexesFn === 'function') return;
+
+      if (typeof getTavernRegexesFn === 'function') {
+        try {
+          const current = getTavernRegexesFn({ type: 'character', name: 'current' }) || [];
+          const target = current.find(regex => getRegexName(regex) === DIALOGUE_REGEX_NAME);
+          if (target) {
+            const before = getRegexReplaceString(target);
+            const after = mergeDialogueAvatarCss(before);
+            if (before === after) {
+              lastAvatarSignature = signature;
+              return;
+            }
+          }
+        } catch (_) {}
+      }
+
+      await updateTavernRegexesWithFn(regexes => {
+        for (const regex of regexes) {
+          if (getRegexName(regex) !== DIALOGUE_REGEX_NAME) continue;
+          setRegexReplaceString(regex, mergeDialogueAvatarCss(getRegexReplaceString(regex)));
+        }
+        return regexes;
+      }, { type: 'character', name: 'current' });
+      lastAvatarSignature = signature;
+      console.debug?.('[苍玄界自动正则] 已同步对话头像', { reason, build: BUILD_ID });
+    } catch (error) {
+      console.warn('[苍玄界自动正则] 对话头像同步失败', error);
+    } finally {
+      avatarSyncing = false;
+      if (pendingAvatarSync) {
+        pendingAvatarSync = false;
+        scheduleAvatarSync('pending');
+      }
+    }
+  }
+
+  function scheduleAvatarSync(reason = 'event') {
+    if (avatarSyncTimer) clearTimeout(avatarSyncTimer);
+    avatarSyncTimer = setTimeout(() => {
+      avatarSyncTimer = null;
+      syncDialogueAvatarRegex(reason);
+    }, AVATAR_SYNC_DELAY_MS);
+  }
+
+  function installAvatarSyncEvents() {
+    const onSync = () => scheduleAvatarSync('custom-role-event');
+    try { window.addEventListener(CUSTOM_ROLE_SYNC_EVENT, onSync); } catch (_) {}
+    try {
+      if (window.parent && window.parent !== window) window.parent.addEventListener(CUSTOM_ROLE_SYNC_EVENT, onSync);
+    } catch (_) {}
+    try {
+      window.addEventListener('storage', event => {
+        if ([CUSTOM_ROLE_STORAGE_KEY, USER_AVATAR_STORAGE_KEY].includes(event.key)) scheduleAvatarSync('storage');
+      });
+    } catch (_) {}
+  }
+
   function patchReplaceVariablesWatcher() {
     const original = getGlobal('replaceVariables');
     if (typeof original !== 'function' || original.__cxAutoRegexWrapped) return;
@@ -362,6 +586,7 @@ $(() => {
   async function init() {
     const eventOnFn = getGlobal('eventOn');
     const tavernEvents = getGlobal('tavern_events');
+    installAvatarSyncEvents();
     if (typeof eventOnFn === 'function' && tavernEvents) {
       [
         tavernEvents.MESSAGE_RECEIVED,
@@ -376,6 +601,7 @@ $(() => {
       }));
     }
 
+    scheduleAvatarSync('bootstrap');
     scheduleSync('bootstrap');
   }
 
@@ -383,5 +609,6 @@ $(() => {
 
   $(window).on('pagehide', () => {
     if (syncTimer) clearTimeout(syncTimer);
+    if (avatarSyncTimer) clearTimeout(avatarSyncTimer);
   });
 });
