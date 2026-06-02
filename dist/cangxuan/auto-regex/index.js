@@ -1,7 +1,7 @@
 // 苍玄界：自动正则调度脚本
 // 扫描最新楼层，按内容启用本局需要的角色卡正则。
 $(() => {
-  const BUILD_ID = 'cangxuan-auto-regex-v1.0.20';
+  const BUILD_ID = 'cangxuan-auto-regex-v1.0.21';
   const CHAT_VAR_ENABLED = 'cx_auto_regex_enabled_names';
   const CHAT_VAR_LAST_MESSAGE_ID = 'cx_auto_regex_last_message_id';
   const SYNC_DELAY_MS = 650;
@@ -101,12 +101,56 @@ $(() => {
     });
   }
 
+  function toFiniteNumber(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function normalizeMessage(raw, fallbackId = null) {
+    const messageId = toFiniteNumber(fallbackId);
+    if (raw === null || raw === undefined) return null;
+    if (typeof raw === 'string') {
+      return { message: raw, message_id: messageId };
+    }
+    if (typeof raw === 'object') {
+      const rawMessage = raw.message ?? raw.mes ?? raw.text ?? raw.content ?? '';
+      const rawId = raw.message_id ?? raw.messageId ?? raw.id ?? raw.mesid ?? fallbackId;
+      return {
+        message: String(rawMessage ?? ''),
+        message_id: toFiniteNumber(rawId),
+      };
+    }
+    return { message: String(raw), message_id: messageId };
+  }
+
+  function getLastMessageIdValue() {
+    const getLastMessageIdFn = getGlobal('getLastMessageId');
+    if (typeof getLastMessageIdFn !== 'function') return null;
+    try {
+      return toFiniteNumber(getLastMessageIdFn());
+    } catch (error) {
+      console.warn('[苍玄界自动正则] 读取最新楼层编号失败', error);
+      return null;
+    }
+  }
+
   function getLatestMessage() {
     const getChatMessagesFn = getGlobal('getChatMessages');
     if (typeof getChatMessagesFn !== 'function') return null;
+    const lastMessageId = getLastMessageIdValue();
     try {
+      if (lastMessageId !== null && lastMessageId >= 0) {
+        const messages = lastMessageId === 0
+          ? getChatMessagesFn(1)
+          : getChatMessagesFn(lastMessageId, lastMessageId + 1);
+        if (Array.isArray(messages) && messages.length) {
+          return normalizeMessage(messages[messages.length - 1], lastMessageId);
+        }
+      }
       const messages = getChatMessagesFn(-1);
-      return Array.isArray(messages) ? messages[0] : null;
+      return Array.isArray(messages) && messages.length
+        ? normalizeMessage(messages[messages.length - 1], lastMessageId)
+        : null;
     } catch (error) {
       console.warn('[苍玄界自动正则] 读取最新楼层失败', error);
       return null;
@@ -117,10 +161,20 @@ $(() => {
     const getChatMessagesFn = getGlobal('getChatMessages');
     if (typeof getChatMessagesFn !== 'function') return [];
     try {
-      const latest = getLatestMessage();
-      if (!latest || !Number.isFinite(latest.message_id)) return [];
-      const start = Math.max(0, latest.message_id - BOOTSTRAP_SCAN_LIMIT + 1);
-      return getChatMessagesFn(`${start}-${latest.message_id}`) || [];
+      const latestId = getLastMessageIdValue();
+      if (latestId !== null && latestId >= 0) {
+        const start = Math.max(0, latestId - BOOTSTRAP_SCAN_LIMIT + 1);
+        const rawMessages = start === 0
+          ? getChatMessagesFn(latestId + 1)
+          : getChatMessagesFn(start, latestId + 1);
+        return (Array.isArray(rawMessages) ? rawMessages : [])
+          .map((message, index) => normalizeMessage(message, start + index))
+          .filter(Boolean);
+      }
+      const rawMessages = getChatMessagesFn(-BOOTSTRAP_SCAN_LIMIT);
+      return (Array.isArray(rawMessages) ? rawMessages : [])
+        .map(message => normalizeMessage(message))
+        .filter(Boolean);
     } catch (error) {
       console.warn('[苍玄界自动正则] 扫描近期楼层失败', error);
       return [];
@@ -267,6 +321,8 @@ $(() => {
         scheduleSync(eventName);
       }));
     }
+
+    scheduleSync('bootstrap');
   }
 
   init().catch(error => console.warn('[苍玄界自动正则] 初始化失败', error));
