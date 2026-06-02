@@ -1,7 +1,7 @@
 // 苍玄界：自动正则调度脚本
 // 扫描最新楼层，按内容启用本局需要的角色卡正则。
 $(() => {
-  const BUILD_ID = 'cangxuan-auto-regex-v1.0.23';
+  const BUILD_ID = 'cangxuan-auto-regex-v1.0.24';
   const CHAT_VAR_ENABLED = 'cx_auto_regex_enabled_names';
   const CHAT_VAR_LAST_MESSAGE_ID = 'cx_auto_regex_last_message_id';
   const SYNC_DELAY_MS = 650;
@@ -360,8 +360,6 @@ $(() => {
   }
 
   async function init() {
-    patchReplaceVariablesWatcher();
-
     const eventOnFn = getGlobal('eventOn');
     const tavernEvents = getGlobal('tavern_events');
     if (typeof eventOnFn === 'function' && tavernEvents) {
@@ -370,10 +368,7 @@ $(() => {
         tavernEvents.MESSAGE_SENT,
         tavernEvents.MESSAGE_SWIPED,
         tavernEvents.MESSAGE_UPDATED,
-        tavernEvents.USER_MESSAGE_RENDERED,
-        tavernEvents.CHARACTER_MESSAGE_RENDERED,
         tavernEvents.CHAT_CHANGED,
-        tavernEvents.GENERATION_ENDED,
       ].filter(Boolean).forEach(eventName => eventOnFn(eventName, (...args) => {
         if (Date.now() - startedAt < INIT_GRACE_MS && eventName === tavernEvents.CHAT_CHANGED) return;
         const messageId = eventName === tavernEvents.CHAT_CHANGED ? null : args[0];
