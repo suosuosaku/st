@@ -2,7 +2,7 @@
 // 外部导入版。脚本运行在 Tavern Helper 脚本上下文，状态栏界面运行在同源 iframe 中。
 // 关键点：iframe 内部不得直接假设存在全局 Mvu；所有 MVU/API 访问都从父级 TH 脚本上下文桥接。
 $(() => {
-  const BUILD_ID = 'cangxuan-v1.0.18';
+  const BUILD_ID = 'cangxuan-v1.0.19';
   const INSTANCE_ID = `${BUILD_ID}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const ROOT_ID = 'cx-floating-status-root';
   const STYLE_ID = 'cx-floating-status-style';
