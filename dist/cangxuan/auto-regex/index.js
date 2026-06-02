@@ -1,7 +1,7 @@
 // 苍玄界：自动正则调度脚本
 // 扫描最新楼层，按内容启用本局需要的角色卡正则。
 $(() => {
-  const BUILD_ID = 'cangxuan-auto-regex-v1.0.22';
+  const BUILD_ID = 'cangxuan-auto-regex-v1.0.23';
   const CHAT_VAR_ENABLED = 'cx_auto_regex_enabled_names';
   const CHAT_VAR_LAST_MESSAGE_ID = 'cx_auto_regex_last_message_id';
   const SYNC_DELAY_MS = 650;
@@ -35,6 +35,10 @@ $(() => {
   let syncTimer = null;
   let syncing = false;
   let pending = false;
+  let lastRerenderSignature = '';
+  let shouldSyncLatest = false;
+  const queuedMessageIds = new Set();
+  const mutedMessageIds = new Map();
   const startedAt = Date.now();
 
   function getGlobal(name) {
@@ -120,27 +124,93 @@ $(() => {
     }
   }
 
+  function normalizeMessageList(messages, fallbackId = null) {
+    return (Array.isArray(messages) ? messages : [])
+      .map(message => normalizeMessage(message, fallbackId))
+      .filter(Boolean);
+  }
+
+  function getMessageById(messageId) {
+    const getChatMessagesFn = getGlobal('getChatMessages');
+    if (typeof getChatMessagesFn !== 'function') return null;
+    const attempts = [
+      () => getChatMessagesFn(messageId),
+      () => getChatMessagesFn(String(messageId)),
+      () => getChatMessagesFn(`${messageId}-${messageId}`),
+      () => messageId === 0 ? getChatMessagesFn(1) : null,
+      () => getChatMessagesFn(messageId, messageId + 1),
+    ];
+    let lastError = null;
+    for (const attempt of attempts) {
+      try {
+        const messages = normalizeMessageList(attempt(), messageId);
+        if (messages.length) return messages[messages.length - 1];
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (lastError) {
+      console.warn('[苍玄界自动正则] 读取指定楼层失败', { messageId, error: lastError });
+    }
+    return null;
+  }
+
   function getLatestMessage() {
     const getChatMessagesFn = getGlobal('getChatMessages');
     if (typeof getChatMessagesFn !== 'function') return null;
     const lastMessageId = getLastMessageIdValue();
+    const byId = lastMessageId !== null && lastMessageId >= 0 ? getMessageById(lastMessageId) : null;
+    if (byId) return byId;
     try {
-      if (lastMessageId !== null && lastMessageId >= 0) {
-        const messages = lastMessageId === 0
-          ? getChatMessagesFn(1)
-          : getChatMessagesFn(lastMessageId, lastMessageId + 1);
-        if (Array.isArray(messages) && messages.length) {
-          return normalizeMessage(messages[messages.length - 1], lastMessageId);
-        }
-      }
-      const messages = getChatMessagesFn(-1);
-      return Array.isArray(messages) && messages.length
-        ? normalizeMessage(messages[messages.length - 1], lastMessageId)
-        : null;
+      const messages = normalizeMessageList(getChatMessagesFn(-1), lastMessageId);
+      return messages.length ? messages[messages.length - 1] : null;
     } catch (error) {
       console.warn('[苍玄界自动正则] 读取最新楼层失败', error);
       return null;
     }
+  }
+
+  function hashText(text) {
+    let hash = 0;
+    for (let index = 0; index < text.length; index += 1) {
+      hash = ((hash << 5) - hash + text.charCodeAt(index)) | 0;
+    }
+    return String(hash);
+  }
+
+  async function rerenderLatestMessageIfNeeded(latest, triggeredRules) {
+    if (!latest || !Number.isFinite(latest.message_id) || !triggeredRules.length) return;
+    const signature = `${latest.message_id}:${triggeredRules.slice().sort().join('|')}:${hashText(latest.message || '')}`;
+    if (signature === lastRerenderSignature) return;
+    lastRerenderSignature = signature;
+    mutedMessageIds.set(latest.message_id, Date.now() + 1500);
+
+    const setChatMessagesFn = getGlobal('setChatMessages');
+    if (typeof setChatMessagesFn === 'function') {
+      try {
+        await setChatMessagesFn([{ message_id: latest.message_id }], { refresh: 'affected' });
+        return;
+      } catch (error) {
+        console.warn('[苍玄界自动正则] 重渲染当前楼层失败', error);
+      }
+    }
+
+    const reloadAndRenderChatWithoutEventsFn = getGlobal('reloadAndRenderChatWithoutEvents');
+    if (typeof reloadAndRenderChatWithoutEventsFn === 'function') {
+      try {
+        await reloadAndRenderChatWithoutEventsFn();
+      } catch (error) {
+        console.warn('[苍玄界自动正则] 刷新聊天显示失败', error);
+      }
+    }
+  }
+
+  function isMutedMessageId(messageId) {
+    const until = mutedMessageIds.get(messageId);
+    if (!until) return false;
+    if (Date.now() <= until) return true;
+    mutedMessageIds.delete(messageId);
+    return false;
   }
 
   function collectTriggeredRules(text) {
@@ -217,6 +287,19 @@ $(() => {
     }, { type: 'character', name: 'current' });
   }
 
+  async function syncMessage(message, reason = 'manual') {
+    const text = message?.message || '';
+    const triggeredRules = collectTriggeredRules(text);
+    const nextEnabled = [
+      ...ALWAYS_ON,
+      ...triggeredRules,
+    ];
+    persistEnabledNames(nextEnabled, message?.message_id);
+    await applyRegexState(nextEnabled);
+    await rerenderLatestMessageIfNeeded(message, triggeredRules);
+    console.debug?.('[苍玄界自动正则] 已同步', { reason, build: BUILD_ID, messageId: message?.message_id, enabled: nextEnabled });
+  }
+
   async function syncNow(reason = 'manual') {
     if (syncing) {
       pending = true;
@@ -224,15 +307,32 @@ $(() => {
     }
     syncing = true;
     try {
-      const latest = getLatestMessage();
-      const text = latest?.message || '';
-      const nextEnabled = [
-        ...ALWAYS_ON,
-        ...collectTriggeredRules(text),
-      ];
-      persistEnabledNames(nextEnabled, latest?.message_id);
-      await applyRegexState(nextEnabled);
-      console.debug?.('[苍玄界自动正则] 已同步', { reason, build: BUILD_ID, enabled: nextEnabled });
+      const targetIds = [...queuedMessageIds].sort((a, b) => a - b);
+      const includeLatest = shouldSyncLatest || targetIds.length === 0;
+      queuedMessageIds.clear();
+      shouldSyncLatest = false;
+
+      const messages = [];
+      const seenIds = new Set();
+      for (const messageId of targetIds) {
+        const message = getMessageById(messageId);
+        if (!message) continue;
+        messages.push(message);
+        if (Number.isFinite(message.message_id)) seenIds.add(message.message_id);
+      }
+
+      if (includeLatest) {
+        const latest = getLatestMessage();
+        if (latest && !seenIds.has(latest.message_id)) messages.push(latest);
+      }
+
+      if (!messages.length) {
+        await syncMessage(null, reason);
+      } else {
+        for (const message of messages) {
+          await syncMessage(message, reason);
+        }
+      }
     } catch (error) {
       console.warn('[苍玄界自动正则] 同步失败', error);
     } finally {
@@ -244,7 +344,14 @@ $(() => {
     }
   }
 
-  function scheduleSync(reason = 'event') {
+  function scheduleSync(reason = 'event', messageId = null) {
+    const targetId = toFiniteNumber(messageId);
+    if (targetId !== null && targetId >= 0) {
+      if (isMutedMessageId(targetId)) return;
+      queuedMessageIds.add(targetId);
+    } else {
+      shouldSyncLatest = true;
+    }
     if (syncTimer) clearTimeout(syncTimer);
     syncTimer = setTimeout(() => {
       syncTimer = null;
@@ -263,11 +370,14 @@ $(() => {
         tavernEvents.MESSAGE_SENT,
         tavernEvents.MESSAGE_SWIPED,
         tavernEvents.MESSAGE_UPDATED,
+        tavernEvents.USER_MESSAGE_RENDERED,
+        tavernEvents.CHARACTER_MESSAGE_RENDERED,
         tavernEvents.CHAT_CHANGED,
         tavernEvents.GENERATION_ENDED,
-      ].filter(Boolean).forEach(eventName => eventOnFn(eventName, () => {
+      ].filter(Boolean).forEach(eventName => eventOnFn(eventName, (...args) => {
         if (Date.now() - startedAt < INIT_GRACE_MS && eventName === tavernEvents.CHAT_CHANGED) return;
-        scheduleSync(eventName);
+        const messageId = eventName === tavernEvents.CHAT_CHANGED ? null : args[0];
+        scheduleSync(eventName, messageId);
       }));
     }
 
