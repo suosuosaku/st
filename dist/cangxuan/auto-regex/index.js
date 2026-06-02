@@ -1,11 +1,10 @@
 // 苍玄界：自动正则调度脚本
 // 扫描最新楼层，按内容启用本局需要的角色卡正则。
 $(() => {
-  const BUILD_ID = 'cangxuan-auto-regex-v1.0.21';
+  const BUILD_ID = 'cangxuan-auto-regex-v1.0.22';
   const CHAT_VAR_ENABLED = 'cx_auto_regex_enabled_names';
   const CHAT_VAR_LAST_MESSAGE_ID = 'cx_auto_regex_last_message_id';
   const SYNC_DELAY_MS = 650;
-  const BOOTSTRAP_SCAN_LIMIT = 12;
   const INIT_GRACE_MS = 3500;
 
   const ALWAYS_ON = [
@@ -71,19 +70,6 @@ $(() => {
       console.warn('[苍玄界自动正则] 写入聊天变量失败', error);
       return null;
     }
-  }
-
-  function readEnabledNames() {
-    const vars = getChatVars();
-    const raw = vars[CHAT_VAR_ENABLED];
-    if (Array.isArray(raw)) return raw.filter(name => typeof name === 'string');
-    if (typeof raw === 'string') {
-      try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) return parsed.filter(name => typeof name === 'string');
-      } catch (_) {}
-    }
-    return [];
   }
 
   function persistEnabledNames(names, messageId) {
@@ -157,30 +143,6 @@ $(() => {
     }
   }
 
-  function getBootstrapMessages() {
-    const getChatMessagesFn = getGlobal('getChatMessages');
-    if (typeof getChatMessagesFn !== 'function') return [];
-    try {
-      const latestId = getLastMessageIdValue();
-      if (latestId !== null && latestId >= 0) {
-        const start = Math.max(0, latestId - BOOTSTRAP_SCAN_LIMIT + 1);
-        const rawMessages = start === 0
-          ? getChatMessagesFn(latestId + 1)
-          : getChatMessagesFn(start, latestId + 1);
-        return (Array.isArray(rawMessages) ? rawMessages : [])
-          .map((message, index) => normalizeMessage(message, start + index))
-          .filter(Boolean);
-      }
-      const rawMessages = getChatMessagesFn(-BOOTSTRAP_SCAN_LIMIT);
-      return (Array.isArray(rawMessages) ? rawMessages : [])
-        .map(message => normalizeMessage(message))
-        .filter(Boolean);
-    } catch (error) {
-      console.warn('[苍玄界自动正则] 扫描近期楼层失败', error);
-      return [];
-    }
-  }
-
   function collectTriggeredRules(text) {
     const triggered = [];
     for (const rule of ADAPTIVE_RULES) {
@@ -189,16 +151,6 @@ $(() => {
       if (rule.pattern?.global) rule.pattern.lastIndex = 0;
     }
     return triggered;
-  }
-
-  function collectBootstrapRules() {
-    const messages = getBootstrapMessages();
-    const found = new Set();
-    for (const message of messages) {
-      const text = message?.message || '';
-      collectTriggeredRules(text).forEach(name => found.add(name));
-    }
-    return [...found];
   }
 
   function getRegexName(regex) {
@@ -274,11 +226,8 @@ $(() => {
     try {
       const latest = getLatestMessage();
       const text = latest?.message || '';
-      const alreadyEnabled = readEnabledNames();
       const nextEnabled = [
         ...ALWAYS_ON,
-        ...alreadyEnabled,
-        ...(reason === 'bootstrap' ? collectBootstrapRules() : []),
         ...collectTriggeredRules(text),
       ];
       persistEnabledNames(nextEnabled, latest?.message_id);
