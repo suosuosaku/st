@@ -27,6 +27,9 @@ export interface EldredWorldbookEntryRef {
   worldbookName: string;
   uid: number;
   name: string;
+  displayName: string;
+  aliases: string[];
+  isNpc: boolean;
   enabled: boolean;
   strategyType: string;
   keys: string[];
@@ -181,6 +184,18 @@ function normalizeEnabled(entry: any): boolean {
   return true;
 }
 
+function inferNpcDisplayName(name: string, content: string, keys: string[]): { displayName: string; aliases: string[]; isNpc: boolean } {
+  const contentName = content.match(/<npc_[^>]*>\s*([^\n:：]{1,40})[:：]/i)?.[1]?.trim();
+  const keyName = keys.find(key => key.length >= 2 && key.length <= 16);
+  const isNpc = /<npc_/i.test(content) || Boolean(contentName);
+  const displayName = isNpc ? (keyName || contentName || name) : name;
+  return {
+    displayName,
+    aliases: uniq([displayName, contentName, keyName, name, ...keys]),
+    isNpc,
+  };
+}
+
 function normalizeEntry(raw: any, worldbookName: string): EldredWorldbookEntryRef {
   const name = entryName(raw);
   const strategy = raw?.strategy || {};
@@ -188,11 +203,15 @@ function normalizeEntry(raw: any, worldbookName: string): EldredWorldbookEntryRe
   const keys = normalizeKeys(strategy.keys ?? raw?.key ?? raw?.keys);
   const secondaryKeys = normalizeKeys(strategy.keys_secondary?.keys ?? raw?.keysecondary);
   const content = typeof raw?.content === 'string' ? raw.content : String(raw?.content || '');
+  const display = inferNpcDisplayName(name, content, keys);
   return {
     id: `${worldbookName}#${Number(raw?.uid ?? 0)}#${name}`,
     worldbookName,
     uid: Number(raw?.uid ?? 0),
     name,
+    displayName: display.displayName,
+    aliases: display.aliases,
+    isNpc: display.isNpc,
     enabled: normalizeEnabled(raw),
     strategyType: String(strategy.type || (raw?.constant ? 'constant' : raw?.selective ? 'selective' : 'unknown')),
     keys,
@@ -208,11 +227,16 @@ function normalizeEntry(raw: any, worldbookName: string): EldredWorldbookEntryRe
   };
 }
 
+function configuredNamesIncludeEntry(names: string[], entry: EldredWorldbookEntryRef): boolean {
+  const configured = new Set(names);
+  return entry.aliases.some(alias => configured.has(alias));
+}
+
 function classifyEntry(entry: EldredWorldbookEntryRef, config: EldredWorldbookSchedulerConfig): EldredWorldbookEntryRef {
-  const exactAlways = config.alwaysNames.includes(entry.name);
-  const exactScheduled = config.scheduledNames.includes(entry.name);
-  const exactKeep = config.keepEnabledNames.includes(entry.name);
-  const haystack = `${entry.name}\n${entry.keys.join('\n')}\n${entry.secondaryKeys.join('\n')}\n${entry.content.slice(0, 600)}`;
+  const exactAlways = configuredNamesIncludeEntry(config.alwaysNames, entry);
+  const exactScheduled = configuredNamesIncludeEntry(config.scheduledNames, entry);
+  const exactKeep = configuredNamesIncludeEntry(config.keepEnabledNames, entry);
+  const haystack = `${entry.name}\n${entry.displayName}\n${entry.aliases.join('\n')}\n${entry.keys.join('\n')}\n${entry.secondaryKeys.join('\n')}\n${entry.content.slice(0, 600)}`;
   const reasons: string[] = [];
   let category: EldredWorldbookCategory = 'unused_candidate';
 
@@ -310,14 +334,14 @@ export async function scanEldredWorldbooks(config: EldredWorldbookSchedulerConfi
     }
   }
 
-  const names = new Set(entries.map(entry => entry.name));
+  const knownNames = new Set(entries.flatMap(entry => entry.aliases));
   return {
     scannedAt: new Date().toISOString(),
     bindings,
     entries,
     duplicates: findDuplicates(entries),
-    missingAlwaysNames: config.alwaysNames.filter(name => !names.has(name)),
-    missingScheduledNames: config.scheduledNames.filter(name => !names.has(name)),
+    missingAlwaysNames: config.alwaysNames.filter(name => !knownNames.has(name)),
+    missingScheduledNames: config.scheduledNames.filter(name => !knownNames.has(name)),
     counts: countCategories(entries, bindings),
   };
 }
@@ -335,27 +359,28 @@ function detectActionTypes(text: string): string[] {
 function extractNameHits(entries: EldredWorldbookEntryRef[], text: string): string[] {
   const lower = lowerText(text);
   return entries
-    .filter(entry => entry.name.length >= 2 && lower.includes(entry.name.toLowerCase()))
-    .map(entry => entry.name)
+    .filter(entry => entry.aliases.some(alias => alias.length >= 2 && lower.includes(alias.toLowerCase())))
+    .map(entry => entry.displayName)
     .slice(0, 12);
 }
 
 function scoreEntry(entry: EldredWorldbookEntryRef, sceneText: string, config: EldredWorldbookSchedulerConfig): { score: number; reason: string } {
-  if (config.alwaysNames.includes(entry.name) || config.keepEnabledNames.includes(entry.name)) {
+  if (configuredNamesIncludeEntry(config.alwaysNames, entry) || configuredNamesIncludeEntry(config.keepEnabledNames, entry)) {
     return { score: 0, reason: '原生常驻/保留启用，跳过智脑重复注入' };
   }
 
   const hasScheduledLibrary = config.scheduledNames.length > 0;
-  const inScheduledLibrary = config.scheduledNames.includes(entry.name);
+  const inScheduledLibrary = configuredNamesIncludeEntry(config.scheduledNames, entry);
   if (hasScheduledLibrary && !inScheduledLibrary) {
     return { score: 0, reason: '不在脚本调度准入库' };
   }
 
   const lower = lowerText(sceneText);
-  if (entry.name.length >= 2 && lower.includes(entry.name.toLowerCase())) {
+  const aliasHit = entry.aliases.find(alias => alias.length >= 2 && lower.includes(alias.toLowerCase()));
+  if (aliasHit) {
     return {
       score: inScheduledLibrary ? 920 : 820,
-      reason: inScheduledLibrary ? '调度准入库+场景命中条目名' : '场景命中条目名',
+      reason: inScheduledLibrary ? `调度准入库+场景命中名称: ${aliasHit}` : `场景命中名称: ${aliasHit}`,
     };
   }
 
@@ -389,7 +414,7 @@ function entryMatchesActionType(entry: EldredWorldbookEntryRef, actionType: stri
   };
   const hints = actionHints[actionType] || [];
   if (hints.length === 0) return false;
-  const haystack = `${entry.name}\n${entry.keys.join('\n')}\n${entry.secondaryKeys.join('\n')}\n${entry.content.slice(0, 1200)}`;
+  const haystack = `${entry.name}\n${entry.displayName}\n${entry.aliases.join('\n')}\n${entry.keys.join('\n')}\n${entry.secondaryKeys.join('\n')}\n${entry.content.slice(0, 1200)}`;
   return hints.some(hint => haystack.includes(hint));
 }
 
@@ -425,12 +450,28 @@ export function buildEldredWorldbookInjection(
   const parts: string[] = [];
   parts.push('<eldred_worldbook_bundle>');
   parts.push('说明: 以下内容由智脑按世界书条目名和当前场景调度，仅作为艾尔德雷德本轮创作上下文。不得复述本说明。');
+  parts.push('边界: 本包不能改变预设输出结构。最终回复仍必须遵守 <thinking>[eldred_audit]...</thinking>、<eldred_content>...</eldred_content>、变量输出和标签格式。');
+  parts.push('对话名规则: NPC若带 display_name，正文台词、头像检索、状态栏与变量写入均使用 display_name；source/name 只用于世界书溯源，职务不得并入角色名。');
   parts.push(`调度时间: ${new Date().toISOString()}`);
-  parts.push(`调度条目: ${selected.map(item => item.entry.name).join('、')}`);
+  parts.push(`调度条目: ${selected.map(item => item.entry.displayName).join('、')}`);
   parts.push('');
   for (const item of selected) {
     const entry = item.entry;
-    parts.push(`<worldbook_entry name="${escapeXml(entry.name)}" source="${escapeXml(entry.worldbookName)}" uid="${entry.uid}" reason="${escapeXml(item.reason)}">`);
+    const attrs = [
+      `name="${escapeXml(entry.name)}"`,
+      `display_name="${escapeXml(entry.displayName)}"`,
+      `source="${escapeXml(entry.worldbookName)}"`,
+      `uid="${entry.uid}"`,
+      `reason="${escapeXml(item.reason)}"`,
+    ];
+    if (entry.isNpc) attrs.push(`aliases="${escapeXml(entry.aliases.join('、'))}"`);
+    parts.push(`<worldbook_entry ${attrs.join(' ')}>`);
+    if (entry.isNpc && entry.displayName !== entry.name) {
+      parts.push(`角色显示名: ${entry.displayName}`);
+      parts.push(`职务/条目名: ${entry.name}`);
+      parts.push('写作约束: 正文发言必须写作【' + entry.displayName + '】：“台词”。不得写作【' + entry.name + '】。');
+      parts.push('');
+    }
     parts.push(entry.content.slice(0, Math.max(500, config.maxChars - parts.join('\n').length)));
     parts.push('</worldbook_entry>');
     parts.push('');
@@ -441,7 +482,7 @@ export function buildEldredWorldbookInjection(
   const report: EldredWorldbookInjectionReport = {
     injectedAt: new Date().toISOString(),
     entryIds: selected.map(item => item.entry.id),
-    entryNames: selected.map(item => item.entry.name),
+    entryNames: selected.map(item => item.entry.displayName),
     reasonById: Object.fromEntries(selected.map(item => [item.entry.id, item.reason])),
     totalChars: content.length,
     estimatedTokens: Math.ceil(content.length / 1.7),
@@ -468,8 +509,8 @@ export async function applyEldredWorldbookEnablePlan(config: EldredWorldbookSche
   backup: EldredWorldbookEnableBackup;
   changed: Array<{ worldbookName: string; uid: number; name: string; from: boolean; to: boolean }>;
 }> {
-  const keepNames = new Set([...config.alwaysNames, ...config.keepEnabledNames]);
-  if (keepNames.size === 0) {
+  const keepConfigNames = [...config.alwaysNames, ...config.keepEnabledNames];
+  if (keepConfigNames.length === 0) {
     throw new Error('常驻/保留启用清单为空，拒绝执行关闭计划，避免误关全部世界书条目');
   }
 
@@ -502,8 +543,15 @@ export async function applyEldredWorldbookEnablePlan(config: EldredWorldbookSche
       return worldbook.map(rawEntry => {
         const name = entryName(rawEntry);
         const uid = Number(rawEntry?.uid ?? 0);
+        const keys = normalizeKeys(rawEntry?.strategy?.keys ?? rawEntry?.key ?? rawEntry?.keys);
+        const content = typeof rawEntry?.content === 'string' ? rawEntry.content : String(rawEntry?.content || '');
+        const entryRef = {
+          name,
+          displayName: inferNpcDisplayName(name, content, keys).displayName,
+          aliases: inferNpcDisplayName(name, content, keys).aliases,
+        } as EldredWorldbookEntryRef;
         const from = normalizeEnabled(rawEntry);
-        const to = keepNames.has(name);
+        const to = configuredNamesIncludeEntry(keepConfigNames, entryRef);
         if (from !== to) changed.push({ worldbookName, uid, name, from, to });
         return { ...rawEntry, enabled: to };
       });

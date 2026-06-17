@@ -184,7 +184,6 @@ $(() => {
     try {
       const scan = await scanEldredWorldbooks(buildEldredSchedulerConfig(store.settings));
       store.chatData.eldredWorldbookScan = scan;
-      store.forcePersist();
       console.info(
         `[智脑-艾尔德雷德] 世界书扫描完成: ${scan.counts.books}本 ${scan.counts.entries}条，重名${scan.duplicates.length}组`,
       );
@@ -271,7 +270,6 @@ $(() => {
       })
       .filter((e: any) => e.content)
       .sort((a: any, b: any) => b.insertionOrder - a.insertionOrder);
-    store.forcePersist();
     refreshWorldBookCache(store);
     void refreshEldredWorldbookScan(store);
   });
@@ -523,7 +521,6 @@ $(() => {
         const insertAt = Math.max(0, messages.length - 1);
         messages.splice(insertAt, 0, { role: 'system', content: injection.content });
         store.chatData.eldredWorldbookLastInjection = injection.report;
-        store.forcePersist();
         console.info(
           `[智脑-艾尔德雷德] 已注入世界书调度包: ${injection.report.entryNames.join('、')} (${injection.report.estimatedTokens} token估算)`,
         );
