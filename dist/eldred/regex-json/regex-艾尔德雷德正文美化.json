@@ -1,0 +1,18 @@
+{
+    "id": "8f1fdc7e-f60d-4e7f-8846-678d9239cf1a",
+    "scriptName": "艾尔德雷德正文美化",
+    "disabled": false,
+    "runOnEdit": true,
+    "findRegex": "/<(?:eldred_content|content)(?:\\s[^>]*)?>\\s*([\\s\\S]*?)\\s*<\\/(?:eldred_content|content)>/g",
+    "trimStrings": [],
+    "replaceString": "<style>\n.eldc-content{--ink:#24170f;--paper:#f6e4b8;--edge:#2f1d12;--gold:#efc35f;--deep:#172539;box-sizing:border-box;margin:12px 0;padding:12px;background:linear-gradient(180deg,#f8e9c3,#dbc07f);border:2px solid var(--edge);box-shadow:0 0 0 2px #ffe6a0 inset,0 0 0 5px rgba(108,69,33,.55) inset,0 5px 0 #0d1724;color:var(--ink);font-family:ui-sans-serif,system-ui,\"Microsoft YaHei\",sans-serif;letter-spacing:0}.eldc-content *{box-sizing:border-box;letter-spacing:0}.eldc-body{position:relative;padding:10px;background:rgba(255,250,225,.72);border:1px dashed rgba(79,50,28,.42);font-size:14px;line-height:1.72;white-space:pre-wrap;overflow-wrap:anywhere}.eldc-body p{margin:0 0 .8em}.eldc-body p:last-child{margin-bottom:0}\n</style><div class=\"eldc-content\"><div class=\"eldc-body\">$1</div></div>",
+    "placement": [
+        1,
+        2
+    ],
+    "substituteRegex": 0,
+    "minDepth": null,
+    "maxDepth": 1,
+    "markdownOnly": true,
+    "promptOnly": false
+}
