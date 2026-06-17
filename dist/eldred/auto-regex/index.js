@@ -2,7 +2,7 @@
 // 角色卡只导入本脚本；本脚本负责安装少量通用正则并处理未闭合剧情标签。
 // 注意：更新酒馆正则会重载聊天楼层，因此本脚本只在规则缺失或内容变化时写入一次。
 $(() => {
-  const BUILD_ID = 'eldred-auto-regex-v1.0.4';
+  const BUILD_ID = 'eldred-auto-regex-v1.0.5';
   const PREFIX = '[EldredAuto]';
   const TAGS = [
     '行动判定', '角色数值', '地图加载', '路径行动', '奇遇事件', '翻牌结果',
@@ -39,7 +39,7 @@ $(() => {
   function makeRegex({ name, find, replace, display = true, prompt = false, runOnEdit = false }) {
     return {
       id: `eldred-auto-${name}`,
-      script_name: `${PREFIX}${name}`,
+      script_name: `${PREFIX}${BUILD_ID}:${name}`,
       enabled: true,
       find_regex: find,
       replace_string: replace,
@@ -103,7 +103,12 @@ $(() => {
     return JSON.stringify(a.map(comparableRegex)) === JSON.stringify(b.map(comparableRegex));
   }
 
+  function hasInstalledBuild(regexes) {
+    return Array.isArray(regexes) && regexes.some(regex => getRegexName(regex).startsWith(`${PREFIX}${BUILD_ID}:`));
+  }
+
   async function installRegexes() {
+    if (globalThis.__eldredAutoRegexInstalling === BUILD_ID) return;
     const updateTavernRegexesWith = getGlobal('updateTavernRegexesWith');
     const getTavernRegexes = getGlobal('getTavernRegexes');
     if (typeof updateTavernRegexesWith !== 'function') {
@@ -117,20 +122,29 @@ $(() => {
     const nextRules = buildRegexes();
     const currentRules = getTavernRegexes({ type: 'character', name: 'current' }) || [];
     const currentAutoRules = currentRules.filter(regex => getRegexName(regex).startsWith(PREFIX));
+    if (hasInstalledBuild(currentAutoRules)) {
+      console.info('[艾尔德雷德自动正则] 已检测到当前版本，跳过写入', BUILD_ID);
+      return;
+    }
     if (sameRegexSet(currentAutoRules, nextRules)) {
       console.info('[艾尔德雷德自动正则] 已是最新，无需重载', BUILD_ID);
       return;
     }
-    await updateTavernRegexesWith(regexes => {
-      const kept = (Array.isArray(regexes) ? regexes : []).filter(regex => {
-        const name = getRegexName(regex);
-        if (name.startsWith(PREFIX)) return false;
-        if (LEGACY_TAG_REGEX_NAMES.has(name) || EXTRA_LEGACY_NAMES.has(name)) return false;
-        return true;
-      });
-      return [...kept, ...nextRules];
-    }, { type: 'character', name: 'current' });
-    console.info('[艾尔德雷德自动正则] 已安装', BUILD_ID);
+    globalThis.__eldredAutoRegexInstalling = BUILD_ID;
+    try {
+      await updateTavernRegexesWith(regexes => {
+        const kept = (Array.isArray(regexes) ? regexes : []).filter(regex => {
+          const name = getRegexName(regex);
+          if (name.startsWith(PREFIX)) return false;
+          if (LEGACY_TAG_REGEX_NAMES.has(name) || EXTRA_LEGACY_NAMES.has(name)) return false;
+          return true;
+        });
+        return [...kept, ...nextRules];
+      }, { type: 'character', name: 'current' });
+      console.info('[艾尔德雷德自动正则] 已安装', BUILD_ID);
+    } finally {
+      globalThis.__eldredAutoRegexInstalling = null;
+    }
   }
 
   installRegexes().catch(error => {
