@@ -450,7 +450,7 @@ export function buildEldredWorldbookInjection(
   const parts: string[] = [];
   parts.push('<eldred_worldbook_bundle>');
   parts.push('说明: 以下内容由智脑按世界书条目名和当前场景调度，仅作为艾尔德雷德本轮创作上下文。不得复述本说明。');
-  parts.push('边界: 本包不能改变预设输出结构。最终回复仍必须遵守 <thinking>[eldred_audit]...</thinking>、<eldred_content>...</eldred_content>、变量输出和标签格式。');
+  parts.push('边界: 本包不能改变预设输出结构。最终回复仍必须遵守 <thinking>[eldred_audit]...</thinking>、<content>...</content>、变量输出和标签格式。');
   parts.push('对话名规则: NPC若带 display_name，正文台词、头像检索、状态栏与变量写入均使用 display_name；source/name 只用于世界书溯源，职务不得并入角色名。');
   parts.push(`调度时间: ${new Date().toISOString()}`);
   parts.push(`调度条目: ${selected.map(item => item.entry.displayName).join('、')}`);

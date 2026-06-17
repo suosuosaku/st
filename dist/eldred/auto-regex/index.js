@@ -1,7 +1,7 @@
 // 艾尔德雷德：自动正则包
 // 角色卡只导入本脚本；本脚本负责安装少量通用正则并处理未闭合剧情标签。
 $(() => {
-  const BUILD_ID = 'eldred-auto-regex-v1.0.1';
+  const BUILD_ID = 'eldred-auto-regex-v1.0.3';
   const PREFIX = '[EldredAuto]';
   const TAGS = [
     '行动判定', '角色数值', '地图加载', '路径行动', '奇遇事件', '翻牌结果',
@@ -28,7 +28,7 @@ $(() => {
   }
 
   function hasEldredTag(text) {
-    return new RegExp(`<(${TAG_ALT})\\b`, 'u').test(String(text || ''));
+    return new RegExp(`<(?:${TAG_ALT})(?:\\s[^>]*)?>`, 'u').test(String(text || ''));
   }
 
   function normalizeMessage(raw, fallbackId = null) {
@@ -84,18 +84,20 @@ $(() => {
     return [
       makeRegex({
         name: '剧情标签完整',
-        find: `/<(${TAG_ALT})>\\s*([\\s\\S]*?)\\s*<\\/\\1>/g`,
+        find: `/<(${TAG_ALT})(?:\\s[^>]*)?>\\s*([\\s\\S]*?)\\s*<\\/\\1>/g`,
         replace: tagPanelReplacement(),
       }),
       makeRegex({
         name: '剧情标签未闭合兜底',
-        find: `/<(${TAG_ALT})>\\s*([\\s\\S]*?)(?=\\n\\s*(?:<\\/(?:eldred_content|content)>|<StatusPlaceHolderImpl\\s*\\/>|<UpdateVariable>|$))/g`,
+        find: `/<(${TAG_ALT})(?:\\s[^>]*)?>\\s*((?:(?!<\\/\\1>)[\\s\\S])*?)(?=\\s*(?:<\\/(?:eldred_content|content)>|<(?:${TAG_ALT})(?:\\s[^>]*)?>|<StatusPlaceHolderImpl\\s*\\/>|<UpdateVariable>|$))/g`,
         replace: tagPanelReplacement(),
       }),
       makeRegex({
         name: '正文壳标签清理_保留正文',
-        find: '/<\\/?(?:eldred_content|content)>/g',
+        find: '/<\\/?(?:eldred_content|content)(?:\\s[^>]*)?>/g',
         replace: '',
+        display: false,
+        prompt: true,
       }),
     ];
   }
@@ -119,24 +121,6 @@ $(() => {
     console.info('[艾尔德雷德自动正则] 已安装', BUILD_ID);
   }
 
-  async function rerenderLatestIfNeeded() {
-    const latest = getLatestMessage();
-    if (!latest || !hasEldredTag(latest.message)) return;
-    const setChatMessages = getGlobal('setChatMessages');
-    if (typeof setChatMessages === 'function' && latest.message_id !== undefined && latest.message_id !== null) {
-      try {
-        await setChatMessages([{ message_id: latest.message_id }], { refresh: 'affected' });
-        return;
-      } catch (error) {
-        console.warn('[艾尔德雷德自动正则] 刷新最新楼层失败', error);
-      }
-    }
-    const reload = getGlobal('reloadAndRenderChatWithoutEvents');
-    if (typeof reload === 'function') {
-      try { await reload(); } catch (_) {}
-    }
-  }
-
   let timer = null;
   function schedule(reason = 'event') {
     if (timer) clearTimeout(timer);
@@ -144,7 +128,6 @@ $(() => {
       timer = null;
       try {
         await installRegexes();
-        await rerenderLatestIfNeeded();
         console.debug?.('[艾尔德雷德自动正则] 同步完成', reason);
       } catch (error) {
         console.warn('[艾尔德雷德自动正则] 同步失败', error);
@@ -157,11 +140,6 @@ $(() => {
     const tavernEvents = getGlobal('tavern_events') || {};
     if (typeof eventOn !== 'function') return;
     [
-      tavernEvents.MESSAGE_RECEIVED,
-      tavernEvents.MESSAGE_SENT,
-      tavernEvents.MESSAGE_SWIPED,
-      tavernEvents.MESSAGE_UPDATED,
-      tavernEvents.MESSAGE_EDITED,
       tavernEvents.CHAT_CHANGED,
       tavernEvents.GENERATION_ENDED,
     ].filter(Boolean).forEach(eventName => {
@@ -169,7 +147,7 @@ $(() => {
     });
   }
 
-  installRegexes().then(() => rerenderLatestIfNeeded()).catch(error => {
+  installRegexes().catch(error => {
     console.warn('[艾尔德雷德自动正则] 初始化失败', error);
   });
   initEvents();
