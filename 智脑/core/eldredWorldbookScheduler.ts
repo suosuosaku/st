@@ -196,6 +196,32 @@ function inferNpcDisplayName(name: string, content: string, keys: string[]): { d
   };
 }
 
+function comparableName(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[\s"'“”‘’《》〈〉【】[\]()（）{}<>·・.。,:：;；,，、/\\|_\-—–]/g, '')
+    .trim();
+}
+
+function entryMatchesConfiguredName(name: string, entry: Pick<EldredWorldbookEntryRef, 'name' | 'displayName' | 'aliases' | 'isNpc'>): boolean {
+  const rawName = name.trim();
+  if (!rawName) return false;
+  if (entry.aliases.some(alias => alias === rawName)) return true;
+
+  const normalizedName = comparableName(rawName);
+  if (!normalizedName) return false;
+
+  const normalizedAliases = entry.aliases.map(comparableName).filter(Boolean);
+  if (normalizedAliases.some(alias => alias === normalizedName)) return true;
+
+  const normalizedDisplayName = comparableName(entry.displayName || entry.name);
+  if (entry.isNpc && normalizedDisplayName.length >= 2 && normalizedName.includes(normalizedDisplayName)) {
+    return true;
+  }
+
+  return false;
+}
+
 function normalizeEntry(raw: any, worldbookName: string): EldredWorldbookEntryRef {
   const name = entryName(raw);
   const strategy = raw?.strategy || {};
@@ -228,8 +254,7 @@ function normalizeEntry(raw: any, worldbookName: string): EldredWorldbookEntryRe
 }
 
 function configuredNamesIncludeEntry(names: string[], entry: EldredWorldbookEntryRef): boolean {
-  const configured = new Set(names);
-  return entry.aliases.some(alias => configured.has(alias));
+  return names.some(name => entryMatchesConfiguredName(name, entry));
 }
 
 function classifyEntry(entry: EldredWorldbookEntryRef, config: EldredWorldbookSchedulerConfig): EldredWorldbookEntryRef {
@@ -334,14 +359,13 @@ export async function scanEldredWorldbooks(config: EldredWorldbookSchedulerConfi
     }
   }
 
-  const knownNames = new Set(entries.flatMap(entry => entry.aliases));
   return {
     scannedAt: new Date().toISOString(),
     bindings,
     entries,
     duplicates: findDuplicates(entries),
-    missingAlwaysNames: config.alwaysNames.filter(name => !knownNames.has(name)),
-    missingScheduledNames: config.scheduledNames.filter(name => !knownNames.has(name)),
+    missingAlwaysNames: config.alwaysNames.filter(name => !entries.some(entry => entryMatchesConfiguredName(name, entry))),
+    missingScheduledNames: config.scheduledNames.filter(name => !entries.some(entry => entryMatchesConfiguredName(name, entry))),
     counts: countCategories(entries, bindings),
   };
 }
