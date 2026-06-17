@@ -206,13 +206,12 @@ function comparableName(value: string): string {
 function entryMatchesConfiguredName(name: string, entry: Pick<EldredWorldbookEntryRef, 'name' | 'displayName' | 'aliases' | 'isNpc'>): boolean {
   const rawName = name.trim();
   if (!rawName) return false;
-  if (entry.aliases.some(alias => alias === rawName)) return true;
 
   const normalizedName = comparableName(rawName);
   if (!normalizedName) return false;
 
-  const normalizedAliases = entry.aliases.map(comparableName).filter(Boolean);
-  if (normalizedAliases.some(alias => alias === normalizedName)) return true;
+  const identityNames = uniq([entry.name, entry.displayName]);
+  if (identityNames.some(identity => identity === rawName || comparableName(identity) === normalizedName)) return true;
 
   const normalizedDisplayName = comparableName(entry.displayName || entry.name);
   if (entry.isNpc && normalizedDisplayName.length >= 2 && normalizedName.includes(normalizedDisplayName)) {
@@ -220,6 +219,20 @@ function entryMatchesConfiguredName(name: string, entry: Pick<EldredWorldbookEnt
   }
 
   return false;
+}
+
+function entryHasConfiguredAlias(name: string, entry: Pick<EldredWorldbookEntryRef, 'aliases'>): boolean {
+  const rawName = name.trim();
+  if (!rawName) return false;
+  if (entry.aliases.some(alias => alias === rawName)) return true;
+
+  const normalizedName = comparableName(rawName);
+  if (!normalizedName) return false;
+  return entry.aliases.some(alias => comparableName(alias) === normalizedName);
+}
+
+function configuredNameIndex(names: string[], entry: Pick<EldredWorldbookEntryRef, 'name' | 'displayName' | 'aliases' | 'isNpc'>): number {
+  return names.findIndex(name => entryMatchesConfiguredName(name, entry));
 }
 
 function normalizeEntry(raw: any, worldbookName: string): EldredWorldbookEntryRef {
@@ -254,7 +267,7 @@ function normalizeEntry(raw: any, worldbookName: string): EldredWorldbookEntryRe
 }
 
 function configuredNamesIncludeEntry(names: string[], entry: EldredWorldbookEntryRef): boolean {
-  return names.some(name => entryMatchesConfiguredName(name, entry));
+  return configuredNameIndex(names, entry) !== -1;
 }
 
 function classifyEntry(entry: EldredWorldbookEntryRef, config: EldredWorldbookSchedulerConfig): EldredWorldbookEntryRef {
@@ -364,8 +377,8 @@ export async function scanEldredWorldbooks(config: EldredWorldbookSchedulerConfi
     bindings,
     entries,
     duplicates: findDuplicates(entries),
-    missingAlwaysNames: config.alwaysNames.filter(name => !entries.some(entry => entryMatchesConfiguredName(name, entry))),
-    missingScheduledNames: config.scheduledNames.filter(name => !entries.some(entry => entryMatchesConfiguredName(name, entry))),
+    missingAlwaysNames: config.alwaysNames.filter(name => !entries.some(entry => entryMatchesConfiguredName(name, entry) || entryHasConfiguredAlias(name, entry))),
+    missingScheduledNames: config.scheduledNames.filter(name => !entries.some(entry => entryMatchesConfiguredName(name, entry) || entryHasConfiguredAlias(name, entry))),
     counts: countCategories(entries, bindings),
   };
 }
@@ -388,30 +401,76 @@ function extractNameHits(entries: EldredWorldbookEntryRef[], text: string): stri
     .slice(0, 12);
 }
 
+function sceneContainsName(sceneText: string, name: string): boolean {
+  const normalizedScene = comparableName(sceneText);
+  const normalizedName = comparableName(name);
+  if (!normalizedName || normalizedName.length < 2) return false;
+  if (normalizedScene.includes(normalizedName)) return true;
+
+  const fragments = uniq([
+    name.replace(/^(神圣王国|霜冠王国|白冠王都|王国|公国|帝国)/, ''),
+    ...name.split(/[与和]/),
+  ]).map(comparableName).filter(fragment => fragment.length >= 4);
+  return fragments.some(fragment => normalizedScene.includes(fragment));
+}
+
+function sceneContainsConfiguredName(sceneText: string, entry: EldredWorldbookEntryRef, configuredNames: string[]): boolean {
+  const matchingNames = configuredNames.filter(name => entryMatchesConfiguredName(name, entry));
+  if (matchingNames.some(name => sceneContainsName(sceneText, name))) return true;
+  if (entry.isNpc && sceneContainsName(sceneText, entry.displayName)) {
+    return matchingNames.some(name => comparableName(name).includes(comparableName(entry.displayName)));
+  }
+  return false;
+}
+
+function usefulKeyHit(entry: EldredWorldbookEntryRef, sceneText: string): string | undefined {
+  const lower = lowerText(sceneText);
+  return [...entry.keys, ...entry.secondaryKeys].find(key => {
+    const normalizedKey = comparableName(key);
+    if (normalizedKey.length < 3 && normalizedKey !== comparableName(entry.name) && normalizedKey !== comparableName(entry.displayName)) {
+      return false;
+    }
+    return key.length >= 2 && lower.includes(key.toLowerCase());
+  });
+}
+
 function scoreEntry(entry: EldredWorldbookEntryRef, sceneText: string, config: EldredWorldbookSchedulerConfig): { score: number; reason: string } {
-  if (configuredNamesIncludeEntry(config.alwaysNames, entry) || configuredNamesIncludeEntry(config.keepEnabledNames, entry)) {
+  const scheduledIndex = configuredNameIndex(config.scheduledNames, entry);
+  const inScheduledLibrary = scheduledIndex !== -1;
+  const keepOnly = configuredNamesIncludeEntry(config.keepEnabledNames, entry) && !inScheduledLibrary;
+
+  if (configuredNamesIncludeEntry(config.alwaysNames, entry) || keepOnly) {
     return { score: 0, reason: '原生常驻/保留启用，跳过智脑重复注入' };
   }
 
   const hasScheduledLibrary = config.scheduledNames.length > 0;
-  const inScheduledLibrary = configuredNamesIncludeEntry(config.scheduledNames, entry);
   if (hasScheduledLibrary && !inScheduledLibrary) {
     return { score: 0, reason: '不在脚本调度准入库' };
+  }
+
+  const scheduledBonus = inScheduledLibrary ? Math.max(80, 180 - scheduledIndex * 4) : 0;
+  const npcBonus = entry.isNpc ? 90 : 0;
+
+  if (inScheduledLibrary && sceneContainsConfiguredName(sceneText, entry, config.scheduledNames)) {
+    return {
+      score: 1240 + scheduledBonus + npcBonus,
+      reason: '调度准入库+场景命中配置名/显示名',
+    };
   }
 
   const lower = lowerText(sceneText);
   const aliasHit = entry.aliases.find(alias => alias.length >= 2 && lower.includes(alias.toLowerCase()));
   if (aliasHit) {
     return {
-      score: inScheduledLibrary ? 920 : 820,
+      score: (inScheduledLibrary ? 980 + scheduledBonus : 820) + npcBonus,
       reason: inScheduledLibrary ? `调度准入库+场景命中名称: ${aliasHit}` : `场景命中名称: ${aliasHit}`,
     };
   }
 
-  const keyHit = [...entry.keys, ...entry.secondaryKeys].find(key => key.length >= 2 && lower.includes(key.toLowerCase()));
+  const keyHit = usefulKeyHit(entry, sceneText);
   if (keyHit) {
     return {
-      score: inScheduledLibrary ? 780 : 700,
+      score: inScheduledLibrary ? 800 + scheduledBonus : 700,
       reason: `场景命中关键字: ${keyHit}`,
     };
   }
@@ -419,7 +478,7 @@ function scoreEntry(entry: EldredWorldbookEntryRef, sceneText: string, config: E
   const actionHit = detectActionTypes(sceneText).find(actionType => entryMatchesActionType(entry, actionType));
   if (actionHit) {
     return {
-      score: inScheduledLibrary ? 640 : 560,
+      score: inScheduledLibrary ? 760 + scheduledBonus : 560,
       reason: `行动类型触发关联规则: ${actionHit}`,
     };
   }
@@ -449,10 +508,14 @@ export function buildEldredWorldbookInjection(
 ): { content: string; report: EldredWorldbookInjectionReport } | null {
   if (!scan || scan.entries.length === 0) return null;
 
+  const scheduledOrder = (entry: EldredWorldbookEntryRef) => {
+    const index = configuredNameIndex(config.scheduledNames, entry);
+    return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+  };
   const scored = scan.entries
     .map(entry => ({ entry, ...scoreEntry(entry, sceneText, config) }))
     .filter(item => item.score > 0)
-    .sort((a, b) => b.score - a.score || b.entry.contentLength - a.entry.contentLength);
+    .sort((a, b) => b.score - a.score || scheduledOrder(a.entry) - scheduledOrder(b.entry) || b.entry.contentLength - a.entry.contentLength);
 
   const selected: typeof scored = [];
   let usedChars = 0;
