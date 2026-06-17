@@ -2,7 +2,7 @@
 // 角色卡只导入本脚本；本脚本负责安装少量通用正则并处理未闭合剧情标签。
 // 注意：更新酒馆正则会重载聊天楼层，因此本脚本只在规则缺失或内容变化时写入一次。
 $(() => {
-  const BUILD_ID = 'eldred-auto-regex-v1.0.6';
+  const BUILD_ID = 'eldred-auto-regex-v1.0.7';
   const PREFIX = '[EldredAuto]';
   const TAGS = [
     '行动判定', '角色数值', '地图加载', '路径行动', '奇遇事件', '翻牌结果',
@@ -36,17 +36,39 @@ $(() => {
     return `${panelCss()}<div class="eldg"><div class="eldg-card" data-tag="$1"><div class="eldg-head"><span class="eldg-mark">◆</span><span class="eldg-title">$1</span></div><pre class="eldg-body">$2</pre></div></div>`;
   }
 
+  function timeCss() {
+    return '<style>.eldg-time{box-sizing:border-box;margin:10px 0;padding:7px 10px;background:#172539;color:#ffe6a0;border:2px solid #24170f;box-shadow:0 0 0 1px rgba(255,255,255,.16) inset,0 3px 0 #0d1724;font:800 13px/1.35 ui-sans-serif,system-ui,"Microsoft YaHei",sans-serif;letter-spacing:0;white-space:pre-wrap;overflow-wrap:anywhere}.eldg-time *{letter-spacing:0}</style>';
+  }
+
+  function timeReplacement() {
+    return `${timeCss()}<div class="eldg-time">$1</div>`;
+  }
+
   function makeRegex({ name, find, replace, display = true, prompt = false, runOnEdit = false }) {
+    const markdownOnly = display === true && prompt !== true;
+    const promptOnly = prompt === true && display !== true;
     return {
       id: `eldred-auto-${name}`,
+      scriptName: `${PREFIX}${BUILD_ID}:${name}`,
       script_name: `${PREFIX}${BUILD_ID}:${name}`,
+      disabled: false,
       enabled: true,
+      findRegex: find,
       find_regex: find,
-      replace_string: replace,
+      trimStrings: [],
       trim_strings: [],
+      replaceString: replace,
+      replace_string: replace,
+      placement: [1, 2],
+      substituteRegex: 0,
+      markdownOnly,
+      promptOnly,
+      runOnEdit,
+      run_on_edit: runOnEdit,
       source: { user_input: false, ai_output: true, slash_command: false, world_info: false },
       destination: { display, prompt },
-      run_on_edit: runOnEdit,
+      minDepth: null,
+      maxDepth: null,
       min_depth: null,
       max_depth: null,
     };
@@ -71,12 +93,29 @@ $(() => {
         display: true,
         prompt: true,
       }),
+      makeRegex({
+        name: '时间标签美化',
+        find: '/<time(?:\\s[^>]*)?>\\s*([\\s\\S]*?)\\s*<\\/time>/g',
+        replace: timeReplacement(),
+        display: true,
+        prompt: false,
+      }),
     ];
   }
 
   function comparableRegex(regex) {
     const source = regex?.source || {};
-    const destination = regex?.destination || {};
+    const explicitDestination = regex?.destination || null;
+    const markdownOnly = regex?.markdownOnly === true;
+    const promptOnly = regex?.promptOnly === true;
+    const inferredDestination = markdownOnly && !promptOnly
+      ? { display: true, prompt: false }
+      : promptOnly && !markdownOnly
+        ? { display: false, prompt: true }
+        : !markdownOnly && !promptOnly
+          ? { display: true, prompt: true }
+          : { display: false, prompt: false };
+    const destination = explicitDestination || inferredDestination;
     return {
       script_name: getRegexName(regex),
       enabled: regex?.enabled !== false,
@@ -103,10 +142,6 @@ $(() => {
     return JSON.stringify(a.map(comparableRegex)) === JSON.stringify(b.map(comparableRegex));
   }
 
-  function hasInstalledBuild(regexes) {
-    return Array.isArray(regexes) && regexes.some(regex => getRegexName(regex).startsWith(`${PREFIX}${BUILD_ID}:`));
-  }
-
   async function installRegexes() {
     if (globalThis.__eldredAutoRegexInstalling === BUILD_ID) return;
     const updateTavernRegexesWith = getGlobal('updateTavernRegexesWith');
@@ -122,10 +157,6 @@ $(() => {
     const nextRules = buildRegexes();
     const currentRules = getTavernRegexes({ type: 'character', name: 'current' }) || [];
     const currentAutoRules = currentRules.filter(regex => getRegexName(regex).startsWith(PREFIX));
-    if (hasInstalledBuild(currentAutoRules)) {
-      console.info('[艾尔德雷德自动正则] 已检测到当前版本，跳过写入', BUILD_ID);
-      return;
-    }
     if (sameRegexSet(currentAutoRules, nextRules)) {
       console.info('[艾尔德雷德自动正则] 已是最新，无需重载', BUILD_ID);
       return;
