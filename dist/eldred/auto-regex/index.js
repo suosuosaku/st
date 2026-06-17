@@ -1,7 +1,7 @@
 // 艾尔德雷德：自动正则包
 // 角色卡只导入本脚本；本脚本负责安装少量通用正则并处理未闭合剧情标签。
 $(() => {
-  const BUILD_ID = 'eldred-auto-regex-v1.0.0';
+  const BUILD_ID = 'eldred-auto-regex-v1.0.1';
   const PREFIX = '[EldredAuto]';
   const TAGS = [
     '行动判定', '角色数值', '地图加载', '路径行动', '奇遇事件', '翻牌结果',
@@ -93,7 +93,7 @@ $(() => {
         replace: tagPanelReplacement(),
       }),
       makeRegex({
-        name: '正文尾标签清理',
+        name: '正文壳标签清理_保留正文',
         find: '/<\\/?(?:eldred_content|content)>/g',
         replace: '',
       }),
