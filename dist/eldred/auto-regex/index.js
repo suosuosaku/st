@@ -2,7 +2,7 @@
 // 角色卡只导入本脚本；本脚本负责安装少量通用正则并处理未闭合剧情标签。
 // 注意：更新酒馆正则会重载聊天楼层，因此本脚本只在规则缺失或内容变化时写入一次。
 $(() => {
-  const BUILD_ID = 'eldred-auto-regex-v1.0.5';
+  const BUILD_ID = 'eldred-auto-regex-v1.0.6';
   const PREFIX = '[EldredAuto]';
   const TAGS = [
     '行动判定', '角色数值', '地图加载', '路径行动', '奇遇事件', '翻牌结果',
@@ -68,7 +68,7 @@ $(() => {
         name: '正文壳标签清理_保留正文',
         find: '/<\\/?(?:eldred_content|content)(?:\\s[^>]*)?>/g',
         replace: '',
-        display: false,
+        display: true,
         prompt: true,
       }),
     ];
