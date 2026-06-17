@@ -342,25 +342,55 @@ function extractNameHits(entries: EldredWorldbookEntryRef[], text: string): stri
 
 function scoreEntry(entry: EldredWorldbookEntryRef, sceneText: string, config: EldredWorldbookSchedulerConfig): { score: number; reason: string } {
   if (config.alwaysNames.includes(entry.name) || config.keepEnabledNames.includes(entry.name)) {
-    return { score: 1000, reason: '常驻清单' };
+    return { score: 0, reason: '原生常驻/保留启用，跳过智脑重复注入' };
   }
+
+  const hasScheduledLibrary = config.scheduledNames.length > 0;
+  const inScheduledLibrary = config.scheduledNames.includes(entry.name);
+  if (hasScheduledLibrary && !inScheduledLibrary) {
+    return { score: 0, reason: '不在脚本调度准入库' };
+  }
+
   const lower = lowerText(sceneText);
-  if (config.scheduledNames.includes(entry.name) && lower.includes(entry.name.toLowerCase())) {
-    return { score: 820, reason: '调度清单+正文命中条目名' };
-  }
-  if (config.scheduledNames.includes(entry.name)) {
-    return { score: 620, reason: '调度清单' };
-  }
   if (entry.name.length >= 2 && lower.includes(entry.name.toLowerCase())) {
-    return { score: 560, reason: '正文命中条目名' };
+    return {
+      score: inScheduledLibrary ? 920 : 820,
+      reason: inScheduledLibrary ? '调度准入库+场景命中条目名' : '场景命中条目名',
+    };
   }
+
   const keyHit = [...entry.keys, ...entry.secondaryKeys].find(key => key.length >= 2 && lower.includes(key.toLowerCase()));
   if (keyHit) {
-    return { score: 480, reason: `正文命中关键字: ${keyHit}` };
+    return {
+      score: inScheduledLibrary ? 780 : 700,
+      reason: `场景命中关键字: ${keyHit}`,
+    };
   }
-  if (entry.category === 'suggested_always') return { score: 240, reason: '常驻候选兜底' };
-  if (entry.category === 'suggested_scheduled') return { score: 160, reason: '调度候选兜底' };
-  return { score: 0, reason: '未命中' };
+
+  const actionHit = detectActionTypes(sceneText).find(actionType => entryMatchesActionType(entry, actionType));
+  if (actionHit) {
+    return {
+      score: inScheduledLibrary ? 640 : 560,
+      reason: `行动类型触发关联规则: ${actionHit}`,
+    };
+  }
+
+  return { score: 0, reason: '未命中调度证据' };
+}
+
+function entryMatchesActionType(entry: EldredWorldbookEntryRef, actionType: string): boolean {
+  const actionHints: Record<string, string[]> = {
+    '入城/盘查': ['城门', '盘查', '通行', '文书', '路引', '担保', '登记', '城墙'],
+    '交涉': ['交涉', '询问', '谈判', '说服', '身份', '来意', '文书', 'NPC', '人物'],
+    '调查': ['调查', '搜索', '线索', '痕迹', '核对', '档案', '病历', '记录', '主线', '异动'],
+    '旅行': ['旅行', '路线', '路费', '营地', '马车', '商队', '地图', '交通', '耗时', '补给', '气候'],
+    '委托': ['委托', '任务', '报酬', '看板', '行会', '担保', '地区委托'],
+    '战斗': ['战斗', '攻击', '防御', '伤害', '魔物', '首领', '威胁', '敌人', '伤病'],
+  };
+  const hints = actionHints[actionType] || [];
+  if (hints.length === 0) return false;
+  const haystack = `${entry.name}\n${entry.keys.join('\n')}\n${entry.secondaryKeys.join('\n')}\n${entry.content.slice(0, 1200)}`;
+  return hints.some(hint => haystack.includes(hint));
 }
 
 export function buildEldredWorldbookInjection(

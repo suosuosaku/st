@@ -193,6 +193,62 @@ $(() => {
     }
   }
 
+  function collectEldredVariableSceneHints(store: ReturnType<typeof useMainStore>): string {
+    const lines: string[] = [];
+    const hintKeyPattern = /当前|地点|区域|地标|路段|天气|在场|接触|人物|NPC|任务|主线|阶段|看板|新闻|传闻|委托|市场|路径|行动|路线|世界|大区域|子区域/;
+
+    function pushLine(path: string, value: unknown) {
+      if (lines.length >= 160) return;
+      const text = typeof value === 'string' ? value : JSON.stringify(value);
+      if (!text) return;
+      lines.push(`${path}: ${text.slice(0, 360)}`);
+    }
+
+    function visit(value: unknown, path = '', depth = 0) {
+      if (lines.length >= 160 || value == null || depth > 5) return;
+      const pathLooksUseful = hintKeyPattern.test(path);
+      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        if (pathLooksUseful || (typeof value === 'string' && hintKeyPattern.test(value))) pushLine(path || 'value', value);
+        return;
+      }
+      if (Array.isArray(value)) {
+        const limit = pathLooksUseful ? 30 : 8;
+        value.slice(0, limit).forEach((item, index) => visit(item, `${path}/${index}`, depth + 1));
+        return;
+      }
+      if (typeof value !== 'object') return;
+      for (const [key, child] of Object.entries(value as Record<string, unknown>).slice(0, 120)) {
+        const nextPath = path ? `${path}/${key}` : key;
+        if (hintKeyPattern.test(nextPath) || depth < 2) {
+          visit(child, nextPath, depth + 1);
+        }
+      }
+    }
+
+    const latestSummary = store.getLatestSummary();
+    for (const event of latestSummary?.timeline?.slice(-5) || []) {
+      pushLine(`summary/${event.time || ''}/${event.event || ''}`, `${event.detail || ''}`);
+    }
+    for (const content of store.capturedContents.slice(-3)) {
+      pushLine(`captured/${content.messageId}`, content.content || '');
+    }
+    for (const record of store.userInputRecords.slice(-3)) {
+      pushLine(`user/${record.messageId}`, record.userInput || '');
+    }
+
+    try {
+      const api = globalThis as any;
+      if (typeof api.getVariables === 'function') {
+        visit(api.getVariables({ type: 'chat' }), 'chat_variables');
+        visit(api.getVariables({ type: 'script' }), 'script_variables');
+      }
+    } catch (error) {
+      console.warn('[智脑-艾尔德雷德] 读取变量场景线索失败:', error);
+    }
+
+    return lines.join('\n').slice(-12000);
+  }
+
   eventOn(tavern_events.WORLDINFO_ENTRIES_LOADED, (lores) => {
     updateRelationshipWorldbookCacheFromLore(lores);
     // 保存原始条目供后续重新扫描（过滤关闭的条目）
@@ -452,10 +508,12 @@ $(() => {
       const lastUserMsg = [...messages].reverse().find(message => message.role === 'user');
       const lastUserText = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : '';
       const sceneText = [
-        latestCaptured?.content || '',
+        store.capturedContents.slice(-3).map(item => item.content || '').join('\n'),
         lastUserText,
         store.getLatestSummary()?.timeline?.slice(-3).map(event => `${event.time} ${event.event} ${event.detail || ''}`).join('\n') || '',
-      ].join('\n').slice(-6000);
+        latestCaptured?.content || '',
+        collectEldredVariableSceneHints(store),
+      ].join('\n').slice(-12000);
       const injection = buildEldredWorldbookInjection(
         store.chatData.eldredWorldbookScan,
         sceneText,
