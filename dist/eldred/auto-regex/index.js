@@ -1,9 +1,10 @@
 // 艾尔德雷德：自动正则清理脚本
-// 显示层正则必须由角色卡/外部正则包常驻导入；本脚本只清理旧版自动安装残留。
+// 正文显示完全交给角色卡内的“艾尔德雷德正文美化”脚本；本脚本清理旧正则残留。
 $(() => {
-  const BUILD_ID = 'eldred-auto-regex-v1.1.1';
+  const BUILD_ID = 'eldred-auto-regex-v1.1.2';
   const PREFIX = '[EldredAuto]';
   const LEGACY_REGEX_NAMES = new Set([
+    '艾尔德雷德正文美化',
     '[不发送]艾尔德雷德正文壳清理',
     '[不发送]艾尔德雷德正文壳改名',
   ]);
