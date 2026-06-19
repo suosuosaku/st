@@ -1,7 +1,7 @@
 import './index.css';
 
 (() => {
-  const BUILD_ID = 'eldred-welcome-v3.2.2';
+  const BUILD_ID = 'eldred-welcome-v3.2.3';
   const HOST_ID = globalThis.__ELDRED_WELCOME_HOST_ID__ || new URLSearchParams(window.location.search).get('hostId') || '';
 
   const pages = [
@@ -207,9 +207,48 @@ import './index.css';
     renderHome();
   }
 
+  function submitToTavernInput(text) {
+    const windows = [];
+    try { windows.push(window.parent); } catch (error) {}
+    try { windows.push(window.top); } catch (error) {}
+    try { windows.push(window.opener); } catch (error) {}
+    windows.push(window);
+    const seen = new Set();
+    for (const win of windows) {
+      if (!win || seen.has(win)) continue;
+      seen.add(win);
+      try {
+        const doc = win.document;
+        if (!doc) continue;
+        const selectors = ['#send_textarea', 'textarea#send_textarea', 'textarea[name="text"]', 'textarea'];
+        for (const selector of selectors) {
+          const candidates = Array.from(doc.querySelectorAll(selector));
+          const target = candidates.find(node => {
+            const rect = node.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+          }) || candidates[0];
+          if (!target) continue;
+          const proto = target instanceof win.HTMLTextAreaElement
+            ? win.HTMLTextAreaElement.prototype
+            : win.HTMLInputElement?.prototype;
+          const setter = proto && Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+          if (setter) setter.call(target, text);
+          else target.value = text;
+          target.dispatchEvent(new win.Event('input', { bubbles: true }));
+          target.dispatchEvent(new win.Event('change', { bubbles: true }));
+          target.focus();
+          return true;
+        }
+      } catch (error) {}
+    }
+    return false;
+  }
+
   function submit() {
+    const text = buildPrompt();
+    const direct = submitToTavernInput(text);
     state.submitted = true;
-    post('submit', { text: buildPrompt() });
+    post('submit', { text, direct });
     renderHome();
   }
 
