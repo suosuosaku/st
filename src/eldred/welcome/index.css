@@ -1,0 +1,573 @@
+.eldred-welcome-ui {
+  --ew-void: #070912;
+  --ew-night: #111a2c;
+  --ew-royal: #253c6b;
+  --ew-azure: #3f79b8;
+  --ew-magic: #6ed5d0;
+  --ew-leaf: #89b45f;
+  --ew-gold: #e4b85b;
+  --ew-red: #b94d4a;
+  --ew-paper: #f1ddac;
+  --ew-paper-ink: #2e2115;
+  --ew-line: rgba(238, 214, 156, 0.24);
+  --ew-soft: rgba(255, 255, 255, 0.08);
+  --ew-text: #f7ecd0;
+  --ew-muted: #cbbd9e;
+  position: relative;
+  width: min(100%, 1080px);
+  margin: 10px auto;
+  color: var(--ew-text);
+  font-family: "Noto Serif SC", "Microsoft YaHei UI", "Microsoft YaHei", serif;
+  isolation: isolate;
+}
+
+.eldred-welcome-ui * {
+  box-sizing: border-box;
+  letter-spacing: 0;
+}
+
+.ew-frame {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(238, 214, 156, 0.32);
+  background:
+    linear-gradient(135deg, rgba(7, 9, 18, 0.95), rgba(18, 28, 48, 0.94) 46%, rgba(55, 37, 61, 0.94)),
+    radial-gradient(circle at 18% 12%, rgba(110, 213, 208, 0.18), transparent 24%),
+    radial-gradient(circle at 84% 6%, rgba(228, 184, 91, 0.2), transparent 22%);
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.38), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.ew-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(90deg, rgba(228, 184, 91, 0.06) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(110, 213, 208, 0.045) 1px, transparent 1px);
+  background-size: 38px 38px;
+  mask-image: radial-gradient(circle at 50% 22%, black 20%, transparent 74%);
+}
+
+.ew-layout {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  min-height: 650px;
+}
+
+.ew-left {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 18px;
+  padding: 20px;
+  border-right: 1px solid var(--ew-line);
+  background: linear-gradient(180deg, rgba(8, 12, 24, 0.88), rgba(21, 32, 54, 0.72));
+}
+
+.ew-sigil {
+  width: 68px;
+  height: 68px;
+  display: grid;
+  place-items: center;
+  color: #201407;
+  font-weight: 1000;
+  font-size: 30px;
+  background:
+    linear-gradient(135deg, #ffe8a3, var(--ew-gold) 52%, #9f6a25),
+    radial-gradient(circle, #fff7ca, transparent 62%);
+  clip-path: polygon(50% 0, 94% 25%, 94% 75%, 50% 100%, 6% 75%, 6% 25%);
+  box-shadow: 0 0 0 8px rgba(228, 184, 91, 0.09), 0 12px 28px rgba(0, 0, 0, 0.34);
+}
+
+.ew-brand h1 {
+  margin: 16px 0 8px;
+  color: #fff3ca;
+  font-size: 28px;
+  line-height: 1.12;
+}
+
+.ew-kicker,
+.ew-muted,
+.ew-small {
+  color: var(--ew-muted);
+  line-height: 1.65;
+}
+
+.ew-kicker {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.ew-small {
+  font-size: 12px;
+}
+
+.ew-nav {
+  display: grid;
+  gap: 8px;
+}
+
+.ew-nav button,
+.ew-quick button,
+.ew-btn,
+.ew-chip,
+.ew-card,
+.ew-choice,
+.ew-route-node {
+  transition: border-color 0.16s ease, transform 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.ew-nav button {
+  min-height: 42px;
+  border: 1px solid rgba(238, 214, 156, 0.18);
+  background: rgba(255, 255, 255, 0.055);
+  color: #e7d8b4;
+  text-align: left;
+  padding: 0 12px;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.ew-nav button:hover,
+.ew-card[data-place]:hover,
+.ew-card[data-origin]:hover,
+.ew-choice:hover,
+.ew-route-node:hover {
+  transform: translateY(-1px);
+  border-color: rgba(110, 213, 208, 0.55);
+}
+
+.ew-nav button.is-active {
+  background: linear-gradient(135deg, rgba(228, 184, 91, 0.92), rgba(255, 238, 173, 0.92));
+  color: #201407;
+}
+
+.ew-left-foot {
+  display: grid;
+  gap: 10px;
+}
+
+.ew-meter {
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+  border: 1px solid rgba(238, 214, 156, 0.14);
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.ew-meter span {
+  height: 5px;
+  background: linear-gradient(90deg, var(--ew-red), var(--ew-gold), var(--ew-magic));
+}
+
+.ew-main {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-width: 0;
+}
+
+.ew-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+  padding: 20px 24px 14px;
+  border-bottom: 1px solid var(--ew-line);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+}
+
+.ew-title {
+  color: #fff3ca;
+  font-size: 23px;
+  line-height: 1.25;
+  font-weight: 1000;
+}
+
+.ew-quick {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.ew-quick button,
+.ew-btn {
+  border: 1px solid rgba(238, 214, 156, 0.2);
+  background: rgba(255, 255, 255, 0.07);
+  color: #f3e4bd;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.ew-quick button:hover,
+.ew-btn:hover {
+  border-color: rgba(228, 184, 91, 0.72);
+  box-shadow: 0 0 0 3px rgba(228, 184, 91, 0.1);
+}
+
+.ew-btn.primary {
+  background: linear-gradient(135deg, var(--ew-gold), #fff0ae);
+  color: #251606;
+}
+
+.ew-page {
+  padding: 20px 24px 22px;
+}
+
+.ew-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.ew-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.ew-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ew-card,
+.ew-choice,
+.ew-letter,
+.ew-preview,
+.ew-route-board {
+  border: 1px solid rgba(238, 214, 156, 0.18);
+  background: rgba(255, 255, 255, 0.065);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.ew-card {
+  padding: 15px;
+}
+
+.ew-card.is-selected,
+.ew-choice.is-selected {
+  border-color: rgba(110, 213, 208, 0.7);
+  box-shadow: 0 0 0 4px rgba(110, 213, 208, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.ew-card b,
+.ew-choice b,
+.ew-letter b,
+.ew-preview b {
+  display: block;
+  color: #fff3ca;
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+
+.ew-card p,
+.ew-choice p,
+.ew-letter p {
+  margin: 0;
+  color: #d8c8a6;
+  line-height: 1.65;
+  font-size: 13px;
+}
+
+.ew-tagline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.ew-chip {
+  display: inline-grid;
+  place-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid rgba(238, 214, 156, 0.18);
+  color: #f8e6b8;
+  background: rgba(0, 0, 0, 0.12);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.ew-hero {
+  position: relative;
+  min-height: 230px;
+  padding: 24px;
+  overflow: hidden;
+  border: 1px solid rgba(238, 214, 156, 0.22);
+  background:
+    linear-gradient(135deg, rgba(15, 24, 42, 0.82), rgba(47, 56, 86, 0.66)),
+    radial-gradient(circle at 72% 24%, rgba(110, 213, 208, 0.26), transparent 25%),
+    radial-gradient(circle at 24% 78%, rgba(228, 184, 91, 0.2), transparent 22%);
+}
+
+.ew-hero::after {
+  content: "";
+  position: absolute;
+  right: 28px;
+  bottom: 20px;
+  width: 190px;
+  height: 120px;
+  background:
+    linear-gradient(135deg, transparent 0 35%, rgba(228, 184, 91, 0.38) 36% 38%, transparent 39%),
+    linear-gradient(45deg, transparent 0 50%, rgba(110, 213, 208, 0.24) 51% 53%, transparent 54%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0));
+  clip-path: polygon(0 100%, 28% 22%, 42% 52%, 58% 0, 80% 64%, 100% 20%, 100% 100%);
+  opacity: 0.9;
+}
+
+.ew-hero h2 {
+  position: relative;
+  z-index: 1;
+  max-width: 620px;
+  margin: 0 0 12px;
+  color: #fff6cf;
+  font-size: 32px;
+  line-height: 1.15;
+}
+
+.ew-hero p {
+  position: relative;
+  z-index: 1;
+  max-width: 590px;
+  margin: 0;
+  color: #e5d6b4;
+  line-height: 1.8;
+}
+
+.ew-letter {
+  padding: 18px;
+  background:
+    linear-gradient(180deg, rgba(241, 221, 172, 0.96), rgba(210, 175, 108, 0.94));
+  color: var(--ew-paper-ink);
+}
+
+.ew-letter b {
+  color: #593616;
+}
+
+.ew-letter p {
+  color: #4d3922;
+}
+
+.ew-route-board {
+  position: relative;
+  min-height: 220px;
+  padding: 18px;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(13, 22, 38, 0.72), rgba(32, 45, 68, 0.5)),
+    radial-gradient(circle at 50% 52%, rgba(110, 213, 208, 0.11), transparent 42%);
+}
+
+.ew-route-board::before {
+  content: "";
+  position: absolute;
+  inset: 30px 46px;
+  border: 1px dashed rgba(228, 184, 91, 0.34);
+  transform: skew(-10deg);
+}
+
+.ew-route-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ew-route-node {
+  min-height: 82px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid rgba(238, 214, 156, 0.2);
+  background: rgba(7, 9, 18, 0.48);
+  cursor: pointer;
+}
+
+.ew-route-node strong {
+  color: #fff3ca;
+}
+
+.ew-route-node span {
+  color: var(--ew-muted);
+  font-size: 12px;
+}
+
+.ew-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.ew-field {
+  display: grid;
+  gap: 7px;
+}
+
+.ew-field.wide {
+  grid-column: 1 / -1;
+}
+
+.ew-field label {
+  color: #ead9af;
+  font-size: 12px;
+  font-weight: 1000;
+}
+
+.ew-field input,
+.ew-field textarea {
+  width: 100%;
+  border: 1px solid rgba(238, 214, 156, 0.24);
+  background: rgba(0, 0, 0, 0.24);
+  color: #fff4d3;
+  padding: 11px 12px;
+  font: inherit;
+  line-height: 1.55;
+  outline: none;
+}
+
+.ew-field textarea {
+  min-height: 94px;
+  resize: vertical;
+}
+
+.ew-field input:focus,
+.ew-field textarea:focus {
+  border-color: rgba(110, 213, 208, 0.72);
+  box-shadow: 0 0 0 3px rgba(110, 213, 208, 0.12);
+}
+
+.ew-choice {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  cursor: pointer;
+}
+
+.ew-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 24px 20px;
+  border-top: 1px solid var(--ew-line);
+}
+
+.ew-footer-group {
+  display: flex;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.ew-preview {
+  padding: 16px;
+  background: linear-gradient(180deg, rgba(241, 221, 172, 0.98), rgba(213, 178, 110, 0.96));
+  color: var(--ew-paper-ink);
+}
+
+.ew-preview b {
+  color: #593616;
+}
+
+.ew-preview pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #332416;
+  font: 13px/1.68 "Noto Serif SC", "Microsoft YaHei", serif;
+}
+
+.ew-confirm-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+  padding: 22px;
+  border-bottom: 1px solid var(--ew-line);
+}
+
+.ew-confirm-badge {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  color: #231608;
+  font-weight: 1000;
+  background: linear-gradient(135deg, var(--ew-gold), #fff0af);
+  clip-path: polygon(50% 0, 90% 20%, 100% 64%, 72% 100%, 28% 100%, 0 64%, 10% 20%);
+}
+
+.ew-confirm-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ew-confirm-item {
+  padding: 11px 12px;
+  border: 1px solid rgba(238, 214, 156, 0.18);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.095), rgba(110, 213, 208, 0.06));
+  color: #f3e4bd;
+}
+
+.ew-confirm-item b {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--ew-gold);
+  font-size: 12px;
+}
+
+@media (max-width: 860px) {
+  .ew-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .ew-left {
+    border-right: 0;
+    border-bottom: 1px solid var(--ew-line);
+  }
+
+  .ew-nav {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .ew-top {
+    grid-template-columns: 1fr;
+  }
+
+  .ew-grid,
+  .ew-grid.three,
+  .ew-form,
+  .ew-confirm-list {
+    grid-template-columns: 1fr;
+  }
+
+  .ew-route-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .eldred-welcome-ui {
+    margin: 6px auto;
+  }
+
+  .ew-page,
+  .ew-top,
+  .ew-footer {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .ew-nav {
+    grid-template-columns: 1fr;
+  }
+
+  .ew-hero h2 {
+    font-size: 25px;
+  }
+}
