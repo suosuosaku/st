@@ -1,8 +1,8 @@
 import './index.css';
 
 (() => {
-  const BUILD_ID = 'eldred-welcome-v3.2.1';
-  const HOST_ID = new URLSearchParams(window.location.search).get('hostId') || '';
+  const BUILD_ID = 'eldred-welcome-v3.2.2';
+  const HOST_ID = globalThis.__ELDRED_WELCOME_HOST_ID__ || new URLSearchParams(window.location.search).get('hostId') || '';
 
   const pages = [
     { id: 'cover', title: '卷首', sub: '世界入口' },
