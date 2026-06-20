@@ -56,6 +56,8 @@ const getHostFunction = <T extends (...args: any[]) => any>(name: string): T | n
   for (const scope of getHostScopes()) {
     try {
       if (typeof scope[name] === 'function') return scope[name] as T;
+      const eldredBridge = scope.__eldredWelcomeBridge;
+      if (eldredBridge && typeof eldredBridge[name] === 'function') return eldredBridge[name] as T;
     } catch {
       // Cross-origin frames can throw.
     }
@@ -63,7 +65,40 @@ const getHostFunction = <T extends (...args: any[]) => any>(name: string): T | n
   return null;
 };
 
-export const hasEldredGenerationBridge = () => Boolean(getHostFunction('generate'));
+const requestGenerateThroughLoader = (config: AnyRecord) => {
+  const requestId = createId('eldred-bridge');
+  const parentWindow = safeScope(() => window.parent) as (Window & AnyRecord) | null;
+  if (!parentWindow || parentWindow === window) {
+    return Promise.reject(Error('未检测到艾尔德雷德脚本桥接。请在 SillyTavern 脚本控制台内运行。'));
+  }
+
+  return new Promise<string>((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      window.removeEventListener('message', handleMessage);
+      reject(Error('艾尔德雷德脚本生成超时。'));
+    }, 600000);
+
+    function handleMessage(event: MessageEvent) {
+      const data = event.data || {};
+      if (data.source !== 'EldredWelcomeLoader' || data.type !== 'generate-result' || data.requestId !== requestId) return;
+      window.clearTimeout(timeout);
+      window.removeEventListener('message', handleMessage);
+      if (data.ok) resolve(String(data.text || ''));
+      else reject(Error(String(data.error || '艾尔德雷德脚本生成失败。')));
+    }
+
+    window.addEventListener('message', handleMessage);
+    parentWindow.postMessage({
+      source: 'EldredWelcome',
+      type: 'generate',
+      requestId,
+      config,
+    }, '*');
+  });
+};
+
+export const hasEldredGenerationBridge = () =>
+  Boolean(getHostFunction('generate')) || Boolean(safeScope(() => window.parent) && window.parent !== window);
 
 export const extractEldredContentBlock = (rawText: string) => {
   const source = String(rawText || '');
@@ -220,7 +255,7 @@ const generateWithEldredPreset = async ({
   systemPrompt: string;
   worldbookScanText: string;
 }) => {
-  const generate = getHostFunction<(config: AnyRecord) => Promise<string>>('generate');
+  const generate = getHostFunction<(config: AnyRecord) => Promise<string>>('generate') || requestGenerateThroughLoader;
   if (!generate) {
     throw Error('未检测到 Tavern Helper generate()。请在 SillyTavern 脚本控制台内运行。');
   }
@@ -383,4 +418,3 @@ export const generateEldredNarrationFromEvent = async (
     return persistGenerationError(runtime, error);
   }
 };
-

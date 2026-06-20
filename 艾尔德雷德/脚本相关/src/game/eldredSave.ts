@@ -154,12 +154,16 @@ const hostFunction = <T extends (...args: any[]) => any>(name: string): T | null
   for (const scope of hostScopes()) {
     try {
       if (typeof scope[name] === 'function') return scope[name] as T;
+      const eldredBridge = scope.__eldredWelcomeBridge;
+      if (eldredBridge && typeof eldredBridge[name] === 'function') return eldredBridge[name] as T;
     } catch {
       // Cross-origin windows can throw.
     }
   }
   return null;
 };
+
+const hasTavernVariableBridge = () => Boolean(hostFunction('getVariables'));
 
 const textOf = (value: unknown, fallback = ''): string => {
   if (value === undefined || value === null) return fallback;
@@ -211,6 +215,11 @@ const readMvuData = (): AnyRecord | null => {
         const statData = asRecord(messageData?.stat_data);
         if (Object.keys(statData).length > 0) return statData;
       }
+      if (api.__eldredWelcomeBridge?.Mvu && typeof api.__eldredWelcomeBridge.Mvu.getMvuData === 'function') {
+        const messageData = api.__eldredWelcomeBridge.Mvu.getMvuData({ type: 'message', message_id: 'latest' });
+        const statData = asRecord(messageData?.stat_data);
+        if (Object.keys(statData).length > 0) return statData;
+      }
     } catch {
       // ignored: the UI must also work as a standalone html file.
     }
@@ -238,6 +247,8 @@ const readCachedRuntime = (): EldredRuntimeSave | null => {
       // ignored
     }
   }
+
+  if (hasTavernVariableBridge()) return null;
 
   try {
     const local = localStorage.getItem(ELDRED_SAVE_KEY);

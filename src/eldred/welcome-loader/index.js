@@ -1,11 +1,11 @@
 (() => {
-  const BUILD_ID = 'eldred-welcome-loader-v3.3.4';
-  const VERSION_REF = 'eldred-integrated-v3.3.4';
+  const BUILD_ID = 'eldred-welcome-loader-v3.3.5';
+  const VERSION_REF = 'eldred-integrated-v3.3.5';
   const GLOBAL_KEY = '__eldredWelcomeLoader';
   const FRAME_SELECTOR = '[data-eldred-welcome-console="true"]';
   const FULL_UI_BASE = detectFullUiBase();
   const FULL_UI_ASSETS = {
-    script: 'assets/index-CtYX08oX.js',
+    script: 'assets/index-siD-br3g.js',
     style: 'assets/index-zfLregNA.css',
   };
   let iframeEl = null;
@@ -60,6 +60,73 @@
 
   function hostDocument() {
     return hostWindow().document || document;
+  }
+
+  function uniqueScopes(scopes) {
+    return Array.from(new Set(scopes.filter(Boolean)));
+  }
+
+  function findCallable(name) {
+    const scopes = uniqueScopes([
+      globalThis,
+      window,
+      (() => { try { return window.parent; } catch (error) { return null; } })(),
+      (() => { try { return window.top; } catch (error) { return null; } })(),
+      (() => { try { return hostWindow(); } catch (error) { return null; } })(),
+    ]);
+    for (const scope of scopes) {
+      try {
+        if (typeof scope?.[name] === 'function') return scope[name].bind(scope);
+      } catch (error) {}
+    }
+    return null;
+  }
+
+  function findMvuGetter() {
+    const scopes = uniqueScopes([
+      globalThis,
+      window,
+      (() => { try { return window.parent; } catch (error) { return null; } })(),
+      (() => { try { return window.top; } catch (error) { return null; } })(),
+      (() => { try { return hostWindow(); } catch (error) { return null; } })(),
+    ]);
+    for (const scope of scopes) {
+      try {
+        if (typeof scope?.Mvu?.getMvuData === 'function') return scope.Mvu.getMvuData.bind(scope.Mvu);
+      } catch (error) {}
+    }
+    return null;
+  }
+
+  function installHostBridge() {
+    const bridge = {
+      build: BUILD_ID,
+      generate(config) {
+        const generate = findCallable('generate');
+        if (!generate) throw Error('未检测到 Tavern Helper generate()。请在 SillyTavern 脚本控制台内运行。');
+        return generate(config);
+      },
+      getVariables(option) {
+        const getVariables = findCallable('getVariables');
+        if (!getVariables) return null;
+        return getVariables(option);
+      },
+      replaceVariables(variables, option) {
+        const replaceVariables = findCallable('replaceVariables');
+        if (!replaceVariables) return false;
+        return replaceVariables(variables, option);
+      },
+      Mvu: {
+        getMvuData(option) {
+          const getMvuData = findMvuGetter();
+          if (!getMvuData) return null;
+          return getMvuData(option);
+        },
+      },
+    };
+
+    try { hostWindow().__eldredWelcomeBridge = bridge; } catch (error) {}
+    try { window.__eldredWelcomeBridge = bridge; } catch (error) {}
   }
 
   function hostViewport() {
@@ -236,9 +303,47 @@
     removeEscapeControls();
   }
 
+  function postGenerateResult(targetWindow, requestId, payload) {
+    try {
+      targetWindow?.postMessage({
+        source: 'EldredWelcomeLoader',
+        type: 'generate-result',
+        requestId,
+        ...payload,
+      }, '*');
+    } catch (error) {
+      console.warn('[EldredWelcomeLoader] generate response failed', error);
+    }
+  }
+
+  function handleGenerateMessage(event, data) {
+    if (iframeEl && event.source && event.source !== iframeEl.contentWindow) return;
+    const targetWindow = event.source || iframeEl?.contentWindow;
+    const requestId = String(data.requestId || '');
+    const config = data.config || {};
+    Promise.resolve()
+      .then(() => {
+        installHostBridge();
+        return hostWindow().__eldredWelcomeBridge?.generate(config);
+      })
+      .then(text => {
+        postGenerateResult(targetWindow, requestId, { ok: true, text: String(text || '') });
+      })
+      .catch(error => {
+        postGenerateResult(targetWindow, requestId, {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+  }
+
   function handleMessage(event) {
     const data = event.data || {};
     if (data.source !== 'EldredWelcome') return;
+    if (data.type === 'generate') {
+      handleGenerateMessage(event, data);
+      return;
+    }
     if (data.type === 'ready') {
       syncViewportToIframe();
       return;
@@ -262,6 +367,7 @@
   }
 
   function bootstrap() {
+    installHostBridge();
     registerScriptButton();
     hostWindow().addEventListener('message', handleMessage);
     mountConsole();

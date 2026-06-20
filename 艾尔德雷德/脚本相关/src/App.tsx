@@ -24,9 +24,10 @@ import {
 } from './game/eldredNarration';
 
 export default function App() {
-  const [runtime, setRuntime] = useState<EldredRuntimeSave>(() => loadEldredRuntimeSave());
-  const [gameState, setGameState] = useState<GameState>(() => loadEldredRuntimeSave().player ? 'playing' : 'creation');
-  const [playerState, setPlayerState] = useState<PlayerState | null>(() => loadEldredRuntimeSave().player);
+  const [initialRuntime] = useState<EldredRuntimeSave>(() => loadEldredRuntimeSave());
+  const [runtime, setRuntime] = useState<EldredRuntimeSave>(initialRuntime);
+  const [gameState, setGameState] = useState<GameState>(() => initialRuntime.player ? 'playing' : 'creation');
+  const [playerState, setPlayerState] = useState<PlayerState | null>(() => initialRuntime.player);
   const [activeTab, setActiveTab] = useState<TabState>('overview');
   const [hudExpanded, setHudExpanded] = useState(true);
   const [interactionStatus, setInteractionStatus] = useState('待生成');
