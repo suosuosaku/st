@@ -2798,7 +2798,7 @@
           "enabled": true,
           "name": "智脑",
           "id": "3b767bf4-a24a-4b08-a39d-28b1fb90c547",
-          "content": "import 'https://testingcf.jsdelivr.net/gh/suosuosaku/st@eldred-integrated-v3.3.2/dist/%E6%99%BA%E8%84%91/index.js'",
+          "content": "import 'https://testingcf.jsdelivr.net/gh/suosuosaku/st@eldred-integrated-v3.3.3/dist/%E6%99%BA%E8%84%91/index.js'",
           "info": "",
           "button": {
             "enabled": true,
@@ -2873,7 +2873,7 @@
                 "smallSummaryApiFormat": "openai"
               }
             },
-            "version": "eldred-integrated-v3.3.2"
+            "version": "eldred-integrated-v3.3.3"
           }
         }
       ],

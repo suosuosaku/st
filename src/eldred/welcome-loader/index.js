@@ -1,13 +1,13 @@
-import welcomeScriptSource from '../welcome/index.js?raw';
-import welcomeCssSource from '../welcome/index.css?raw';
-
 (() => {
-  const BUILD_ID = 'eldred-welcome-loader-v3.3.2';
-  const VERSION_REF = 'eldred-integrated-v3.3.2';
+  const BUILD_ID = 'eldred-welcome-loader-v3.3.3';
+  const VERSION_REF = 'eldred-integrated-v3.3.3';
   const GLOBAL_KEY = '__eldredWelcomeLoader';
   const FRAME_SELECTOR = '[data-eldred-welcome-console="true"]';
-  const HOST_ID_PREFIX = 'eldred-welcome-';
-  const MAP_BASE = detectMapBase();
+  const FULL_UI_BASE = detectFullUiBase();
+  const FULL_UI_ASSETS = {
+    script: 'assets/index-DiBdrHY-.js',
+    style: 'assets/index-DelN8k02.css',
+  };
   let iframeEl = null;
   let exitButtonEl = null;
   let viewportDestroy = null;
@@ -40,10 +40,15 @@ import welcomeCssSource from '../welcome/index.css?raw';
     return scriptUrl ? String(scriptUrl).replace(/[?#].*$/, '') : '';
   }
 
-  function detectMapBase() {
+  function detectFullUiBase() {
     const scriptUrl = detectScriptUrl();
-    if (scriptUrl) return scriptUrl.replace(/\/welcome-loader\/index\.js$/, '/maps/');
-    return `https://testingcf.jsdelivr.net/gh/suosuosaku/st@${VERSION_REF}/dist/eldred/maps/`;
+    if (scriptUrl) {
+      try {
+        const repoBase = scriptUrl.replace(/\/dist\/eldred\/welcome-loader\/index\.js$/, '/');
+        return new URL('艾尔德雷德/脚本相关/dist/', repoBase).href;
+      } catch (error) {}
+    }
+    return `https://testingcf.jsdelivr.net/gh/suosuosaku/st@${VERSION_REF}/%E8%89%BE%E5%B0%94%E5%BE%B7%E9%9B%B7%E5%BE%B7/%E8%84%9A%E6%9C%AC%E7%9B%B8%E5%85%B3/dist/`;
   }
 
   function hostWindow() {
@@ -152,37 +157,32 @@ import welcomeCssSource from '../welcome/index.css?raw';
     update();
   }
 
-  function scriptText() {
-    return String(welcomeScriptSource || '')
-      .replace(/^\s*import\s+['"]\.\/index\.css['"];\s*/, '')
-      .replace(/<\/script/gi, '<\\/script');
-  }
-
-  function styleText() {
-    return String(welcomeCssSource || '').replace(/<\/style/gi, '<\\/style');
-  }
-
   function mountWelcomeDocument(iframe) {
     if (!iframe || iframe.dataset.eldredWelcomeMounted === 'true') return;
     const doc = iframe.contentDocument;
     if (!doc) return;
     iframe.dataset.eldredWelcomeMounted = 'true';
-    const hostId = `${HOST_ID_PREFIX}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const scriptUrl = new URL(FULL_UI_ASSETS.script, FULL_UI_BASE).href;
+    const styleUrl = new URL(FULL_UI_ASSETS.style, FULL_UI_BASE).href;
     doc.open();
     doc.write(`<!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <style>${styleText()}</style>
+  <base href="${FULL_UI_BASE}">
+  <title>艾尔德雷德大世界</title>
+  <link rel="stylesheet" crossorigin href="${styleUrl}">
+  <style>
+    html,body,#root{width:100%;height:100%;margin:0;overflow:hidden;background:#08090a;color:#d1d5db;}
+  </style>
 </head>
 <body>
-  <div id="app"></div>
+  <div id="root"></div>
   <script>
-    globalThis.__ELDRED_WELCOME_HOST_ID__ = ${JSON.stringify(hostId)};
-    globalThis.__ELDRED_MAP_BASE__ = ${JSON.stringify(MAP_BASE)};
+    globalThis.__ELDRED_FULL_UI_BASE__ = ${JSON.stringify(FULL_UI_BASE)};
   <\/script>
-  <script type="module">${scriptText()}<\/script>
+  <script type="module" crossorigin src="${scriptUrl}"><\/script>
 </body>
 </html>`);
     doc.close();
