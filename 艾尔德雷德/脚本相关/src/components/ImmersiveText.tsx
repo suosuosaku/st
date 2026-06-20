@@ -52,22 +52,44 @@ export function DialogueLine({ speaker, text }: { speaker: string; text: string 
 export function ImmersiveNoticeCard({ notice }: { notice: ImmersiveNotice }) {
   const Icon = iconByType[notice.type];
   return (
-    <div className="pixel-vertical-card">
-      <div className="pixel-card-crown" />
-      <div className="pixel-card-body">
-        <div className="pixel-token-icon">
-          <Icon className="w-4 h-4" />
-        </div>
-        <div className="min-w-0 text-center">
-          <div className="font-serif text-fantasy-gold text-sm md:text-base tracking-wider leading-tight">{notice.title}</div>
-          <div className="text-xs text-amber-50/85 leading-5 mt-2">{notice.body}</div>
-          {notice.meta && <div className="pixel-card-meta">{notice.meta}</div>}
-        </div>
+    <NoticePanel title={notice.title} body={notice.body} meta={notice.meta} Icon={Icon} compact />
+  );
+}
+
+function NoticePanel({
+  title,
+  body,
+  meta,
+  Icon,
+  compact = false,
+}: {
+  title: string;
+  body: string;
+  meta?: string;
+  Icon: typeof PackagePlus;
+  compact?: boolean;
+}) {
+  const noticeTitle = title.replace(/^【|】$/g, '');
+  const parts = body.split(/[｜|]/).map(part => part.trim()).filter(Boolean);
+  return (
+    <div className={`pixel-inline-notice ${compact ? 'pixel-inline-notice-compact' : ''}`}>
+      <div className="pixel-inline-notice-icon">
+        <Icon className="h-5 w-5" />
       </div>
-      <div className="pixel-card-gems" aria-hidden="true">
-        <span />
-        <span />
-        <span />
+      <div className="pixel-inline-notice-main">
+        <div className="pixel-inline-notice-title font-serif text-sm md:text-base">【{noticeTitle}】</div>
+        <div className="pixel-inline-notice-body text-xs md:text-sm">
+          {parts.length > 1 ? (
+            <div className="pixel-inline-notice-body-grid">
+              {parts.map((part, index) => (
+                <span className="pixel-inline-notice-chip" key={`${noticeTitle}-${index}`}>{part}</span>
+              ))}
+            </div>
+          ) : (
+            <div className="whitespace-pre-line">{body}</div>
+          )}
+          {meta && <div className="pixel-card-meta">{meta}</div>}
+        </div>
       </div>
     </div>
   );
@@ -77,25 +99,7 @@ function InlineNotice({ title, body }: { title: string; body: string }) {
   const type = noticeTypeFromTitle(title);
   const Icon = title.includes('战斗') ? Swords : iconByType[type];
   return (
-    <div className="my-5 flex justify-center">
-      <div className="pixel-vertical-card pixel-vertical-card-inline">
-        <div className="pixel-card-crown" />
-        <div className="pixel-card-body">
-          <div className="pixel-token-icon">
-            <Icon className="w-4 h-4" />
-          </div>
-          <div className="text-center">
-            <div className="font-serif text-fantasy-gold text-base tracking-wider">{title}</div>
-            <div className="text-xs md:text-sm text-amber-50/85 leading-6 mt-2 whitespace-pre-line">{body}</div>
-          </div>
-        </div>
-        <div className="pixel-card-gems" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-        </div>
-      </div>
-    </div>
+    <NoticePanel title={title} body={body} Icon={Icon} />
   );
 }
 
