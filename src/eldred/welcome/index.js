@@ -1,93 +1,129 @@
 import './index.css';
 
 (() => {
-  const BUILD_ID = 'eldred-welcome-v3.2.3';
+  const BUILD_ID = 'eldred-welcome-v3.3.0';
   const HOST_ID = globalThis.__ELDRED_WELCOME_HOST_ID__ || new URLSearchParams(window.location.search).get('hostId') || '';
+  const MAP_BASE = new URL('../maps/', window.location.href).toString();
 
-  const pages = [
-    { id: 'cover', title: '卷首', sub: '世界入口' },
-    { id: 'origin', title: '出生点', sub: '第一幕落点' },
-    { id: 'identity', title: '身份', sub: '角色模板' },
-    { id: 'dossier', title: '档案', sub: '玩家设定' },
-    { id: 'party', title: '同行', sub: '队伍边界' },
-    { id: 'confirm', title: '确认', sub: '开局指令' },
+  const chapters = [
+    { id: 'cover', title: '封面', tag: 'PRESS START' },
+    { id: 'author', title: '作者寄语', tag: 'LETTER' },
+    { id: 'world', title: '世界简介', tag: 'WORLD MAP' },
+    { id: 'factions', title: '势力简介', tag: 'FACTIONS' },
+    { id: 'story', title: '故事背景', tag: 'PROLOGUE' },
+    { id: 'setup', title: '开局设置', tag: 'CHARACTER' },
   ];
 
-  const places = [
+  const regions = [
     {
-      id: '黎明城墙白冠西门',
-      region: '神圣王国艾琳西亚',
-      risk: '低',
-      service: '城门登记 / 临时通行证 / 旅店询问',
-      mood: '体制内盘查',
-      hook: '第一场麻烦通常不是魔物，而是解释自己为什么没有像样文书。',
+      id: 'elinsea',
+      name: '艾琳西亚',
+      title: '神圣王国',
+      map: 'eldred-map-elinsea-v1.png',
+      risk: '低至中',
+      tone: '城门、文书、教会与王都秩序',
+      start: '黎明城墙白冠西门',
+      services: '通行登记 / 旅店 / 行会窗口 / 教会救济',
+      hooks: ['缺少路引', '行会试用委托', '白冠城外市集传闻'],
+      x: 64,
+      y: 52,
     },
     {
-      id: '风车港城外码头',
-      region: '岚之领七城邦',
+      id: 'stormland',
+      name: '岚之领',
+      title: '七城邦与风车港',
+      map: 'eldred-map-stormland-v1.png',
       risk: '中',
-      service: '船运 / 商队 / 行会委托',
-      mood: '海风与账单',
-      hook: '一张写错名字的货单，可能比贵族请柬更快把人卷进故事。',
+      tone: '商路、码头、债单与海风',
+      start: '风车港城外码头',
+      services: '船运 / 商会 / 酒馆委托 / 走私传闻',
+      hooks: ['错名货单', '失踪船员', '商队护送'],
+      x: 31,
+      y: 47,
     },
     {
-      id: '灰雾边境营地',
-      region: '禁忌之地边缘',
+      id: 'forbidden',
+      name: '禁忌之地',
+      title: '灰雾边境',
+      map: 'eldred-map-forbidden-v1.png',
       risk: '高',
-      service: '巡防 / 救治 / 禁物封存',
-      mood: '边境危机',
-      hook: '帐篷外的泥很新，伤员也很新，没人有空把麻烦说得体面。',
+      tone: '营地、封存物、伤员与雾潮',
+      start: '灰雾边境营地',
+      services: '巡防 / 救治 / 禁物封存 / 前线补给',
+      hooks: ['夜间警铃', '伤员名单', '遗物封箱'],
+      x: 50,
+      y: 48,
     },
     {
-      id: '星砂学院邮驿站',
-      region: '星砂学院邦',
-      risk: '低',
-      service: '邮驿 / 鉴定 / 学徒委托',
-      mood: '实验事故',
-      hook: '驿站永远有寄错的箱子，偶尔箱子还会自己发光。',
-    },
-    {
-      id: '白冠城外市集',
-      region: '艾琳西亚',
+      id: 'aeraya',
+      name: '亚雷亚',
+      title: '浮空圣都',
+      map: 'eldred-map-aeraya-v1.png',
       risk: '中',
-      service: '补给 / 雇佣 / 传闻打听',
-      mood: '市井轻喜剧',
-      hook: '晚饭钱和第一份委托会同时出现，但前者通常更急。',
+      tone: '记录灵、浮空城、空港与古代档案',
+      start: '记录灵小厅',
+      services: '档案查询 / 空港通行 / 学术鉴定',
+      hooks: ['编号异常', '旧档案缺页', '空港临时封锁'],
+      x: 42,
+      y: 21,
     },
     {
-      id: '自定义出生点',
-      region: '玩家指定',
-      risk: '待定',
-      service: '按设定生成',
-      mood: '自由接入',
-      hook: '写地点、氛围或眼前麻烦即可，世界会把它接进当前规则。',
+      id: 'neighbors',
+      name: '邻国边境',
+      title: '霜冠、南境与镜塔',
+      map: 'eldred-map-neighbor-realms-v1.png',
+      risk: '中至高',
+      tone: '异国边贸、佣兵、旧约与远方消息',
+      start: '镜塔自由市外环',
+      services: '边贸 / 镜塔情报 / 佣兵雇佣 / 过境文书',
+      hooks: ['失效通行章', '雇佣告示', '边境线索'],
+      x: 72,
+      y: 63,
     },
   ];
 
   const identities = [
-    ['旅行者', '行动自由，但缺少担保，开局要处理落脚、文书和第一份收入。'],
-    ['见习冒险者', '懂一点行会规矩，容易接委托，也容易被老手低估。'],
-    ['边境杂役', '熟悉营地、货车和低价补给，知道路上真正缺什么。'],
-    ['流亡小贵族', '懂礼仪和旧关系，但姓氏可能比钱包更先带来麻烦。'],
-    ['学院旁听生', '有知识入口，容易卷进实验事故、账单和导师的临时差遣。'],
-    ['自定义身份', '只保留玩家填写的身份气质，不预设隐藏血统或救世使命。'],
+    { id: 'traveler', name: '旅行者', stat: '灵巧 +1', note: '行动自由，缺少担保。' },
+    { id: 'rookie', name: '见习冒险者', stat: '力量 +1', note: '熟悉行会流程，容易接到试用委托。' },
+    { id: 'borderhand', name: '边境杂役', stat: '体魄 +1', note: '懂补给、营地和路上真正缺什么。' },
+    { id: 'exile', name: '流亡小贵族', stat: '魅力 +1', note: '懂礼仪，有旧关系，也有旧麻烦。' },
+    { id: 'listener', name: '学院旁听生', stat: '学识 +1', note: '能接触鉴定、档案和实验事故。' },
+    { id: 'custom', name: '自定义身份', stat: '自由 +1', note: '按玩家填写的角色设计落地。' },
   ];
 
-  const partyModes = [
-    ['暂时独行', '第一幕重点落在落脚、盘查、委托入口和本地 NPC 接触。'],
-    ['可遇伙伴', '允许剧情自然出现可同行角色，但不强行入队。'],
-    ['已有同行', '玩家可在角色设计里写明同行者，剧情负责给出合理登场。'],
+  const classes = [
+    { id: 'blade', name: '剑盾新手', icon: '⚔', role: '前排 / 护卫 / 近战压制', bonus: '力量' },
+    { id: 'ranger', name: '巡路猎手', icon: '➶', role: '侦察 / 路线 / 远程支援', bonus: '灵巧' },
+    { id: 'scribe', name: '记录学徒', icon: '✦', role: '鉴定 / 调查 / 记录灵接口', bonus: '学识' },
+    { id: 'mender', name: '随队医者', icon: '✚', role: '治疗 / 营地 / 状态处理', bonus: '体魄' },
+    { id: 'broker', name: '市井掮客', icon: '◆', role: '交易 / 传闻 / 谈判', bonus: '魅力' },
   ];
 
-  const tones = ['轻喜剧冒险', '城邦日常', '遗迹探索', '边境危机'];
+  const factions = [
+    ['白冠王室', '艾琳西亚王都、城墙、文书与骑士秩序。'],
+    ['圣辉教会', '救济、审判、净化、旧圣物保管。'],
+    ['七城邦商会', '码头、船票、债单、货路与雇佣委托。'],
+    ['星砂学院邦', '鉴定、记录灵、魔法实验与学徒事故。'],
+    ['灰雾边境军', '巡防营地、禁物封存、雾潮监视。'],
+    ['镜塔自由市', '情报、佣兵、边贸与异国过境。'],
+  ];
+
+  const storyBeats = [
+    ['灰雾回潮', '禁忌黑土边界出现新的雾墙与失踪记录。'],
+    ['王都封章', '白冠王都收紧通行，普通旅人也会被卷入盘查。'],
+    ['商路异动', '风车港与七城邦的货单、船票和债务开始互相咬合。'],
+    ['记录缺页', '亚雷亚的记录灵出现空白编号，旧档案无法完整对齐。'],
+  ];
 
   const state = {
-    page: 'cover',
-    place: places[0].id,
-    identity: identities[0][0],
-    party: partyModes[0][0],
-    tone: tones[0],
+    chapter: 'cover',
+    region: regions[0].id,
+    identity: identities[0].id,
+    classId: classes[0].id,
+    level: 1,
+    party: '暂时独行',
     submitted: false,
+    stats: { 力量: 1, 灵巧: 1, 体魄: 1, 学识: 1, 魅力: 1 },
     fields: {
       name: '{{user}}',
       customPlace: '',
@@ -108,52 +144,30 @@ import './index.css';
     })[char]);
   }
 
-  function pageIndex() {
-    return Math.max(0, pages.findIndex(page => page.id === state.page));
+  function chapterIndex() {
+    return Math.max(0, chapters.findIndex(item => item.id === state.chapter));
   }
 
-  function currentPage() {
-    return pages[pageIndex()] || pages[0];
-  }
-
-  function selectedPlace() {
-    return places.find(place => place.id === state.place) || places[0];
+  function selectedRegion() {
+    return regions.find(item => item.id === state.region) || regions[0];
   }
 
   function selectedIdentity() {
-    return identities.find(identity => identity[0] === state.identity) || identities[0];
+    return identities.find(item => item.id === state.identity) || identities[0];
   }
 
-  function selectedParty() {
-    return partyModes.find(mode => mode[0] === state.party) || partyModes[0];
+  function selectedClass() {
+    return classes.find(item => item.id === state.classId) || classes[0];
+  }
+
+  function statPool() {
+    const spent = Object.values(state.stats).reduce((sum, value) => sum + Number(value || 0), 0);
+    return 9 + (state.level - 1) * 2 - spent;
   }
 
   function actualPlaceName() {
     const custom = state.fields.customPlace.trim();
-    return state.place === '自定义出生点' && custom ? custom : state.place;
-  }
-
-  function buildPrompt() {
-    const place = selectedPlace();
-    const identity = selectedIdentity();
-    return [
-      '【艾尔德雷德开局设定】',
-      `玩家名: ${state.fields.name.trim() || '{{user}}'}`,
-      `出生点: ${actualPlaceName()}`,
-      `区域倾向: ${place.region}`,
-      `地点服务: ${place.service}`,
-      `地点风险: ${place.risk}`,
-      `开场气质: ${place.mood}`,
-      `角色模板: ${identity[0]}`,
-      `模板边界: ${identity[1]}`,
-      `角色设计: ${state.fields.design.trim() || '默认是纯路人，不预设隐藏身份，由玩家后续补充。'}`,
-      `当前麻烦: ${state.fields.trouble.trim() || place.hook}`,
-      `开局目标: ${state.fields.goal.trim() || '先进入当前地点的日常秩序，获得第一个可行动目标。'}`,
-      `同行预案: ${state.party}`,
-      `开局节奏: ${state.tone}`,
-      `补充说明: ${state.fields.note.trim() || '无'}`,
-      '生成要求: 根据以上角色设计和出生点自行设计第一幕剧情；不要使用固定开场白；输出必须遵守艾尔德雷德预设格式，正文使用<content>包裹，变量按MVU规则更新。',
-    ].join('\n');
+    return custom || selectedRegion().start;
   }
 
   function post(type, payload = {}) {
@@ -164,47 +178,41 @@ import './index.css';
 
   function resizeSoon() {
     requestAnimationFrame(() => {
-      const height = Math.max(
-        document.documentElement.scrollHeight,
-        document.body?.scrollHeight || 0,
-        640,
-      );
+      const height = Math.max(document.documentElement.scrollHeight, document.body?.scrollHeight || 0, 720);
       post('resize', { height: height + 12 });
     });
   }
 
   function move(delta) {
-    const next = Math.max(0, Math.min(pages.length - 1, pageIndex() + delta));
-    state.page = pages[next].id;
+    const next = Math.max(0, Math.min(chapters.length - 1, chapterIndex() + delta));
+    state.chapter = chapters[next].id;
     renderHome();
   }
 
-  function fillSample() {
-    state.page = 'confirm';
-    state.place = places[0].id;
-    state.identity = identities[0][0];
-    state.party = partyModes[0][0];
-    state.tone = tones[0];
-    state.fields = {
-      name: '{{user}}',
-      customPlace: '',
-      design: '看起来只是普通旅行者，背着磨旧的包，语气乐观，钱袋不算充足。',
-      trouble: '没有能立刻证明身份的路引，但想进城找落脚处和第一份委托。',
-      goal: '通过盘查，进入艾琳西亚，找到今晚能睡觉且不会太贵的地方。',
-      note: '不要预设隐藏身份，玩家会在后续自己补充真实来历。',
-    };
-    renderHome();
-  }
-
-  function reset() {
-    state.page = 'cover';
-    state.place = places[0].id;
-    state.identity = identities[0][0];
-    state.party = partyModes[0][0];
-    state.tone = tones[0];
-    state.submitted = false;
-    state.fields = { name: '{{user}}', customPlace: '', design: '', trouble: '', goal: '', note: '' };
-    renderHome();
+  function buildPrompt() {
+    const region = selectedRegion();
+    const identity = selectedIdentity();
+    const klass = selectedClass();
+    const attrs = Object.entries(state.stats).map(([key, value]) => `${key}${value}`).join(' / ');
+    return [
+      '【艾尔德雷德开局设定】',
+      `玩家名: ${state.fields.name.trim() || '{{user}}'}`,
+      `开局地区: ${region.name} - ${region.title}`,
+      `出生地标: ${actualPlaceName()}`,
+      `地区风险: ${region.risk}`,
+      `地区服务: ${region.services}`,
+      `身份: ${identity.name}`,
+      `职业定位: ${klass.name}`,
+      `职业职责: ${klass.role}`,
+      `等级: ${state.level}`,
+      `属性加点: ${attrs}`,
+      `同行状态: ${state.party}`,
+      `角色设计: ${state.fields.design.trim() || identity.note}`,
+      `当前麻烦: ${state.fields.trouble.trim() || region.hooks[0]}`,
+      `开局目标: ${state.fields.goal.trim() || '在当前地标取得第一份可执行目标。'}`,
+      `补充: ${state.fields.note.trim() || '无'}`,
+      '生成要求: 根据以上档案生成第一幕；正文必须使用<content>包裹；同步输出必要MVU变量更新；不得预设玩家隐藏血统或救世身份。',
+    ].join('\n');
   }
 
   function submitToTavernInput(text) {
@@ -252,6 +260,26 @@ import './index.css';
     renderHome();
   }
 
+  function randomize() {
+    state.region = regions[Math.floor(Math.random() * regions.length)].id;
+    state.identity = identities[Math.floor(Math.random() * (identities.length - 1))].id;
+    state.classId = classes[Math.floor(Math.random() * classes.length)].id;
+    state.level = 1 + Math.floor(Math.random() * 3);
+    state.party = ['暂时独行', '可遇伙伴', '已有同行'][Math.floor(Math.random() * 3)];
+    state.stats = { 力量: 1, 灵巧: 1, 体魄: 1, 学识: 1, 魅力: 1 };
+    let pool = statPool();
+    const keys = Object.keys(state.stats);
+    while (pool > 0) {
+      const key = keys[Math.floor(Math.random() * keys.length)];
+      if (state.stats[key] < 5) {
+        state.stats[key] += 1;
+        pool -= 1;
+      }
+    }
+    state.fields.trouble = selectedRegion().hooks[0];
+    renderHome();
+  }
+
   function field(key, label, placeholder, textarea = false) {
     const value = state.fields[key] || '';
     return `
@@ -263,70 +291,40 @@ import './index.css';
       </label>`;
   }
 
+  function pixelButton(label, action, extra = '') {
+    return `<button class="ew-pixel-btn ${extra}" data-action="${esc(action)}">${label}</button>`;
+  }
+
   function renderShell(inner) {
     const app = document.getElementById('app');
     if (!app) return;
-    const place = selectedPlace();
-    const page = currentPage();
+    const chapter = chapters[chapterIndex()];
     app.innerHTML = `
       <main class="eldred-welcome" data-build="${BUILD_ID}">
-        <section class="ew-frame">
-          <header class="ew-title">
-            <div>
-              <span>ELDRED KINGDOM DOSSIER</span>
+        <section class="ew-console">
+          <div class="ew-console-top">
+            <div class="ew-brand">
+              <span>ELDRED</span>
               <h1>艾尔德雷德大世界</h1>
-              <p>自由开局控制台 / 多阶段角色接入</p>
             </div>
-            <div class="ew-seal">E</div>
-          </header>
-
-          <section class="ew-board">
-            <aside class="ew-side">
-              <div class="ew-side-card">
-                <b>制作与边界</b>
-                <p>开场只负责收集玩家设计、出生点与第一幕方向，不预设救世身份，不写固定开场白。</p>
-              </div>
-              <nav class="ew-steps">
-                ${pages.map((item, index) => `
-                  <button class="${state.page === item.id ? 'active' : ''}" data-page="${item.id}">
-                    <span>${String(index + 1).padStart(2, '0')}</span>
-                    <strong>${item.title}</strong>
-                    <small>${item.sub}</small>
-                  </button>
-                `).join('')}
-              </nav>
-              <div class="ew-side-card compact">
-                <b>${esc(actualPlaceName())}</b>
-                <p>${esc(place.region)} / 风险 ${esc(place.risk)} / ${esc(state.tone)}</p>
-              </div>
-            </aside>
-
-            <section class="ew-stage">
-              <header class="ew-stage-head">
-                <div>
-                  <span>${esc(page.sub)} / ${esc(place.mood)}</span>
-                  <h2>${esc(page.title)}</h2>
-                </div>
-                <div class="ew-fast">
-                  <button data-page="origin">地点</button>
-                  <button data-page="dossier">档案</button>
-                  <button data-page="confirm">预览</button>
-                </div>
-              </header>
-              <section class="ew-content">${inner}</section>
-              <footer class="ew-footer">
-                <div>
-                  <button data-action="sample">填入示例</button>
-                  <button data-action="reset">重置</button>
-                </div>
-                <div>
-                  <button data-action="prev" ${pageIndex() === 0 ? 'disabled' : ''}>上一步</button>
-                  <button data-action="next" ${pageIndex() === pages.length - 1 ? 'disabled' : ''}>下一步</button>
-                  <button class="primary" data-action="submit">${state.submitted ? '已发送' : '发送开局设定'}</button>
-                </div>
-              </footer>
-            </section>
+            <div class="ew-cartridge">${esc(chapter.tag)}</div>
+          </div>
+          <section class="ew-slide" data-chapter="${esc(chapter.id)}">
+            ${inner}
           </section>
+          <footer class="ew-command">
+            <nav class="ew-chapters">
+              ${chapters.map((item, index) => `
+                <button class="${item.id === state.chapter ? 'active' : ''}" data-chapter="${item.id}">
+                  <span>${String(index + 1).padStart(2, '0')}</span>${esc(item.title)}
+                </button>
+              `).join('')}
+            </nav>
+            <div class="ew-controls">
+              ${pixelButton('◀ 上一步', 'prev', chapterIndex() === 0 ? 'is-disabled' : '')}
+              ${state.chapter === 'setup' ? pixelButton(state.submitted ? '已写入' : '写入开局', 'submit', 'primary') : pixelButton('下一步 ▶', 'next', 'primary')}
+            </div>
+          </footer>
         </section>
       </main>`;
     bind(app);
@@ -335,106 +333,184 @@ import './index.css';
 
   function coverPage() {
     return `
-      <div class="ew-stack">
-        <section class="ew-hero">
-          <div>
-            <span>ADVENTURE OPENING</span>
-            <h3>先确定角色从哪里醒来，再让世界按规则回应。</h3>
-            <p>这里不是固定开场白。玩家只需要给出角色设计、出生点和眼前麻烦，艾尔德雷德会从文书、委托、地标服务、NPC职责和当地传闻里生成第一幕。</p>
-          </div>
-          <div class="ew-orbit">
-            <i></i><i></i><i></i><i></i>
-            <strong>${esc(actualPlaceName())}</strong>
-          </div>
+      <div class="ew-cover" style="--cover-map:url('${MAP_BASE}eldred-world-map-base-v1.png')">
+        <div class="ew-title-stack">
+          <span class="ew-press">PRESS START</span>
+          <h2>艾尔德雷德</h2>
+          <p>像素冒险 / 西幻大世界 / 自由开局</p>
+        </div>
+        <div class="ew-save-slots">
+          <button data-action="next"><b>NEW GAME</b><small>进入开场章节</small></button>
+          <button data-chapter="setup"><b>LOAD SETUP</b><small>直接创建角色</small></button>
+        </div>
+      </div>`;
+  }
+
+  function authorPage() {
+    return `
+      <div class="ew-two">
+        <section class="ew-letter">
+          <span>AUTHOR</span>
+          <h2>给初入艾尔德雷德的旅人</h2>
+          <p>你可以从城门、码头、营地、学院或异国边境开始。</p>
+          <p>你可以只是普通旅行者、见习冒险者、边境杂役、旁听生，或一个不愿再使用旧姓氏的人。</p>
+          <p>名字会被登记，金币会被花掉，伤口会留下记录，同行者也会记得你做过什么。</p>
         </section>
-        <section class="ew-info-grid">
-          <article><b>一页一件事</b><p>每一页只处理一个开局维度，避免把所有设定堆在同一屏。</p></article>
-          <article><b>玩家先定调</b><p>身份、麻烦、目标可以很普通，世界负责给出可行动的剧情入口。</p></article>
-          <article><b>首轮动态生成</b><p>新闻、传闻、委托、在场人物与变量由第一幕剧情同步落地。</p></article>
+        <section class="ew-pixel-panel">
+          <div class="ew-big-icon">★</div>
+          <b>冒险存档 001</b>
+          <small>白冠城墙外 / 风车港码头 / 灰雾营地 / 记录灵小厅</small>
         </section>
       </div>`;
   }
 
-  function originPage() {
+  function worldPage() {
     return `
-      <div class="ew-stack">
-        <section class="ew-map">
-          ${places.slice(0, 5).map((place, index) => `
-            <button class="ew-node n${index + 1} ${state.place === place.id ? 'selected' : ''}" data-place="${esc(place.id)}">
-              <strong>${esc(place.id)}</strong><span>${esc(place.region)}</span>
+      <div class="ew-map-layout">
+        <section class="ew-world-map" style="--world-map:url('${MAP_BASE}eldred-world-map-base-v1.png')">
+          ${regions.map(region => `
+            <button class="ew-map-pin ${region.id === state.region ? 'active' : ''}" style="left:${region.x}%;top:${region.y}%" data-region="${region.id}">
+              <span>${esc(region.name)}</span>
             </button>
           `).join('')}
         </section>
-        <section class="ew-card-grid">
-          ${places.map(place => `
-            <article class="ew-card ${state.place === place.id ? 'selected' : ''}" data-place="${esc(place.id)}">
-              <div><b>${esc(place.id)}</b><span>${esc(place.mood)}</span></div>
-              <p>${esc(place.hook)}</p>
-              <small>${esc(place.service)} / 风险 ${esc(place.risk)}</small>
-            </article>
+        <section class="ew-region-deck">
+          ${regions.map(region => `
+            <button class="ew-region-card ${region.id === state.region ? 'selected' : ''}" data-region="${region.id}">
+              <b>${esc(region.name)}</b>
+              <span>${esc(region.title)}</span>
+              <small>${esc(region.tone)}</small>
+            </button>
           `).join('')}
         </section>
-        ${state.place === '自定义出生点' ? field('customPlace', '自定义出生点', '例如：白冠城外一间漏雨旅店') : ''}
       </div>`;
   }
 
-  function identityPage() {
+  function factionsPage() {
     return `
-      <section class="ew-card-grid three">
-        ${identities.map(identity => `
-          <article class="ew-card ${state.identity === identity[0] ? 'selected' : ''}" data-identity="${esc(identity[0])}">
-            <div><b>${esc(identity[0])}</b><span>身份模板</span></div>
-            <p>${esc(identity[1])}</p>
+      <div class="ew-faction-grid">
+        ${factions.map(([name, text], index) => `
+          <article class="ew-faction">
+            <div class="ew-token">${['♜', '✚', '◆', '✦', '⚑', '◇'][index]}</div>
+            <b>${esc(name)}</b>
+            <p>${esc(text)}</p>
           </article>
         `).join('')}
-      </section>`;
+      </div>`;
   }
 
-  function dossierPage() {
+  function storyPage() {
     return `
-      <section class="ew-form">
-        ${field('name', '玩家名', '{{user}}')}
-        ${field('goal', '开局目标', '进城、找委托、寻找某人、躲债、调查传闻等')}
-        ${field('design', '角色设计', '外貌、性格、擅长什么、不擅长什么；保持可被世界验证', true)}
-        ${field('trouble', '当前麻烦', '没有文书、包裹可疑、钱包紧张、被误会、刚从某地逃出来等', true)}
-        ${field('note', '补充说明', '不要预设隐藏身份；玩家后续自己揭示的内容写这里', true)}
-      </section>`;
-  }
-
-  function partyPage() {
-    return `
-      <div class="ew-stack">
-        <section class="ew-card-grid three">
-          ${partyModes.map(mode => `
-            <article class="ew-card ${state.party === mode[0] ? 'selected' : ''}" data-party="${esc(mode[0])}">
-              <div><b>${esc(mode[0])}</b><span>同行边界</span></div>
-              <p>${esc(mode[1])}</p>
+      <div class="ew-story">
+        <section class="ew-story-banner">
+          <h2>雾潮回卷，旧档缺页，新的旅人抵达边界。</h2>
+          <p>城门钟声、港口税单、营地封箱与记录灵缺页同时亮起；第一幕从旅人脚下的地标开始。</p>
+        </section>
+        <section class="ew-timeline">
+          ${storyBeats.map((item, index) => `
+            <article>
+              <span>${String(index + 1).padStart(2, '0')}</span>
+              <b>${esc(item[0])}</b>
+              <p>${esc(item[1])}</p>
             </article>
           `).join('')}
-        </section>
-        <section class="ew-tone-row">
-          ${tones.map(tone => `<button class="${state.tone === tone ? 'selected' : ''}" data-tone="${esc(tone)}">${esc(tone)}</button>`).join('')}
-        </section>
-        <section class="ew-info-grid">
-          <article><b>首轮 NPC</b><p>由出生点自然决定。城门开局优先巡逻、登记员、行会窗口和临时委托人。</p></article>
-          <article><b>入队边界</b><p>第一幕可以遇到伙伴，但是否入队必须由剧情关系、条件和后续选择共同决定。</p></article>
-          <article><b>状态反馈</b><p>在场人物、可回访、可入队、关系立场应在变量与状态栏中同步可见。</p></article>
         </section>
       </div>`;
   }
 
-  function confirmPage() {
+  function setupPage() {
+    const region = selectedRegion();
+    const identity = selectedIdentity();
+    const klass = selectedClass();
     return `
-      <div class="ew-stack">
-        <section class="ew-summary">
-          <div><span>出生点</span><b>${esc(actualPlaceName())}</b></div>
-          <div><span>身份</span><b>${esc(state.identity)}</b></div>
-          <div><span>同行</span><b>${esc(state.party)}</b></div>
-          <div><span>节奏</span><b>${esc(state.tone)}</b></div>
+      <div class="ew-setup">
+        <section class="ew-setup-map">
+          <div class="ew-area-map" style="--area-map:url('${MAP_BASE}${region.map}')">
+            <div class="ew-location-tag">
+              <span>START</span>
+              <b>${esc(actualPlaceName())}</b>
+              <small>${esc(region.name)} / 风险 ${esc(region.risk)}</small>
+            </div>
+          </div>
+          <div class="ew-hooks">
+            ${region.hooks.map(hook => `<button data-trouble="${esc(hook)}">${esc(hook)}</button>`).join('')}
+          </div>
         </section>
-        <section class="ew-preview">
-          <header><b>将发送给模型的开局设定</b><span>${state.submitted ? '已提交' : '等待确认'}</span></header>
-          <pre>${esc(buildPrompt())}</pre>
+
+        <section class="ew-maker">
+          <div class="ew-choice-row">
+            <header><span>REGION</span><b>地区开场</b></header>
+            <div class="ew-choice-grid">
+              ${regions.map(item => `<button class="${item.id === state.region ? 'selected' : ''}" data-region="${item.id}">${esc(item.name)}</button>`).join('')}
+            </div>
+          </div>
+
+          <div class="ew-choice-row">
+            <header><span>IDENTITY</span><b>身份</b></header>
+            <div class="ew-choice-grid three">
+              ${identities.map(item => `
+                <button class="${item.id === state.identity ? 'selected' : ''}" data-identity="${item.id}">
+                  <b>${esc(item.name)}</b><small>${esc(item.stat)}</small>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+
+          <div class="ew-choice-row">
+            <header><span>CLASS</span><b>职业定位</b></header>
+            <div class="ew-class-grid">
+              ${classes.map(item => `
+                <button class="${item.id === state.classId ? 'selected' : ''}" data-class="${item.id}">
+                  <span>${item.icon}</span><b>${esc(item.name)}</b><small>${esc(item.role)}</small>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+
+          <div class="ew-build-grid">
+            <section class="ew-level-box">
+              <header><span>LEVEL</span><b>等级 ${state.level}</b></header>
+              <div class="ew-stepper">
+                <button data-action="level-down">-</button>
+                <strong>Lv.${state.level}</strong>
+                <button data-action="level-up">+</button>
+              </div>
+              <small>剩余属性点：${statPool()}</small>
+            </section>
+            <section class="ew-stat-box">
+              ${Object.entries(state.stats).map(([key, value]) => `
+                <div class="ew-stat">
+                  <span>${esc(key)}</span>
+                  <button data-stat="${esc(key)}" data-delta="-1">-</button>
+                  <b>${value}</b>
+                  <button data-stat="${esc(key)}" data-delta="1">+</button>
+                </div>
+              `).join('')}
+            </section>
+          </div>
+
+          <section class="ew-form">
+            ${field('name', '玩家名', '{{user}}')}
+            ${field('customPlace', '出生地标', region.start)}
+            ${field('design', '角色外观与性格', `${identity.name}，${klass.name}，${identity.note}`, true)}
+            ${field('trouble', '眼前麻烦', region.hooks[0], true)}
+            ${field('goal', '第一目标', '通过盘查、接取委托、寻找落脚处、调查传闻等', true)}
+            ${field('note', '额外设定', '可写同行者、禁忌、债务、旧识或不希望出现的设定', true)}
+          </section>
+
+          <div class="ew-party-row">
+            ${['暂时独行', '可遇伙伴', '已有同行'].map(mode => `<button class="${state.party === mode ? 'selected' : ''}" data-party="${mode}">${mode}</button>`).join('')}
+            <button data-action="random">随机档案</button>
+          </div>
+
+          <section class="ew-character-sheet">
+            <header><span>READY</span><b>${esc(state.fields.name.trim() || '{{user}}')} / ${esc(region.name)} / ${esc(klass.name)}</b></header>
+            <div>
+              <p>${esc(actualPlaceName())}</p>
+              <p>${esc(identity.name)} · ${esc(klass.role)} · ${esc(state.party)}</p>
+              <p>${esc(Object.entries(state.stats).map(([key, value]) => `${key}${value}`).join(' / '))}</p>
+            </div>
+          </section>
         </section>
       </div>`;
   }
@@ -445,19 +521,17 @@ import './index.css';
       .map(line => line.match(/^([^:：]{2,14})[:：]\s*([\s\S]+)$/))
       .filter(Boolean)
       .map(match => [match[1], match[2]])
-      .slice(0, 14);
+      .slice(0, 12);
     return `
       <main class="eldred-welcome confirm-only">
-        <section class="ew-frame compact-frame">
-          <section class="ew-confirm-banner">
-            <span>已提交</span>
-            <h2>开局设定已写入聊天</h2>
-            <p>下一轮正式回复应根据这份设定生成第一幕剧情，并使用 <content> 与 MVU 变量更新格式。</p>
+        <section class="ew-console">
+          <section class="ew-confirm">
+            <span>SAVED</span>
+            <h2>开局档案已写入输入框</h2>
+            <div class="ew-summary">
+              ${rows.map(row => `<article><span>${esc(row[0])}</span><b>${esc(row[1])}</b></article>`).join('')}
+            </div>
           </section>
-          <section class="ew-summary">
-            ${rows.map(row => `<div><span>${esc(row[0])}</span><b>${esc(row[1])}</b></div>`).join('')}
-          </section>
-          <section class="ew-preview"><header><b>设定原文</b></header><pre>${esc(raw)}</pre></section>
         </section>
       </main>`;
   }
@@ -465,12 +539,12 @@ import './index.css';
   function renderHome() {
     const renderer = {
       cover: coverPage,
-      origin: originPage,
-      identity: identityPage,
-      dossier: dossierPage,
-      party: partyPage,
-      confirm: confirmPage,
-    }[state.page] || coverPage;
+      author: authorPage,
+      world: worldPage,
+      factions: factionsPage,
+      story: storyPage,
+      setup: setupPage,
+    }[state.chapter] || coverPage;
     renderShell(renderer());
   }
 
@@ -481,20 +555,29 @@ import './index.css';
     resizeSoon();
   }
 
+  function setStat(key, delta) {
+    if (!Object.prototype.hasOwnProperty.call(state.stats, key)) return;
+    const next = state.stats[key] + delta;
+    if (next < 1 || next > 5) return;
+    if (delta > 0 && statPool() <= 0) return;
+    state.stats[key] = next;
+    renderHome();
+  }
+
   function bind(app) {
     if (app.dataset.bound === BUILD_ID) return;
     app.dataset.bound = BUILD_ID;
     app.addEventListener('click', event => {
       const target = event.target;
-      const page = target.closest?.('[data-page]');
-      if (page) {
-        state.page = page.dataset.page;
+      const chapter = target.closest?.('[data-chapter]');
+      if (chapter) {
+        state.chapter = chapter.dataset.chapter;
         renderHome();
         return;
       }
-      const place = target.closest?.('[data-place]');
-      if (place) {
-        state.place = place.dataset.place;
+      const region = target.closest?.('[data-region]');
+      if (region) {
+        state.region = region.dataset.region;
         renderHome();
         return;
       }
@@ -504,31 +587,50 @@ import './index.css';
         renderHome();
         return;
       }
+      const klass = target.closest?.('[data-class]');
+      if (klass) {
+        state.classId = klass.dataset.class;
+        renderHome();
+        return;
+      }
       const party = target.closest?.('[data-party]');
       if (party) {
         state.party = party.dataset.party;
         renderHome();
         return;
       }
-      const tone = target.closest?.('[data-tone]');
-      if (tone) {
-        state.tone = tone.dataset.tone;
+      const trouble = target.closest?.('[data-trouble]');
+      if (trouble) {
+        state.fields.trouble = trouble.dataset.trouble;
         renderHome();
         return;
       }
+      const stat = target.closest?.('[data-stat]');
+      if (stat) {
+        setStat(stat.dataset.stat, Number(stat.dataset.delta || 0));
+        return;
+      }
       const action = target.closest?.('[data-action]')?.dataset.action;
-      if (action === 'sample') fillSample();
-      if (action === 'reset') reset();
-      if (action === 'prev') move(-1);
       if (action === 'next') move(1);
+      if (action === 'prev' && chapterIndex() > 0) move(-1);
       if (action === 'submit') submit();
+      if (action === 'random') randomize();
+      if (action === 'level-up' && state.level < 3) {
+        state.level += 1;
+        renderHome();
+      }
+      if (action === 'level-down' && state.level > 1) {
+        const requiredMax = 9 + (state.level - 2) * 2;
+        const spent = Object.values(state.stats).reduce((sum, value) => sum + value, 0);
+        if (spent <= requiredMax) state.level -= 1;
+        renderHome();
+      }
     });
     app.addEventListener('input', event => {
       const fieldName = event.target?.dataset?.field;
       if (!fieldName) return;
       state.fields[fieldName] = event.target.value;
-      if (state.page === 'confirm') renderHome();
-      else resizeSoon();
+      resizeSoon();
     });
   }
 
