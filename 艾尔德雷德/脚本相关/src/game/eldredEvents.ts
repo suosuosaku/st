@@ -24,6 +24,7 @@ export type EldredFrontendEventInput = {
   player?: PlayerState | null;
   party?: Character[];
   enemies?: CombatUnit[];
+  authoritativeResult?: string;
   extraFacts?: string[];
 };
 
@@ -84,7 +85,8 @@ export const buildEldredFrontendEventPayload = (input: EldredFrontendEventInput)
     `    equipment_name: "${quote(equipment?.name)}"`,
     `    quest_id: "${quote(input.quest?.id)}"`,
     `    quest_title: "${quote(input.quest?.title)}"`,
-    '  authoritative_state_before_event:',
+    `    result: "${quote(input.authoritativeResult || input.playerIntent)}"`,
+    '  authoritative_state_after_event:',
     ...playerFacts(input.player),
     ...partyFacts(input.party),
     ...enemyFacts(input.enemies),
@@ -92,6 +94,6 @@ export const buildEldredFrontendEventPayload = (input: EldredFrontendEventInput)
     ...facts.map(fact => `    - "${quote(fact)}"`),
     '```',
     '',
-    '裁决请求：按当前正文、变量与世界书裁决此事件；前端事件只代表玩家操作意图，不代表结果已经发生。若事件成立，正文输出对应美化标签并在 <UpdateVariable> 写回变量。',
+    '同步请求：以上为脚本控制台已经结算的前端权威事实。正文只演绎结果、补足场景反应，并在 <UpdateVariable> 写回同一结果；不得反转命中、伤害、消耗、装备槽位、经验、升级或队伍状态。',
   ].join('\n');
 };

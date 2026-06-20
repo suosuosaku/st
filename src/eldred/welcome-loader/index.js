@@ -1,12 +1,12 @@
 (() => {
-  const BUILD_ID = 'eldred-welcome-loader-v3.3.5';
-  const VERSION_REF = 'eldred-integrated-v3.3.5';
+  const BUILD_ID = 'eldred-welcome-loader-v3.4.1';
+  const VERSION_REF = 'eldred-integrated-v3.4.1';
   const GLOBAL_KEY = '__eldredWelcomeLoader';
   const FRAME_SELECTOR = '[data-eldred-welcome-console="true"]';
   const FULL_UI_BASE = detectFullUiBase();
   const FULL_UI_ASSETS = {
-    script: 'assets/index-siD-br3g.js',
-    style: 'assets/index-zfLregNA.css',
+    script: 'assets/index-HqM9pvvg.js',
+    style: 'assets/index-ksAmbY1v.css',
   };
   let iframeEl = null;
   let exitButtonEl = null;
@@ -115,6 +115,72 @@
         const replaceVariables = findCallable('replaceVariables');
         if (!replaceVariables) return false;
         return replaceVariables(variables, option);
+      },
+      generateRaw(config) {
+        const generateRaw = findCallable('generateRaw');
+        if (!generateRaw) throw Error('未检测到 Tavern Helper generateRaw()。');
+        return generateRaw(config);
+      },
+      importRawPreset(name, raw) {
+        const importRawPreset = findCallable('importRawPreset');
+        if (!importRawPreset) throw Error('未检测到 importRawPreset()。');
+        return importRawPreset(name, raw);
+      },
+      loadPreset(name) {
+        const loadPreset = findCallable('loadPreset');
+        if (!loadPreset) return false;
+        return loadPreset(name);
+      },
+      getPresetNames() {
+        const getPresetNames = findCallable('getPresetNames');
+        return getPresetNames ? getPresetNames() : [];
+      },
+      getLoadedPresetName() {
+        const getLoadedPresetName = findCallable('getLoadedPresetName');
+        return getLoadedPresetName ? getLoadedPresetName() : undefined;
+      },
+      getWorldbookNames() {
+        const getWorldbookNames = findCallable('getWorldbookNames');
+        return getWorldbookNames ? getWorldbookNames() : [];
+      },
+      getWorldbook(name) {
+        const getWorldbook = findCallable('getWorldbook');
+        if (!getWorldbook) return [];
+        return getWorldbook(name);
+      },
+      createWorldbook(name, entries) {
+        const createWorldbook = findCallable('createWorldbook');
+        if (!createWorldbook) throw Error('未检测到 createWorldbook()。');
+        return createWorldbook(name, entries);
+      },
+      createOrReplaceWorldbook(name, entries, option) {
+        const createOrReplaceWorldbook = findCallable('createOrReplaceWorldbook');
+        if (!createOrReplaceWorldbook) throw Error('未检测到 createOrReplaceWorldbook()。');
+        return createOrReplaceWorldbook(name, entries, option);
+      },
+      createWorldbookEntries(name, entries, option) {
+        const createWorldbookEntries = findCallable('createWorldbookEntries');
+        if (!createWorldbookEntries) throw Error('未检测到 createWorldbookEntries()。');
+        return createWorldbookEntries(name, entries, option);
+      },
+      getGlobalWorldbookNames() {
+        const getGlobalWorldbookNames = findCallable('getGlobalWorldbookNames');
+        return getGlobalWorldbookNames ? getGlobalWorldbookNames() : [];
+      },
+      rebindGlobalWorldbooks(names) {
+        const rebindGlobalWorldbooks = findCallable('rebindGlobalWorldbooks');
+        if (!rebindGlobalWorldbooks) return false;
+        return rebindGlobalWorldbooks(names);
+      },
+      getOrCreateChatWorldbook(chat, name) {
+        const getOrCreateChatWorldbook = findCallable('getOrCreateChatWorldbook');
+        if (!getOrCreateChatWorldbook) throw Error('未检测到 getOrCreateChatWorldbook()。');
+        return getOrCreateChatWorldbook(chat, name);
+      },
+      rebindChatWorldbook(chat, name) {
+        const rebindChatWorldbook = findCallable('rebindChatWorldbook');
+        if (!rebindChatWorldbook) throw Error('未检测到 rebindChatWorldbook()。');
+        return rebindChatWorldbook(chat, name);
       },
       Mvu: {
         getMvuData(option) {

@@ -234,7 +234,7 @@ const buildHistoryPrompts = (runtime: EldredRuntimeSave): StoryPrompt[] =>
 
 const buildBaseSystemPrompt = (runtime: EldredRuntimeSave, userInput: string, kind: EldredNarrationKind, party: Character[] = [], enemies: CombatUnit[] = []) => [
   '艾尔德雷德脚本控制台事实输入。',
-  '正文、变量更新、战斗裁决和沉浸提示由艾尔德雷德专用预设处理。',
+  '脚本控制台负责权威状态、按钮交互、战斗数值、装备槽位、技能装配和存档；正文负责演绎、场景反应、变量同步和沉浸提示。',
   ELDRED_WORLD_ENGINE_PATCH,
   ELDRED_CHAT_BEAUTIFY_RULES,
   kind === 'combat' ? ELDRED_COMBAT_INTERNAL_CHECKLIST : '',
@@ -396,7 +396,7 @@ export const generateEldredNarrationFromEvent = async (
   const userInput = input.playerIntent || input.title || '前端事件';
   const systemPrompt = [
     buildBaseSystemPrompt(runtime, eventPayload, kind, party, enemies),
-    '按当前变量、世界书和事件事实生成下一段正文；事件只代表玩家在脚本控制台中的操作意图，结果由正文裁决。需要输出 <content> 与 <UpdateVariable>。',
+    '按当前变量、世界书和前端权威事件生成下一段正文；事件中的 result 与 authoritative_state_after_event 已经发生。需要输出 <content> 与 <UpdateVariable>，变量写回必须与前端结果一致。',
   ].join('\n\n');
   try {
     const rawText = await generateWithEldredPreset({

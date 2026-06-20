@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { Character, CombatUnit, PlayerState, Skill } from '../../types';
 import { equippedIdsFromLoadout, getClassById, getEquipmentById, getSkillById, playerToCombatUnit } from '../../game/rules';
 import { EldredFrontendEventInput } from '../../game/eldredEvents';
+import { EldredCombatCommand } from '../../game/eldredActions';
 
 type CombatLog = {
   id: string;
@@ -33,6 +34,7 @@ type CombatPanelProps = {
   initialTurn?: number;
   initialLogs?: string[];
   onSubmitEvent?: (event: Omit<EldredFrontendEventInput, 'player' | 'party' | 'enemies'>) => Promise<void>;
+  onSubmitCommand?: (command: EldredCombatCommand) => Promise<void>;
 };
 
 const npcToCombatUnit = (npc: Character): CombatUnit => {
@@ -82,6 +84,7 @@ export function CombatPanel({
   initialTurn = 1,
   initialLogs = EMPTY_LOGS,
   onSubmitEvent,
+  onSubmitCommand,
 }: CombatPanelProps) {
   const initialUnits = useMemo(() => {
     const party = partyNpcs.map(npcToCombatUnit);
@@ -175,7 +178,16 @@ export function CombatPanel({
     }
 
     let status = '已提交正文生成';
-    if (onSubmitEvent) {
+    if (onSubmitCommand) {
+      await onSubmitCommand({
+        kind,
+        actorId: selectedActor.id,
+        targetId: selectedTarget?.id,
+        skillId: kind === 'skill' ? selectedSkill?.id : undefined,
+        targetIsAlly: selectedSkillTargetsAlly,
+      });
+      status = '前端结算完成，正文同步中';
+    } else if (onSubmitEvent) {
       await onSubmitEvent({
         eventType: 'combat_command',
         title: `回合${turn}：${selectedActor.name}${commandLabel[kind]}`,
@@ -209,7 +221,7 @@ export function CombatPanel({
           </div>
           <div className="min-w-0">
             <div className="text-sm font-serif text-gray-200 truncate">{player.location.name} · {player.location.landmarkName}</div>
-            <div className="text-xs text-gray-400">正文裁决 / MVU写回</div>
+            <div className="text-xs text-gray-400">前端结算 / MVU同步</div>
           </div>
         </div>
 
@@ -330,7 +342,7 @@ function UnitCard({ unit }: { unit: CombatUnit; compact?: boolean }) {
   const isDead = unit.hp <= 0;
 
   return (
-    <div className={`p-4 bg-black/40 rounded-lg border flex flex-col gap-3 relative overflow-hidden ${unit.isEnemy ? 'border-fantasy-red/20' : 'border-fantasy-blue/20'} ${isDead ? 'opacity-50 grayscale' : ''}`}>
+    <div className={`pixel-unit-shell p-4 flex flex-col gap-3 relative overflow-hidden ${unit.isEnemy ? 'border-fantasy-red/50' : 'border-fantasy-gold/40'} ${isDead ? 'opacity-50 grayscale' : ''}`}>
       <div className="flex justify-between items-start gap-3">
         <div className="flex flex-col min-w-0">
           <span className={`font-serif tracking-wide truncate ${unit.isEnemy ? 'text-fantasy-red' : 'text-blue-300'}`}>{unit.name}</span>
@@ -353,8 +365,8 @@ function UnitCard({ unit }: { unit: CombatUnit; compact?: boolean }) {
       <div className="space-y-1.5 mt-1">
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-gray-500 w-8">生命</span>
-          <div className="flex-1 h-1.5 bg-gray-900 rounded-full overflow-hidden">
-            <motion.div initial={{ width: 0 }} animate={{ width: `${hpPct}%` }} className="h-full hp-bar-fill" />
+          <div className="flex-1 pixel-bar-shell">
+            <motion.div initial={{ width: 0 }} animate={{ width: `${hpPct}%` }} className="pixel-bar-fill hp" />
           </div>
           <span className="text-xs font-mono text-gray-300 w-16 text-right">{unit.hp}/{unit.maxHp}</span>
         </div>
@@ -362,8 +374,8 @@ function UnitCard({ unit }: { unit: CombatUnit; compact?: boolean }) {
         {unit.maxMp > 0 && (
           <div className="flex items-center gap-2">
             <span className="text-[10px] text-gray-500 w-8">法力</span>
-            <div className="flex-1 h-1.5 bg-gray-900 rounded-full overflow-hidden">
-              <motion.div initial={{ width: 0 }} animate={{ width: `${mpPct}%` }} className="h-full mp-bar-fill" />
+            <div className="flex-1 pixel-bar-shell">
+              <motion.div initial={{ width: 0 }} animate={{ width: `${mpPct}%` }} className="pixel-bar-fill mp" />
             </div>
             <span className="text-xs font-mono text-gray-300 w-16 text-right">{unit.mp}/{unit.maxMp}</span>
           </div>

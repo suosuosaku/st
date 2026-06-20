@@ -1,4 +1,4 @@
-import { Award, BookMarked, Heart, MapPin, PackagePlus, Shield, Sparkles, TrendingUp, UserPlus } from 'lucide-react';
+import { Award, BookMarked, Heart, MapPin, PackagePlus, Shield, Sparkles, Swords, TrendingUp, UserPlus } from 'lucide-react';
 import { characterImage, eldredNPCs } from '../data';
 import { ImmersiveNotice, ImmersiveNoticeType } from '../types';
 
@@ -15,6 +15,19 @@ const iconByType: Record<ImmersiveNoticeType, typeof PackagePlus> = {
   equipment: PackagePlus,
 };
 
+const noticeTypeFromTitle = (title: string): ImmersiveNoticeType => {
+  if (/物品|获得/.test(title)) return 'item';
+  if (/委托/.test(title)) return 'quest';
+  if (/NPC|角色|收录/.test(title)) return 'npc';
+  if (/技能/.test(title)) return 'skill';
+  if (/地点|地图/.test(title)) return 'location';
+  if (/升级|等级/.test(title)) return 'level';
+  if (/好感/.test(title)) return 'favor';
+  if (/声望/.test(title)) return 'reputation';
+  if (/装备/.test(title)) return 'equipment';
+  return 'event';
+};
+
 const getAvatar = (name: string) => {
   const known = eldredNPCs.find(npc => npc.name === name || npc.fullName.includes(name));
   return known?.avatarUrl || characterImage(name, '头像');
@@ -22,13 +35,13 @@ const getAvatar = (name: string) => {
 
 export function DialogueLine({ speaker, text }: { speaker: string; text: string }) {
   return (
-    <div className="my-4 flex gap-3 items-start">
-      <div className="w-11 h-11 shrink-0 rounded border border-[#8b4513]/40 bg-[#3A2C1D]/10 overflow-hidden shadow">
+    <div className="my-4 flex gap-3 items-start pixel-dialogue">
+      <div className="pixel-avatar w-12 h-12 md:w-14 md:h-14 shrink-0 overflow-hidden">
         <img src={getAvatar(speaker)} alt={speaker} className="w-full h-full object-cover" />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="text-base md:text-lg font-serif text-[#8b4513] mb-1">【{speaker}】</div>
-        <div className="relative rounded border border-[#8b4513]/25 bg-[#f8edd4]/60 px-4 py-3 text-sm md:text-base leading-7 shadow-inner">
+        <div className="text-lg md:text-xl font-serif text-[#7b4218] mb-1 font-bold tracking-wide">【{speaker}】</div>
+        <div className="pixel-speech relative px-4 py-3 text-sm md:text-base leading-7">
           {text}
         </div>
       </div>
@@ -39,15 +52,47 @@ export function DialogueLine({ speaker, text }: { speaker: string; text: string 
 export function ImmersiveNoticeCard({ notice }: { notice: ImmersiveNotice }) {
   const Icon = iconByType[notice.type];
   return (
-    <div className="glass-panel rounded-lg p-4 border-fantasy-gold/40 bg-gradient-to-br from-fantasy-gold/10 via-black/30 to-fantasy-blue/10">
-      <div className="flex items-start gap-3">
-        <div className="w-9 h-9 rounded bg-fantasy-gold/10 border border-fantasy-gold/30 flex items-center justify-center shrink-0">
-          <Icon className="w-4 h-4 text-fantasy-gold" />
+    <div className="pixel-vertical-card">
+      <div className="pixel-card-crown" />
+      <div className="pixel-card-body">
+        <div className="pixel-token-icon">
+          <Icon className="w-4 h-4" />
         </div>
-        <div className="min-w-0">
-          <div className="font-serif text-fantasy-gold text-sm tracking-wider">{notice.title}</div>
-          <div className="text-xs text-gray-300 leading-5 mt-1">{notice.body}</div>
-          {notice.meta && <div className="text-[11px] text-gray-500 mt-2">{notice.meta}</div>}
+        <div className="min-w-0 text-center">
+          <div className="font-serif text-fantasy-gold text-sm md:text-base tracking-wider leading-tight">{notice.title}</div>
+          <div className="text-xs text-amber-50/85 leading-5 mt-2">{notice.body}</div>
+          {notice.meta && <div className="pixel-card-meta">{notice.meta}</div>}
+        </div>
+      </div>
+      <div className="pixel-card-gems" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
+    </div>
+  );
+}
+
+function InlineNotice({ title, body }: { title: string; body: string }) {
+  const type = noticeTypeFromTitle(title);
+  const Icon = title.includes('战斗') ? Swords : iconByType[type];
+  return (
+    <div className="my-5 flex justify-center">
+      <div className="pixel-vertical-card pixel-vertical-card-inline">
+        <div className="pixel-card-crown" />
+        <div className="pixel-card-body">
+          <div className="pixel-token-icon">
+            <Icon className="w-4 h-4" />
+          </div>
+          <div className="text-center">
+            <div className="font-serif text-fantasy-gold text-base tracking-wider">{title}</div>
+            <div className="text-xs md:text-sm text-amber-50/85 leading-6 mt-2 whitespace-pre-line">{body}</div>
+          </div>
+        </div>
+        <div className="pixel-card-gems" aria-hidden="true">
+          <span />
+          <span />
+          <span />
         </div>
       </div>
     </div>
@@ -62,6 +107,10 @@ export function RichNarrative({ text }: { text: string }) {
         const dialogue = line.match(/^【([^】]{1,32})】[：:]\s*[“"]?(.+?)[”"]?$/);
         if (dialogue) {
           return <DialogueLine key={`${dialogue[1]}-${index}`} speaker={dialogue[1]} text={dialogue[2]} />;
+        }
+        const notice = line.match(/^【(获得物品|获得技能|委托更新|NPC收录|地点解锁|事件推进|好感变化|声望变化|装备变更|角色升级|战斗回合|战斗结算)】[：:：]?\s*(.+)$/);
+        if (notice) {
+          return <InlineNotice key={`notice-${index}`} title={notice[1]} body={notice[2]} />;
         }
         return (
           <p key={index}>

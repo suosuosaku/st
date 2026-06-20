@@ -26,6 +26,7 @@ const EMPTY_NPCS: Character[] = [];
 type PartyPanelProps = {
   player: PlayerState;
   onUpdatePlayer: (updater: PlayerState | ((prev: PlayerState) => PlayerState)) => void;
+  onUpdateNpcs?: (updater: Character[] | ((prev: Character[]) => Character[])) => void;
   npcs?: Character[];
   onSubmitEvent?: (event: Omit<EldredFrontendEventInput, 'player' | 'party' | 'enemies'>) => Promise<void>;
 };
@@ -76,7 +77,7 @@ const canNpcEquip = (equipment: Equipment, npc: Character) => {
   });
 };
 
-export function PartyPanel({ player, onUpdatePlayer, npcs = EMPTY_NPCS, onSubmitEvent }: PartyPanelProps) {
+export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_NPCS, onSubmitEvent }: PartyPanelProps) {
   const [selectedId, setSelectedId] = useState('player');
   const [npcStates, setNpcStates] = useState<Record<string, Character>>(() =>
     Object.fromEntries(npcs.map(npc => [npc.id, npc])),
@@ -103,7 +104,9 @@ export function PartyPanel({ player, onUpdatePlayer, npcs = EMPTY_NPCS, onSubmit
     setNpcStates(prev => {
       const current = prev[npcId];
       if (!current) return prev;
-      return { ...prev, [npcId]: updater(current) };
+      const next = { ...prev, [npcId]: updater(current) };
+      onUpdateNpcs?.(Object.values(next));
+      return next;
     });
   };
 

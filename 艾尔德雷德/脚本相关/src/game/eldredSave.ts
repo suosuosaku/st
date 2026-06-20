@@ -669,16 +669,15 @@ const worldFromStatData = (statData: AnyRecord): EldredRuntimeSave['world'] => {
 };
 
 const normalizeRuntime = (raw: Partial<EldredRuntimeSave>, source: EldredRuntimeSource): EldredRuntimeSave => {
-  const cacheOnly = source === 'cache';
   const entries = Array.isArray(raw.narration?.entries) ? raw.narration.entries : [];
   const messages = Array.isArray(raw.messages) ? raw.messages : [];
   return {
     schemaVersion: ELDRED_SAVE_SCHEMA_VERSION,
     source,
     player: raw.player || null,
-    npcs: cacheOnly ? [] : raw.npcs || [],
-    quests: cacheOnly ? [] : raw.quests || [],
-    combat: cacheOnly ? { turn: 1, enemyUnits: [], logs: [] } : raw.combat || { turn: 1, enemyUnits: [], logs: [] },
+    npcs: raw.npcs || [],
+    quests: raw.quests || [],
+    combat: raw.combat || { turn: 1, enemyUnits: [], logs: [] },
     world: raw.world || emptyWorld(),
     rawStatData: raw.rawStatData,
     narration: {
@@ -729,8 +728,28 @@ export const loadEldredRuntimeSave = (): EldredRuntimeSave => {
   if (statData) {
     const runtime = runtimeFromStatData(statData);
     if (runtime.player || runtime.npcs.length || runtime.quests.length || runtime.combat.enemyUnits.length) {
+      const cachedWorld = cachedRuntime?.world;
+      const world = {
+        ...runtime.world,
+        currentTime: runtime.world.currentTime || cachedWorld?.currentTime || '',
+        currentLocation: runtime.world.currentLocation || cachedWorld?.currentLocation || '',
+        region: runtime.world.region || cachedWorld?.region || '',
+        subRegion: runtime.world.subRegion || cachedWorld?.subRegion || '',
+        landmark: runtime.world.landmark || cachedWorld?.landmark || '',
+        weather: runtime.world.weather || cachedWorld?.weather || '',
+        risk: runtime.world.risk || cachedWorld?.risk || '',
+        travelState: runtime.world.travelState || cachedWorld?.travelState || '',
+        presentCharacters: runtime.world.presentCharacters.length ? runtime.world.presentCharacters : cachedWorld?.presentCharacters || [],
+      };
       return {
         ...runtime,
+        player: runtime.player || cachedRuntime?.player || null,
+        npcs: runtime.npcs.length ? runtime.npcs : cachedRuntime?.npcs || [],
+        quests: runtime.quests.length ? runtime.quests : cachedRuntime?.quests || [],
+        combat: runtime.combat.enemyUnits.length || runtime.combat.logs.length
+          ? runtime.combat
+          : cachedRuntime?.combat || runtime.combat,
+        world,
         narration: cachedRuntime?.narration || runtime.narration,
         messages: cachedRuntime?.messages || runtime.messages,
       };
