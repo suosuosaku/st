@@ -43,7 +43,7 @@ export function DialogueLine({ speaker, text }: { speaker: string; text: string 
         <img src={getAvatar(speaker)} alt={speaker} className="w-full h-full object-cover" />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="text-lg md:text-xl font-serif text-[#7b4218] mb-1 font-bold tracking-wide">【{speaker}】</div>
+        <div className="text-xl md:text-2xl font-serif text-[#7b4218] mb-1 font-bold tracking-wide">【{speaker}】</div>
         <div className="pixel-speech relative px-4 py-3 text-sm md:text-base leading-7">
           {text}
         </div>

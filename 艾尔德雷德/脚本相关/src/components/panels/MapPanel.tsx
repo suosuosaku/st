@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { ArrowLeft, Compass, LocateFixed, MapPin, Route, ShieldAlert } from 'lucide-react';
 import { motion } from 'motion/react';
 import { PlayerState } from '../../types';
+import { EldredRuntimeSave } from '../../game/eldredSave';
+import { formatEldredLocation } from '../../game/locationFormat';
 import { getRegionById, RegionMap, regions, worldMapImage } from '../../game/mapData';
 
 const getRiskColor = (risk: RegionMap['risk']) => {
@@ -11,10 +13,11 @@ const getRiskColor = (risk: RegionMap['risk']) => {
   return 'border-blue-300 text-blue-300';
 };
 
-export function MapPanel({ player }: { player: PlayerState }) {
+export function MapPanel({ player, runtime }: { player: PlayerState; runtime?: EldredRuntimeSave }) {
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
   const selectedRegion = selectedRegionId ? getRegionById(selectedRegionId) : null;
-  const currentRegion = getRegionById(player.location.regionId);
+  const locationDisplay = formatEldredLocation(runtime?.world, player.location);
+  const currentRegion = locationDisplay.region || getRegionById(player.location.regionId);
 
   return (
     <div className="h-full w-full glass-panel rounded-xl overflow-y-auto xl:overflow-hidden flex flex-col xl:flex-row relative">
@@ -70,7 +73,7 @@ export function MapPanel({ player }: { player: PlayerState }) {
                 </button>
 
                 {selectedRegion.landmarks.map(landmark => {
-                  const isCurrent = selectedRegion.id === player.location.regionId && landmark.name === player.location.landmarkName;
+                  const isCurrent = selectedRegion.id === currentRegion.id && landmark.name === locationDisplay.landmarkName;
                   return (
                     <motion.button
                       key={landmark.name}
@@ -108,7 +111,7 @@ export function MapPanel({ player }: { player: PlayerState }) {
             {selectedRegion ? selectedRegion.name : '艾尔德雷德世界地图'}
           </h2>
           <p className="text-gray-400 text-xs xl:text-sm leading-relaxed">
-            {selectedRegion ? selectedRegion.summary : `当前坐标：${player.location.name}·${player.location.landmarkName}`}
+            {selectedRegion ? selectedRegion.summary : `当前坐标：${locationDisplay.fullName}`}
           </p>
         </div>
 

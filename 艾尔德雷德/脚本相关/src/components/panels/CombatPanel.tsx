@@ -5,6 +5,8 @@ import { Character, CombatUnit, PlayerState, Skill } from '../../types';
 import { equippedIdsFromLoadout, getClassById, getEquipmentById, getSkillById, playerToCombatUnit } from '../../game/rules';
 import { EldredFrontendEventInput } from '../../game/eldredEvents';
 import { EldredCombatCommand } from '../../game/eldredActions';
+import { EldredRuntimeSave } from '../../game/eldredSave';
+import { formatEldredLocation } from '../../game/locationFormat';
 
 type CombatLog = {
   id: string;
@@ -33,6 +35,7 @@ type CombatPanelProps = {
   enemyUnits?: CombatUnit[];
   initialTurn?: number;
   initialLogs?: string[];
+  runtime?: EldredRuntimeSave;
   onSubmitEvent?: (event: Omit<EldredFrontendEventInput, 'player' | 'party' | 'enemies'>) => Promise<void>;
   onSubmitCommand?: (command: EldredCombatCommand) => Promise<void>;
 };
@@ -83,6 +86,7 @@ export function CombatPanel({
   enemyUnits = EMPTY_COMBAT_UNITS,
   initialTurn = 1,
   initialLogs = EMPTY_LOGS,
+  runtime,
   onSubmitEvent,
   onSubmitCommand,
 }: CombatPanelProps) {
@@ -118,6 +122,7 @@ export function CombatPanel({
   const selectedTarget = selectedSkillTargetsAlly
     ? units.find(unit => unit.id === selectedAllyTargetId) || selectedActor
     : units.find(unit => unit.id === selectedTargetId) || enemies[0];
+  const locationDisplay = formatEldredLocation(runtime?.world, player.location);
 
   const actorSkills = useMemo(
     () => selectedActor?.skillIds
@@ -148,7 +153,7 @@ export function CombatPanel({
       `行动者：${selectedActor?.name || '未选择'}`,
       `行动：${kind === 'skill' && selectedSkill ? `使用${selectedSkill.name}` : commandLabel[kind]}`,
       `目标：${selectedTarget?.name || '待正文确认'}`,
-      `地点：${player.location.name} / ${player.location.landmarkName}`,
+      `地点：${locationDisplay.fullName}`,
       `主角方：${players.map(unitSummary).join('；') || '无'}`,
       `敌方：${enemies.map(unitSummary).join('；') || '无'}`,
     ];
@@ -220,7 +225,7 @@ export function CombatPanel({
             <span className="text-xl text-white font-mono font-bold">{turn}</span>
           </div>
           <div className="min-w-0">
-            <div className="text-sm font-serif text-gray-200 truncate">{player.location.name} · {player.location.landmarkName}</div>
+            <div className="text-sm font-serif text-gray-200 truncate">{locationDisplay.fullName}</div>
             <div className="text-xs text-gray-400">前端结算 / MVU同步</div>
           </div>
         </div>
@@ -386,13 +391,34 @@ function UnitCard({ unit }: { unit: CombatUnit; compact?: boolean }) {
 }
 
 function LogEntry({ actor, action, result, color = 'text-fantasy-gold' }: Omit<CombatLog, 'id'>) {
+  const pieces = result.split(/[；;]/).map(piece => piece.trim()).filter(Boolean);
+  const hasStructuredPieces = pieces.length > 1;
+  const checkLine = pieces.find(piece => piece.includes('检定') || piece.includes('目标值') || piece.includes('目标护甲'));
+  const costLine = pieces.find(piece => piece.includes('消耗') || piece.includes('法力') || piece.includes('护盾吸收'));
+  const resultLine = pieces.find(piece => piece.includes('命中') || piece.includes('未命中') || piece.includes('成功') || piece.includes('失败') || piece.includes('造成')) || result;
+  const executionLine = hasStructuredPieces
+    ? pieces.filter(piece => piece !== checkLine && piece !== costLine && piece !== resultLine).join('；') || action
+    : action;
+
   return (
-    <div className="pb-2 border-b border-white/5 last:border-0 last:pb-0">
-      <div className="flex items-baseline gap-2 mb-1">
-        <span className={`text-xs font-bold ${color}`}>{actor}</span>
-        <span className="text-xs text-gray-300">{action}</span>
+    <div className="combat-action-card">
+      <div className="combat-action-title">
+        <span className={color}>{actor}</span>
+        <strong>{action}</strong>
       </div>
-      <div className="text-xs text-gray-400">{result}</div>
+      <CombatFact label="执行" value={executionLine} />
+      {costLine && <CombatFact label="消耗" value={costLine} />}
+      {checkLine && <CombatFact label="检定" value={checkLine} />}
+      <CombatFact label="结果" value={resultLine} strong />
+    </div>
+  );
+}
+
+function CombatFact({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="combat-action-row">
+      <span>{label}</span>
+      <p className={strong ? 'text-gray-100' : ''}>{value}</p>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { Activity, Archive, Heart, Shield, Sparkles, User, UserPlus, Zap } from 
 import { useEffect, useMemo, useState } from 'react';
 import { AttributeKey, Character, Equipment, EquipmentLoadout, PlayerState, Skill } from '../../types';
 import { EldredFrontendEventInput } from '../../game/eldredEvents';
+import { formatEldredLocation } from '../../game/locationFormat';
 import {
   ACTIVE_SKILL_LIMIT,
   ATTRIBUTE_KEYS,
@@ -89,6 +90,7 @@ export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_
 
   const cls = getClassById(player.classId);
   const race = getRaceById(player.raceId);
+  const playerLocationDisplay = formatEldredLocation(undefined, player.location);
   const rosterNpcs = useMemo(() => Object.values(npcStates), [npcStates]);
   const partyNpcs = useMemo(() => player.partyMemberIds.map(id => npcStates[id]).filter(defined), [npcStates, player.partyMemberIds]);
   const selectedNpc = selectedId === 'player' ? null : npcStates[selectedId] || null;
@@ -261,7 +263,7 @@ export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_
         fullName: player.name,
         raceName: race.name,
         className: cls.name,
-        location: player.location.name,
+        location: playerLocationDisplay.fullName,
         avatar: '',
         level: player.level,
         experience: player.experience,
@@ -413,27 +415,33 @@ export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_
           <Shield className="w-64 h-64 text-fantasy-gold" />
         </div>
 
-        <div className="p-5 md:p-8 border-b border-white/10 relative z-10 flex flex-col sm:flex-row gap-5 md:gap-8">
-          <div className="w-24 h-24 md:w-32 md:h-32 bg-fantasy-darker border-2 border-fantasy-gold rounded flex items-center justify-center text-fantasy-gold shadow-lg shadow-black overflow-hidden shrink-0">
-            {selected.avatar ? <img src={selected.avatar} alt={selected.fullName} className="w-full h-full object-contain" /> : <span className="text-xs md:text-sm font-serif opacity-50">玩家</span>}
+        <div className="dossier-hero relative z-10">
+          <div className="dossier-portrait">
+            {selected.avatar ? <img src={selected.avatar} alt={selected.fullName} className="h-full w-full object-contain" /> : <span>玩家</span>}
           </div>
-          <div className="flex flex-col justify-center min-w-0">
-            <div className="flex flex-wrap items-center gap-3 mb-2">
-              <span className="px-2 py-0.5 rounded text-[10px] border border-gray-400 text-gray-400">{selected.kind === 'player' ? '玩家' : '同行'}</span>
-              <h1 className="text-xl md:text-3xl font-serif text-white tracking-widest">{selected.fullName}</h1>
+          <div className="min-w-0 flex-1 text-center">
+            <div className="mx-auto mb-2 w-fit border border-white/10 bg-black/35 px-3 py-1 text-xs text-gray-300">{selected.kind === 'player' ? '玩家' : '同行'} / Lv.{selected.level}</div>
+            <h1 className="font-serif text-2xl font-bold tracking-widest text-white md:text-4xl">{selected.fullName}</h1>
+            <div className="mt-2 text-sm text-gray-400">{selected.raceName} / {selected.className} / {selected.location}</div>
+            <div className="dossier-attributes mt-5">
+              {ATTRIBUTE_KEYS.map(key => (
+                <div key={key} className="dossier-attribute">
+                  <span>{ATTRIBUTE_LABELS[key].slice(0, 1)}</span>
+                  <strong>{selected.stats[key]}</strong>
+                </div>
+              ))}
             </div>
-            <div className="text-gray-400 text-sm mb-4">{selected.raceName} / {selected.className} / {selected.location}</div>
-            <div className="flex flex-wrap gap-4">
-              <div className="flex items-center gap-2"><Heart className="w-4 h-4 text-red-400" /><span className="text-sm font-mono text-gray-300">{selected.stats.hp} / {selected.stats.maxHp}</span></div>
-              <div className="flex items-center gap-2"><Zap className="w-4 h-4 text-blue-400" /><span className="text-sm font-mono text-gray-300">{selected.stats.mp} / {selected.stats.maxMp}</span></div>
-              <div className="flex items-center gap-2"><Shield className="w-4 h-4 text-fantasy-gold" /><span className="text-sm font-mono text-gray-300">护甲 {selected.stats.ac}</span></div>
-              <div className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-fantasy-gold" /><span className="text-sm font-mono text-gray-300">{selected.experience}/{selected.nextExperience}</span></div>
+            <div className="mt-5 grid gap-2 sm:grid-cols-4">
+              <div className="dossier-meter"><Heart className="h-4 w-4 text-red-400" /><span>{selected.stats.hp}/{selected.stats.maxHp}</span></div>
+              <div className="dossier-meter"><Zap className="h-4 w-4 text-blue-400" /><span>{selected.stats.mp}/{selected.stats.maxMp}</span></div>
+              <div className="dossier-meter"><Shield className="h-4 w-4 text-fantasy-gold" /><span>护甲 {selected.stats.ac}</span></div>
+              <div className="dossier-meter"><Sparkles className="h-4 w-4 text-fantasy-gold" /><span>{selected.experience}/{selected.nextExperience}</span></div>
             </div>
             {selected.kind === 'npc' && (
-              <div className="mt-3 flex gap-2 text-xs">
-                <span className="px-2 py-1 rounded bg-black/40 border border-white/10 text-gray-300">好感 {selected.favorability}</span>
-                <span className="px-2 py-1 rounded bg-black/40 border border-white/10 text-gray-300">{selected.relation}</span>
-                <button onClick={() => removeNpcFromParty(selected.id)} className="px-2 py-1 rounded border border-fantasy-red/40 text-fantasy-red hover:bg-fantasy-red/10">移出队伍</button>
+              <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs">
+                <span className="pixel-data-tile px-3 py-1 text-gray-300">好感 {selected.favorability}</span>
+                <span className="pixel-data-tile px-3 py-1 text-gray-300">{selected.relation}</span>
+                <button onClick={() => removeNpcFromParty(selected.id)} className="px-3 py-1 border border-fantasy-red/40 text-fantasy-red hover:bg-fantasy-red/10">移出队伍</button>
               </div>
             )}
           </div>

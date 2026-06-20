@@ -3,6 +3,7 @@ import { Clock, Loader2, MapPin, Send, ShieldAlert, ScrollText } from 'lucide-re
 import { ImmersiveNoticeCard, RichNarrative } from '../ImmersiveText';
 import { PlayerState } from '../../types';
 import { EldredRuntimeSave } from '../../game/eldredSave';
+import { formatEldredLocation } from '../../game/locationFormat';
 
 export function OverviewPanel({
   player,
@@ -20,8 +21,7 @@ export function OverviewPanel({
   const [draft, setDraft] = useState('');
   const entries = runtime?.narration.entries || [];
   const world = runtime?.world;
-  const locationName = world?.currentLocation || player.location.name;
-  const landmarkName = world?.landmark || player.location.landmarkName;
+  const locationDisplay = formatEldredLocation(world, player.location);
   const timeText = world?.currentTime || '待正文落定';
   const weatherText = world?.weather || player.location.weather || '未登记';
   const visibleEntries = [...entries].reverse();
@@ -93,8 +93,8 @@ export function OverviewPanel({
               <MapPin className="w-5 h-5" />
             </div>
             <div>
-              <div className="text-base md:text-lg text-gray-200 font-serif">{locationName}·{landmarkName}</div>
-              <div className="text-xs text-gray-400">{world?.subRegion || player.location.summary}</div>
+              <div className="text-base md:text-lg text-gray-200 font-serif">{locationDisplay.fullName}</div>
+              <div className="text-xs text-gray-400">{locationDisplay.detail || player.location.summary}</div>
             </div>
           </div>
         </div>

@@ -11,6 +11,7 @@ import { CombatPanel } from './components/panels/CombatPanel';
 import { NpcPanel } from './components/panels/NpcPanel';
 import { EmptyPanel } from './components/panels/EmptyPanel';
 import { SystemPanel } from './components/panels/SystemPanel';
+import { InventoryPanel } from './components/panels/InventoryPanel';
 import {
   EldredRuntimeSave,
   loadEldredRuntimeSave,
@@ -187,13 +188,13 @@ export default function App() {
     if (!playerState) return <EmptyPanel title="等待入局" message="尚未读取到角色变量" />;
     switch (activeTab) {
       case 'overview': return <OverviewPanel player={playerState} interactionStatus={interactionStatus} isGenerating={isGeneratingNarration} runtime={runtime} onSubmitFreeInput={submitFreeInput} />;
-      case 'map': return <MapPanel player={playerState} />;
+      case 'map': return <MapPanel player={playerState} runtime={runtime} />;
       case 'party': return <PartyPanel player={playerState} onUpdatePlayer={updatePlayerPreview} onUpdateNpcs={updateNpcs} npcs={runtime.npcs} onSubmitEvent={submitRuntimeEvent} />;
       case 'npc': return <NpcPanel npcs={runtime.npcs} />;
       case 'quests': return <QuestPanel quests={runtime.quests} onSubmitEvent={submitRuntimeEvent} />;
-      case 'combat': return <CombatPanel player={playerState} partyNpcs={runtime.npcs.filter(npc => playerState.partyMemberIds.includes(npc.id) || playerState.partyMemberIds.includes(npc.name))} enemyUnits={runtime.combat.enemyUnits} initialTurn={runtime.combat.turn} initialLogs={runtime.combat.logs} onSubmitEvent={submitRuntimeEvent} onSubmitCommand={submitCombatCommand} />;
-      case 'inventory': return <EmptyPanel title="行囊与物资" message={playerState.inventory.join('、')} />;
-      case 'system': return <SystemPanel />;
+      case 'combat': return <CombatPanel player={playerState} partyNpcs={runtime.npcs.filter(npc => playerState.partyMemberIds.includes(npc.id) || playerState.partyMemberIds.includes(npc.name))} enemyUnits={runtime.combat.enemyUnits} initialTurn={runtime.combat.turn} initialLogs={runtime.combat.logs} runtime={runtime} onSubmitEvent={submitRuntimeEvent} onSubmitCommand={submitCombatCommand} />;
+      case 'inventory': return <InventoryPanel player={playerState} />;
+      case 'system': return <SystemPanel runtime={runtime} player={playerState} />;
       default: return <EmptyPanel title="未知区域" />;
     }
   };

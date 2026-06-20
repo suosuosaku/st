@@ -16,6 +16,7 @@ import {
   EldredRuntimeSave,
   persistEldredRuntimeCache,
 } from './eldredSave';
+import { formatEldredLocation } from './locationFormat';
 
 type AnyRecord = Record<string, any>;
 type StoryPrompt = { role: 'system' | 'assistant' | 'user'; content: string };
@@ -126,6 +127,7 @@ const formatPlayerFacts = (player: PlayerState | null) => {
     .filter(Boolean)
     .map(id => getEquipmentById(id!)?.name || id)
     .join('、') || '无';
+  const location = formatEldredLocation(undefined, player.location);
   return [
     `主角：${player.name}`,
     `身份：${player.identity.gender || '未记录'} / ${player.identity.age || '未记录'} / ${player.identity.background || '未记录'}`,
@@ -137,7 +139,7 @@ const formatPlayerFacts = (player: PlayerState | null) => {
     `伴生天赋：${talents}`,
     `激活技能：${skills}`,
     `装备：${equipment}`,
-    `当前位置：${player.location.name} / ${player.location.landmarkName} / ${player.location.summary}`,
+    `当前位置：${location.fullName} / ${player.location.summary}`,
   ].join('\n');
 };
 
@@ -173,6 +175,7 @@ export const buildEldredOpeningFacts = (player: PlayerState) => {
   const skillNames = player.activeSkillIds.map(id => getSkillById(id)?.name).filter(Boolean).join('、') || '无';
   const talentNames = player.talentIds.map(id => getTalentById(id)?.name).filter(Boolean).join('、') || '无';
   const equipment = player.equipmentIds.map(id => getEquipmentById(id)?.name).filter(Boolean).join('、') || '无';
+  const location = formatEldredLocation(undefined, player.location);
   return [
     '【艾尔德雷德入局设定】',
     `姓名：${player.name}`,
@@ -182,7 +185,7 @@ export const buildEldredOpeningFacts = (player: PlayerState) => {
     `种族：${race.name}｜${race.auraName}｜${race.auraEffect}`,
     `职业：${cls.name}｜${cls.classAuraName}｜${cls.classAuraEffect}`,
     `伴生天赋：${talentNames}`,
-    `出生点：${player.location.name}｜${player.location.landmarkName}`,
+    `出生点：${location.fullName}`,
     `五维：${stats}`,
     '等级：1',
     `战斗底值：生命${player.stats.maxHp}｜法力${player.stats.maxMp}｜护甲${player.stats.ac}｜熟练+${player.stats.proficiency}`,
@@ -193,6 +196,7 @@ export const buildEldredOpeningFacts = (player: PlayerState) => {
 
 const buildRuntimeSummary = (runtime: EldredRuntimeSave, party: Character[] = [], enemies: CombatUnit[] = []) => {
   const world = runtime.world;
+  const location = formatEldredLocation(world, runtime.player?.location);
   const recent = runtime.narration.entries
     .slice(0, 4)
     .reverse()
@@ -202,7 +206,7 @@ const buildRuntimeSummary = (runtime: EldredRuntimeSave, party: Character[] = []
     '【艾尔德雷德当前局势】',
     `数据来源：${runtime.source}`,
     `时间：${world.currentTime || '未登记'}`,
-    `地点：${world.currentLocation || runtime.player?.location.name || '未登记'} / ${world.region || runtime.player?.location.regionId || '未登记'} / ${world.landmark || runtime.player?.location.landmarkName || '未登记'}`,
+    `地点：${location.fullName}`,
     `天气：${world.weather || '未登记'}，风险：${world.risk || '未登记'}，旅行状态：${world.travelState || '未登记'}`,
     `在场角色：${world.presentCharacters.join('、') || '未登记'}`,
     formatPlayerFacts(runtime.player),

@@ -1,4 +1,5 @@
 import { Character, CombatUnit, PlayerState, Quest } from '../types';
+import { formatEldredLocation } from './locationFormat';
 import { getEquipmentById, getSkillById } from './rules';
 
 export type EldredFrontendEventType =
@@ -34,6 +35,7 @@ const yamlList = (values: string[] = []) => `[${values.map(value => `"${quote(va
 
 const playerFacts = (player?: PlayerState | null) => {
   if (!player) return ['    player_ready: false'];
+  const location = formatEldredLocation(undefined, player.location);
   return [
     '    player_ready: true',
     `    player_name: "${quote(player.name)}"`,
@@ -41,7 +43,7 @@ const playerFacts = (player?: PlayerState | null) => {
     `    hp: "${player.stats.hp}/${player.stats.maxHp}"`,
     `    mp: "${player.stats.mp}/${player.stats.maxMp}"`,
     `    ac: ${player.stats.ac}`,
-    `    location: "${quote(`${player.location.name} / ${player.location.landmarkName}`)}"`,
+    `    location: "${quote(location.fullName)}"`,
     `    active_skills: ${yamlList(player.activeSkillIds.map(id => getSkillById(id)?.name || id))}`,
     `    equipment: ${yamlList(Object.values(player.equipmentLoadout).filter(Boolean).map(id => getEquipmentById(id)?.name || id))}`,
   ];
