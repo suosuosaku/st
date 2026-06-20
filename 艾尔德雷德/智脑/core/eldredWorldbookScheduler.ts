@@ -453,6 +453,35 @@ export function splitConfiguredNames(textOrList: string | string[] | undefined |
   return uniq(String(textOrList).split(/[\n,，、]+/));
 }
 
+const ELDRED_FORCED_ALWAYS_NAME_SET = new Set(splitConfiguredNames(ELDRED_DEFAULT_ALWAYS_NAMES));
+const ELDRED_FORCED_ALWAYS_NAME_PATTERNS = [
+  /^====[^=\n]+====_(?:开始|结束)(?:\s+\[mvu_plot\])?$/,
+  /^\[mvu_update\]/,
+  /^世界引擎$/,
+  /^世界观总览$/,
+  /^魔法与职业$/,
+  /^变量列表$/,
+  /^固定NPC检索索引$/,
+  /^开局地点索引$/,
+  /^正文沉浸美化规则$/,
+  /^等级制度与数值判定规则$/,
+  /^战斗与职业规则$/,
+  /^技能等级与效果区间规则$/,
+  /^装备与修理$/,
+  /^区域声望$/,
+  /^气候与地脉多样性规则$/,
+  /^敌人生成与威胁等级表$/,
+  /^装备生成与战利品规则$/,
+  /^地区委托生成规则$/,
+  /^NPC生成池与审美规则$/,
+  /^副本与秘境生成规则$/,
+  /^动态看板生成边界$/,
+  /^标签格式模板$/,
+  /^奇遇与翻牌系统规则$/,
+  /^自由探索与路径行动规则$/,
+  /^主线阶段触发 \[mvu_plot\]$/,
+];
+
 function isBlockedEntryName(name: string): boolean {
   return BLOCKED_ENTRY_NAME_PATTERNS.some(pattern => pattern.test(name));
 }
@@ -461,15 +490,37 @@ function removeBlockedConfiguredNames(names: string[]): string[] {
   return names.filter(name => !isBlockedEntryName(name));
 }
 
+function isForcedAlwaysName(name: string): boolean {
+  const trimmed = name.trim();
+  if (!trimmed) return false;
+  if (ELDRED_FORCED_ALWAYS_NAME_SET.has(trimmed)) return true;
+  return ELDRED_FORCED_ALWAYS_NAME_PATTERNS.some(pattern => pattern.test(trimmed));
+}
+
+function mergeSchedulerNames(...groups: string[][]): string[] {
+  return removeBlockedConfiguredNames(uniq(groups.flat()));
+}
+
+function removeForcedAlwaysNames(names: string[]): string[] {
+  return names.filter(name => !isForcedAlwaysName(name));
+}
+
 export function buildEldredSchedulerConfig(settings: any): EldredWorldbookSchedulerConfig {
   const alwaysNames = removeBlockedConfiguredNames(splitConfiguredNames(settings?.eldredWorldbookAlwaysNames));
   const scheduledNames = removeBlockedConfiguredNames(splitConfiguredNames(settings?.eldredWorldbookScheduledNames));
   const keepEnabledNames = removeBlockedConfiguredNames(splitConfiguredNames(settings?.eldredWorldbookKeepEnabledNames));
   const shouldUseDefaults = alwaysNames.length === 0 && scheduledNames.length === 0 && keepEnabledNames.length === 0;
+  const forcedAlwaysNames = removeBlockedConfiguredNames([...ELDRED_FORCED_ALWAYS_NAME_SET]);
+  const configuredAlwaysNames = shouldUseDefaults
+    ? removeBlockedConfiguredNames(splitConfiguredNames(ELDRED_DEFAULT_ALWAYS_NAMES))
+    : alwaysNames;
+  const configuredScheduledNames = shouldUseDefaults
+    ? removeBlockedConfiguredNames(splitConfiguredNames(ELDRED_DEFAULT_SCHEDULED_NAMES))
+    : scheduledNames;
   return {
-    alwaysNames: shouldUseDefaults ? removeBlockedConfiguredNames(splitConfiguredNames(ELDRED_DEFAULT_ALWAYS_NAMES)) : alwaysNames,
-    scheduledNames: shouldUseDefaults ? removeBlockedConfiguredNames(splitConfiguredNames(ELDRED_DEFAULT_SCHEDULED_NAMES)) : scheduledNames,
-    keepEnabledNames,
+    alwaysNames: mergeSchedulerNames(forcedAlwaysNames, configuredAlwaysNames),
+    scheduledNames: removeBlockedConfiguredNames(removeForcedAlwaysNames(configuredScheduledNames)),
+    keepEnabledNames: removeBlockedConfiguredNames(removeForcedAlwaysNames(keepEnabledNames)),
     maxEntries: Math.max(1, Number(settings?.eldredWorldbookMaxEntries ?? 12)),
     maxChars: Math.max(1000, Number(settings?.eldredWorldbookMaxChars ?? 16000)),
   };
@@ -593,13 +644,14 @@ function classifyEntry(entry: EldredWorldbookEntryRef, config: EldredWorldbookSc
   const exactAlways = configuredNamesIncludeEntry(config.alwaysNames, entry);
   const exactScheduled = configuredNamesIncludeEntry(config.scheduledNames, entry);
   const exactKeep = configuredNamesIncludeEntry(config.keepEnabledNames, entry);
+  const forcedAlways = isForcedAlwaysName(entry.name);
   const haystack = `${entry.name}\n${entry.displayName}\n${entry.aliases.join('\n')}\n${entry.keys.join('\n')}\n${entry.secondaryKeys.join('\n')}\n${entry.content.slice(0, 600)}`;
   const reasons: string[] = [];
   let category: EldredWorldbookCategory = 'unused_candidate';
 
-  if (exactAlways || exactKeep) {
+  if (forcedAlways || exactAlways || exactKeep) {
     category = 'always';
-    reasons.push(exactAlways ? '命中常驻条目名清单' : '命中保留启用清单');
+    reasons.push(forcedAlways ? '艾尔德雷德规则/结构条目强制常驻' : exactAlways ? '命中常驻条目名清单' : '命中保留启用清单');
   } else if (exactScheduled) {
     category = 'scheduled';
     reasons.push('命中脚本调度条目名清单');

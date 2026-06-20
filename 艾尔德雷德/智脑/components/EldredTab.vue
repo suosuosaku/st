@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useMainStore } from '../stores/mainStore';
 import {
+  ELDRED_DEFAULT_ALWAYS_NAMES,
+  ELDRED_DEFAULT_SCHEDULED_NAMES,
   applyEldredWorldbookEnablePlan,
   buildEldredSchedulerConfig,
   restoreEldredWorldbookEnableBackup,
@@ -30,14 +32,6 @@ const autoInjectEnabled = computed({
   get: () => store.settings.eldredWorldbookAutoInjectEnabled,
   set: value => store.updateSettings({ eldredWorldbookAutoInjectEnabled: value }),
 });
-const alwaysNames = computed({
-  get: () => store.settings.eldredWorldbookAlwaysNames,
-  set: value => store.updateSettings({ eldredWorldbookAlwaysNames: value }),
-});
-const scheduledNames = computed({
-  get: () => store.settings.eldredWorldbookScheduledNames,
-  set: value => store.updateSettings({ eldredWorldbookScheduledNames: value }),
-});
 const keepEnabledNames = computed({
   get: () => store.settings.eldredWorldbookKeepEnabledNames,
   set: value => store.updateSettings({ eldredWorldbookKeepEnabledNames: value }),
@@ -50,6 +44,9 @@ const maxChars = computed({
   get: () => store.settings.eldredWorldbookMaxChars,
   set: value => store.updateSettings({ eldredWorldbookMaxChars: Number(value) }),
 });
+const effectiveConfig = computed(() => buildEldredSchedulerConfig(store.settings));
+const alwaysPreview = computed(() => effectiveConfig.value.alwaysNames.join('\n'));
+const scheduledPreview = computed(() => effectiveConfig.value.scheduledNames.join('\n'));
 
 const filteredEntries = computed(() => {
   const q = search.value.trim().toLowerCase();
@@ -64,18 +61,6 @@ const filteredEntries = computed(() => {
     )
     .slice(0, 160);
 });
-
-const suggestedAlways = computed(() =>
-  (scan.value?.entries || [])
-    .filter(entry => entry.category === 'suggested_always')
-    .map(entry => entry.name),
-);
-
-const suggestedScheduled = computed(() =>
-  (scan.value?.entries || [])
-    .filter(entry => entry.category === 'suggested_scheduled')
-    .map(entry => entry.name),
-);
 
 async function runScan() {
   scanning.value = true;
@@ -92,12 +77,14 @@ async function runScan() {
   }
 }
 
-function fillSuggestedAlways() {
-  alwaysNames.value = suggestedAlways.value.join('\n');
-}
-
-function fillSuggestedScheduled() {
-  scheduledNames.value = suggestedScheduled.value.join('\n');
+function resetSchedulerDefaults() {
+  store.updateSettings({
+    eldredWorldbookAlwaysNames: ELDRED_DEFAULT_ALWAYS_NAMES,
+    eldredWorldbookScheduledNames: ELDRED_DEFAULT_SCHEDULED_NAMES,
+    eldredWorldbookKeepEnabledNames: '',
+  });
+  statusText.value = '已重置为艾尔德雷德推荐调度底座。';
+  void runScan();
 }
 
 async function applyPlan() {
@@ -174,19 +161,18 @@ function categoryLabel(category: EldredWorldbookEntryRef['category']): string {
     <div class="eldred-grid">
       <section class="eldred-section">
         <div class="eldred-section-title">调度清单</div>
-        <div class="eldred-field">
-          <label>常驻条目名</label>
-          <textarea v-model="alwaysNames" rows="5" placeholder="一行一个世界书条目名。只保留这些条目原生开启。" />
-          <button class="eldred-mini-btn" :disabled="suggestedAlways.length === 0" @click="fillSuggestedAlways">
-            填入候选
-          </button>
+        <div class="eldred-plan-summary">
+          <span>常驻底座 {{ effectiveConfig.alwaysNames.length }}</span>
+          <span>脚本调度库 {{ effectiveConfig.scheduledNames.length }}</span>
+          <span>额外保留 {{ effectiveConfig.keepEnabledNames.length }}</span>
         </div>
         <div class="eldred-field">
-          <label>脚本调度条目名</label>
-          <textarea v-model="scheduledNames" rows="5" placeholder="一行一个世界书条目名。原生可关闭，由智脑按场景注入。" />
-          <button class="eldred-mini-btn" :disabled="suggestedScheduled.length === 0" @click="fillSuggestedScheduled">
-            填入候选
-          </button>
+          <label>常驻底座（自动）</label>
+          <textarea :value="alwaysPreview" rows="5" readonly />
+        </div>
+        <div class="eldred-field">
+          <label>脚本调度库（自动）</label>
+          <textarea :value="scheduledPreview" rows="5" readonly />
         </div>
         <div class="eldred-field">
           <label>额外保留启用</label>
@@ -197,6 +183,9 @@ function categoryLabel(category: EldredWorldbookEntryRef['category']): string {
           <label>每轮最多字符 <input v-model.number="maxChars" type="number" min="1000" step="500" /></label>
         </div>
         <div class="eldred-actions">
+          <button class="eldred-btn" :disabled="scanning" @click="resetSchedulerDefaults">
+            重置推荐底座
+          </button>
           <button class="eldred-danger" :disabled="applying" @click="applyPlan">
             {{ applying ? '应用中...' : '应用轻量启用计划' }}
           </button>
@@ -281,7 +270,8 @@ function categoryLabel(category: EldredWorldbookEntryRef['category']): string {
 .eldred-actions,
 .eldred-limits,
 .eldred-stats,
-.eldred-injection-list {
+.eldred-injection-list,
+.eldred-plan-summary {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -371,12 +361,18 @@ button:disabled {
   padding: 6px 8px;
   resize: vertical;
 }
+.eldred-field textarea[readonly] {
+  color: rgba(255, 255, 255, 0.62);
+  background: rgba(167, 139, 250, 0.055);
+  resize: none;
+}
 .eldred-limits input {
   width: 86px;
   margin-left: 6px;
 }
 .eldred-stats span,
-.eldred-injection-list span {
+.eldred-injection-list span,
+.eldred-plan-summary span {
   border-radius: 999px;
   background: rgba(167, 139, 250, 0.09);
   color: rgba(216, 205, 255, 0.9);
