@@ -1,6 +1,6 @@
 import { extractEldredReadableContent } from '../utils/eldredParser';
 
-const STYLE_ID = 'eldred-message-beautifier-style';
+const STYLE_ID = 'eldred-message-beautifier-style-v1-0-21';
 const R2_BASE = 'https://pub-0b945c39f816498d833c1a7e27007410.r2.dev/';
 
 const noticeLabels = new Set([
@@ -17,6 +17,21 @@ const noticeLabels = new Set([
   '战斗实况',
   '技能演出',
 ]);
+
+const noticeVisuals: Record<string, { icon: string; tone: string }> = {
+  获得物品: { icon: '◆', tone: 'item' },
+  技能入库: { icon: '✦', tone: 'skill' },
+  委托更新: { icon: '▣', tone: 'quest' },
+  NPC收录: { icon: '●', tone: 'npc' },
+  地点解锁: { icon: '▰', tone: 'location' },
+  事件进展: { icon: '◇', tone: 'event' },
+  升级提示: { icon: '▲', tone: 'level' },
+  好感变化: { icon: '♥', tone: 'favor' },
+  声望变化: { icon: '★', tone: 'reputation' },
+  装备变更: { icon: '⬒', tone: 'equipment' },
+  战斗实况: { icon: '⚔', tone: 'battle' },
+  技能演出: { icon: '✧', tone: 'battle' },
+};
 
 function escapeHtml(text: string): string {
   return text
@@ -38,26 +53,34 @@ function normalizeSpecialBlocks(text: string): string {
 }
 
 function shouldBeautify(text: string): boolean {
-  return /【[^】]{1,32}】[：:][“"]/.test(text)
+  return /【[^】]{1,32}】[：:]\s*[“"]/.test(text)
     || /【(?:获得物品|技能入库|委托更新|NPC收录|地点解锁|事件进展|升级提示|好感变化|声望变化|装备变更|战斗实况|技能演出)】[：:]/.test(text)
+    || /【[^】]{1,32}】[：:]\s*(?![“"])/.test(text)
     || /<战斗实况>|<技能演出>/.test(text);
 }
 
 function renderNotice(label: string, body: string): string {
-  const [title = '', source = '', effect = ''] = body.split(/[｜|]/).map(item => item.trim());
+  const visual = noticeVisuals[label] || { icon: '◆', tone: 'event' };
+  const parts = body.split(/[｜|]/).map(item => item.trim()).filter(Boolean);
+  const [title = body, ...details] = parts.length ? parts : [body];
+  const detailRows = details
+    .map(item => `<div class="eldred-notice-row">${escapeHtml(item)}</div>`)
+    .join('');
   return [
-    '<div class="eldred-notice-card">',
-    `<div class="eldred-notice-mark">${escapeHtml(label)}</div>`,
-    '<div class="eldred-notice-body">',
+    `<section class="eldred-notice-card eldred-notice-${visual.tone}">`,
+    '<div class="eldred-notice-cap" aria-hidden="true"></div>',
+    '<div class="eldred-notice-head">',
+    `<span class="eldred-notice-icon">${escapeHtml(visual.icon)}</span>`,
+    `<span class="eldred-notice-mark">【${escapeHtml(label)}】</span>`,
+    '</div>',
     `<div class="eldred-notice-title">${escapeHtml(title || body)}</div>`,
-    source ? `<div class="eldred-notice-meta">${escapeHtml(source)}</div>` : '',
-    effect ? `<div class="eldred-notice-text">${escapeHtml(effect)}</div>` : '',
-    '</div>',
-    '</div>',
+    detailRows ? `<div class="eldred-notice-body">${detailRows}</div>` : '',
+    '</section>',
   ].join('');
 }
 
 function renderBattleNotice(label: string, body: string): string {
+  const visual = noticeVisuals[label] || noticeVisuals.战斗实况;
   const rows = body
     .split(/[；;\n]+/)
     .map(item => item.trim())
@@ -70,10 +93,14 @@ function renderBattleNotice(label: string, body: string): string {
     })
     .join('');
   return [
-    '<div class="eldred-battle-card">',
-    `<div class="eldred-battle-mark">${escapeHtml(label)}</div>`,
-    `<div class="eldred-battle-grid">${rows || `<div class="eldred-battle-line wide">${escapeHtml(body)}</div>`}</div>`,
+    `<section class="eldred-battle-card eldred-notice-${visual.tone}">`,
+    '<div class="eldred-notice-cap" aria-hidden="true"></div>',
+    '<div class="eldred-notice-head">',
+    `<span class="eldred-notice-icon">${escapeHtml(visual.icon)}</span>`,
+    `<span class="eldred-battle-mark">【${escapeHtml(label)}】</span>`,
     '</div>',
+    `<div class="eldred-battle-grid">${rows || `<div class="eldred-battle-line wide">${escapeHtml(body)}</div>`}</div>`,
+    '</section>',
   ].join('');
 }
 
@@ -108,7 +135,11 @@ function renderBeautifiedContent(rawContent: string): string {
       return renderNotice(notice[1], notice[2]);
     }
 
-    const dialogue = line.match(/^【([^】]{1,32})】[：:][“"]?([\s\S]+?)[”"]?$/);
+    if (notice && !/^[“"]/.test(notice[2].trim())) {
+      return renderNotice(notice[1].trim(), notice[2].trim());
+    }
+
+    const dialogue = line.match(/^【([^】]{1,32})】[：:]\s*[“"]([\s\S]+?)[”"]?$/);
     if (dialogue) {
       return renderDialogue(dialogue[1].trim(), dialogue[2].trim());
     }
@@ -121,6 +152,9 @@ function renderBeautifiedContent(rawContent: string): string {
 
 export function installEldredMessageBeautifierStyles(): void {
   const doc = window.parent?.document || document;
+  doc.querySelectorAll('style[id^="eldred-message-beautifier-style"]').forEach(node => {
+    if (node.id !== STYLE_ID) node.remove();
+  });
   if (doc.getElementById(STYLE_ID)) return;
   const style = doc.createElement('style');
   style.id = STYLE_ID;
@@ -169,46 +203,144 @@ export function installEldredMessageBeautifierStyles(): void {
   word-break: break-word;
 }
 .eldred-notice-card {
+  --notice-accent: #d6b35a;
+  --notice-dark: rgba(41, 25, 12, 0.96);
+  position: relative;
+  display: block;
+  width: min(18.5rem, calc(100% - 18px));
+  margin: 12px auto 14px;
+  padding: 8px;
+  border: 3px solid rgba(98, 61, 25, 0.95);
+  border-radius: 0;
+  background:
+    linear-gradient(180deg, rgba(78, 44, 17, 0.96), rgba(31, 17, 8, 0.98)),
+    repeating-linear-gradient(90deg, rgba(255, 225, 150, 0.05) 0 3px, transparent 3px 10px);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 226, 150, 0.13),
+    5px 5px 0 rgba(41, 20, 4, 0.24),
+    0 8px 18px rgba(0, 0, 0, 0.2);
+  color: #573518;
+  image-rendering: pixelated;
+  clear: both;
+}
+.eldred-notice-item { --notice-accent: #d9b15f; }
+.eldred-notice-skill { --notice-accent: #cbb7ff; }
+.eldred-notice-quest { --notice-accent: #f0c461; }
+.eldred-notice-npc { --notice-accent: #9fd0ff; }
+.eldred-notice-location { --notice-accent: #9fe3a5; }
+.eldred-notice-event { --notice-accent: #e5cf89; }
+.eldred-notice-level { --notice-accent: #ffd76a; }
+.eldred-notice-favor { --notice-accent: #ff9aaa; }
+.eldred-notice-reputation { --notice-accent: #efd374; }
+.eldred-notice-equipment { --notice-accent: #c8ccd2; }
+.eldred-notice-battle { --notice-accent: #ff746c; }
+.eldred-notice-cap {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  top: -7px;
+  height: 7px;
+  border: 2px solid rgba(98, 61, 25, 0.95);
+  border-bottom: 0;
+  background: linear-gradient(180deg, var(--notice-accent), #87551f);
+  box-shadow: 3px 0 0 rgba(41, 20, 4, 0.18);
+}
+.eldred-notice-head {
   display: grid;
-  grid-template-columns: minmax(76px, auto) minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 8px;
   align-items: stretch;
-  border: 1px solid var(--eldred-gold-dim);
-  border-radius: 6px;
-  background: linear-gradient(135deg, rgba(214, 179, 90, 0.12), rgba(16, 24, 32, 0.78));
-  overflow: hidden;
+  min-height: 42px;
+}
+.eldred-notice-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid rgba(98, 61, 25, 0.95);
+  background:
+    linear-gradient(135deg, rgba(48, 24, 10, 0.98), rgba(112, 68, 26, 0.96)),
+    repeating-linear-gradient(45deg, rgba(255, 226, 150, 0.15) 0 2px, transparent 2px 8px);
+  color: var(--notice-accent);
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: inset 0 0 0 1px rgba(255, 226, 150, 0.18), 3px 3px 0 rgba(41, 20, 4, 0.2);
+}
+.eldred-notice-mark,
+.eldred-battle-mark {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border: 2px solid rgba(98, 61, 25, 0.95);
+  border-radius: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 234, 176, 0.96), rgba(214, 179, 90, 0.92)),
+    repeating-linear-gradient(0deg, rgba(98, 61, 25, 0.07) 0 2px, transparent 2px 8px);
+  color: #5b3214;
+  padding: 0 8px;
+  font-family: serif;
+  font-weight: 900;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  box-shadow: inset 0 0 0 1px rgba(255, 248, 214, 0.55), 3px 3px 0 rgba(41, 20, 4, 0.16);
+}
+.eldred-notice-title {
+  margin-top: 8px;
+  border: 3px solid rgba(98, 61, 25, 0.92);
+  border-radius: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 235, 184, 0.94), rgba(236, 199, 124, 0.9)),
+    repeating-linear-gradient(0deg, rgba(98, 61, 25, 0.04) 0 2px, transparent 2px 9px);
+  color: #553418;
+  padding: 8px 9px;
+  font-weight: 800;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  box-shadow: inset 0 0 0 1px rgba(255, 248, 214, 0.72), 4px 4px 0 rgba(41, 20, 4, 0.16);
+}
+.eldred-notice-body {
+  display: grid;
+  gap: 5px;
+  margin-top: 8px;
+}
+.eldred-notice-row {
+  border-left: 3px solid rgba(98, 61, 25, 0.82);
+  background: rgba(255, 247, 215, 0.26);
+  color: #5f3b1e;
+  padding: 4px 7px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 .eldred-battle-card {
-  display: grid;
-  gap: 8px;
-  border: 1px solid rgba(220, 60, 60, 0.36);
-  border-radius: 6px;
-  background: linear-gradient(135deg, rgba(88, 20, 20, 0.42), rgba(16, 16, 24, 0.86));
-  padding: 10px;
-  box-shadow: inset 0 0 22px rgba(214, 179, 90, 0.04);
-}
-.eldred-battle-mark {
-  width: fit-content;
-  border: 1px solid rgba(214, 179, 90, 0.42);
-  border-radius: 4px;
-  color: #24170d;
-  background: linear-gradient(180deg, #d6b35a, #9b6b27);
-  padding: 3px 8px;
-  font-weight: 800;
-  font-size: 0.82em;
+  --notice-accent: #ff746c;
+  position: relative;
+  display: block;
+  width: min(28rem, calc(100% - 18px));
+  margin: 12px auto 14px;
+  padding: 8px;
+  border: 3px solid rgba(104, 43, 31, 0.95);
+  border-radius: 0;
+  background:
+    linear-gradient(180deg, rgba(74, 18, 15, 0.96), rgba(25, 14, 15, 0.98)),
+    repeating-linear-gradient(90deg, rgba(255, 116, 108, 0.05) 0 3px, transparent 3px 10px);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 180, 140, 0.12),
+    5px 5px 0 rgba(41, 7, 4, 0.24);
+  image-rendering: pixelated;
+  clear: both;
 }
 .eldred-battle-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
+  margin-top: 8px;
 }
 .eldred-battle-line {
   display: grid;
   grid-template-columns: 5.5em minmax(0, 1fr);
   gap: 6px;
-  border: 1px solid rgba(214, 179, 90, 0.14);
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.18);
+  border: 2px solid rgba(120, 66, 36, 0.58);
+  border-radius: 0;
+  background: rgba(255, 235, 184, 0.1);
   padding: 6px 7px;
 }
 .eldred-battle-line.wide {
@@ -216,38 +348,13 @@ export function installEldredMessageBeautifierStyles(): void {
   grid-column: 1 / -1;
 }
 .eldred-battle-line b {
-  color: var(--eldred-gold);
+  color: var(--notice-accent);
   font-size: 0.86em;
 }
 .eldred-battle-line span {
   min-width: 0;
   color: rgba(244, 232, 206, 0.82);
   overflow-wrap: anywhere;
-}
-.eldred-notice-mark {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px;
-  color: #1a120b;
-  background: var(--eldred-gold);
-  font-weight: 700;
-  font-size: 0.78em;
-  text-align: center;
-}
-.eldred-notice-body {
-  min-width: 0;
-  padding: 8px 10px;
-}
-.eldred-notice-title {
-  color: var(--eldred-ink);
-  font-weight: 700;
-}
-.eldred-notice-meta,
-.eldred-notice-text {
-  color: rgba(244, 232, 206, 0.68);
-  font-size: 0.84em;
-  margin-top: 2px;
 }
 .eldred-time-chip {
   width: fit-content;
@@ -281,16 +388,29 @@ export function installEldredMessageBeautifierStyles(): void {
     padding: 7px 8px;
   }
   .eldred-notice-card {
-    grid-template-columns: 1fr;
-    gap: 0;
+    width: min(18rem, calc(100% - 8px));
+    margin: 10px auto 12px;
+    padding: 7px;
+  }
+  .eldred-battle-card {
+    width: min(100%, calc(100% - 8px));
+    padding: 7px;
+  }
+  .eldred-notice-head {
+    grid-template-columns: 36px minmax(0, 1fr);
+    min-height: 36px;
+    gap: 7px;
+  }
+  .eldred-notice-icon {
+    border-width: 2px;
+  }
+  .eldred-notice-title {
+    border-width: 2px;
+    padding: 7px 8px;
   }
   .eldred-battle-grid,
   .eldred-battle-line {
     grid-template-columns: 1fr;
-  }
-  .eldred-notice-mark {
-    justify-content: flex-start;
-    padding: 5px 8px;
   }
 }
 `;
