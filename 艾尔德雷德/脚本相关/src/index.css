@@ -1,0 +1,178 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;800&family=Noto+Serif+SC:wght@400;600;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", "Noto Sans SC", sans-serif;
+  --font-serif: "Cinzel", "Noto Serif SC", serif;
+  --font-mono: "JetBrains Mono", monospace;
+  
+  --color-fantasy-dark: #0D0F12;
+  --color-fantasy-darker: #08090A;
+  --color-fantasy-gold: #D4AF37;
+  --color-fantasy-gold-dim: #997A15;
+  --color-fantasy-copper: #B87333;
+  --color-fantasy-blue: #2A4561;
+  --color-fantasy-red: #8B0000;
+  --color-fantasy-parchment: #F4E8D1;
+  --color-fantasy-silver: #C0C0C0;
+}
+
+html {
+  font-size: 15px;
+}
+
+body {
+  @apply bg-fantasy-darker text-gray-300 font-sans overflow-hidden select-none;
+  background-image: radial-gradient(circle at 50% 0%, #1A2235 0%, #08090A 70%), url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+}
+
+.text-gold-gradient {
+  background: linear-gradient(to right, #E5C07B, #D4AF37, #E5C07B);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-copper-gradient {
+  background: linear-gradient(to right, #D88B54, #B87333, #D88B54);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.glass-panel {
+  @apply bg-fantasy-darker/90 backdrop-blur-md border border-fantasy-gold/30 shadow-2xl;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), inset 0 0 20px rgba(212, 175, 55, 0.05);
+}
+
+.glass-panel-light {
+    @apply bg-black/40 backdrop-blur-sm border border-white/10;
+}
+
+.parchment-panel {
+  @apply bg-[#EADBBB] text-[#3A2C1D] shadow-inner font-serif relative z-0;
+  border: 4px solid transparent;
+  border-image: linear-gradient(to bottom right, #b8860b 0%, #d4af37 50%, #8b4513 100%) 1;
+  box-shadow: inset 0 0 100px rgba(139, 69, 19, 0.1), 0 10px 25px rgba(0,0,0,0.5);
+  background-image: 
+    radial-gradient(circle at 100% 0%, rgba(200, 180, 140, 0.4) 0%, transparent 50%),
+    radial-gradient(circle at 0% 100%, rgba(160, 130, 90, 0.3) 0%, transparent 50%),
+    url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.6' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.05'/%3E%3C/svg%3E");
+}
+
+.parchment-panel::after {
+    content: "";
+    @apply absolute inset-0 mix-blend-multiply opacity-20 pointer-events-none -z-10;
+    box-shadow: inset 0 0 30px 10px rgba(0,0,0,0.5);
+}
+
+.btn-rpg {
+  @apply relative overflow-hidden bg-gradient-to-b from-[#1a1c23] to-fantasy-dark border border-fantasy-gold/40 text-fantasy-gold font-serif transition-all duration-300 shadow-md;
+}
+.btn-rpg:hover:not(:disabled) {
+  @apply border-fantasy-gold bg-fantasy-gold/10 text-white shadow-[0_0_15px_rgba(212,175,55,0.4)];
+}
+.btn-rpg:active:not(:disabled) {
+  @apply translate-y-px shadow-[0_0_5px_rgba(212,175,55,0.4)];
+}
+.btn-rpg:disabled {
+  @apply opacity-50 cursor-not-allowed border-gray-600 text-gray-500 bg-gray-900;
+}
+.btn-rpg.active {
+   @apply border-fantasy-gold bg-gradient-to-b from-fantasy-gold/30 to-fantasy-dark text-white shadow-[0_0_20px_rgba(212,175,55,0.5)];
+}
+.btn-rpg::before {
+  content: '';
+  @apply absolute top-0 left-[-100%] w-1/2 h-full bg-gradient-to-r from-transparent via-white/10 to-transparent skew-x-[-45deg] transition-all duration-500 pointer-events-none;
+}
+.btn-rpg:hover:not(:disabled)::before {
+  @apply left-[200%];
+}
+
+/* Status bars */
+.hp-bar-fill {
+    background: linear-gradient(90deg, #8B0000 0%, #ff4d4d 100%);
+    box-shadow: 0 0 10px rgba(255, 77, 77, 0.4);
+}
+.mp-bar-fill {
+    background: linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%);
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
+}
+.ap-bar-fill {
+    background: linear-gradient(90deg, #b45309 0%, #f59e0b 100%);
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
+}
+
+.map-marker {
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.85));
+}
+
+.map-marker-anchor {
+  width: 0;
+  height: 0;
+}
+
+.map-marker-pin {
+  transform: translate(-50%, -50%);
+}
+
+.map-marker-label,
+.map-marker-current {
+  position: absolute;
+  left: 50%;
+  top: 0.9rem;
+  transform: translateX(-50%);
+  max-width: 8.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.map-marker-current {
+  top: 2.35rem;
+}
+
+@media (max-width: 640px) {
+  html {
+    font-size: 12.5px;
+  }
+
+  body {
+    font-size: 13px;
+  }
+
+  .glass-panel,
+  .glass-panel-light,
+  .parchment-panel {
+    border-radius: 0.5rem;
+  }
+
+  .btn-rpg {
+    letter-spacing: 0;
+  }
+
+  .map-marker-label,
+  .map-marker-current {
+    max-width: 5.8rem;
+  }
+}
+
+@media (max-width: 380px) {
+  html {
+    font-size: 11.5px;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0,0,0,0.4);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(212, 175, 55, 0.3);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(212, 175, 55, 0.8);
+}
