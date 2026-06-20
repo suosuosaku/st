@@ -14,6 +14,7 @@ import {
   EldredNarrationKind,
   EldredRuntimeMessage,
   EldredRuntimeSave,
+  loadEldredRuntimeSave,
   persistEldredRuntimeCache,
 } from './eldredSave';
 import { formatEldredLocation } from './locationFormat';
@@ -64,6 +65,152 @@ const getHostFunction = <T extends (...args: any[]) => any>(name: string): T | n
     }
   }
   return null;
+};
+
+type MvuBridge = {
+  getMvuData?: (option: AnyRecord) => unknown;
+  parseMessage?: (message: string, oldData: unknown) => Promise<unknown> | unknown;
+  replaceMvuData?: (data: unknown, option: AnyRecord) => Promise<unknown> | unknown;
+};
+
+const getMvuBridge = (): MvuBridge | null => {
+  for (const scope of getHostScopes()) {
+    try {
+      if (scope.Mvu && typeof scope.Mvu === 'object') return scope.Mvu as MvuBridge;
+      if (scope.__eldredWelcomeBridge?.Mvu && typeof scope.__eldredWelcomeBridge.Mvu === 'object') {
+        return scope.__eldredWelcomeBridge.Mvu as MvuBridge;
+      }
+    } catch {
+      // Cross-origin frames can throw.
+    }
+  }
+  return null;
+};
+
+const currentMessageContexts = () => {
+  const contexts: AnyRecord[] = [
+    { type: 'message', message_id: 'latest' },
+    { type: 'message', message_id: -1 },
+  ];
+  const getCurrentMessageId = getHostFunction<() => number>('getCurrentMessageId');
+  if (getCurrentMessageId) {
+    try {
+      const id = Number(getCurrentMessageId());
+      if (Number.isFinite(id)) contexts.push({ type: 'message', message_id: id });
+    } catch {
+      // ignored
+    }
+  }
+  const getLastMessageId = getHostFunction<() => number>('getLastMessageId');
+  if (getLastMessageId) {
+    try {
+      const id = Number(getLastMessageId());
+      if (Number.isFinite(id)) {
+        contexts.push({ type: 'message', message_id: id });
+        if (id > 0) contexts.push({ type: 'message', message_id: id - 1 });
+      }
+    } catch {
+      // ignored
+    }
+  }
+  const seen = new Set<string>();
+  return contexts.filter(context => {
+    const key = JSON.stringify(context);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
+const readMessageVariables = (option: AnyRecord) => {
+  const getVariables = getHostFunction<(option: AnyRecord) => unknown>('getVariables');
+  if (!getVariables) return null;
+  try {
+    return getVariables(option);
+  } catch {
+    return null;
+  }
+};
+
+const resolveMvuWriteContext = (mvu: MvuBridge) => {
+  const contexts = currentMessageContexts();
+  for (const option of contexts) {
+    try {
+      const data = mvu.getMvuData?.(option);
+      if (data && typeof data === 'object') return { option, oldData: data };
+    } catch {
+      // Try the next message context.
+    }
+  }
+  const fallbackOption = contexts[0] || { type: 'message', message_id: 'latest' };
+  return {
+    option: fallbackOption,
+    oldData: readMessageVariables(fallbackOption) || {},
+  };
+};
+
+const notifyRuntimeChanged = () => {
+  try {
+    window.dispatchEvent(new CustomEvent('eldred-runtime-event'));
+  } catch {
+    // ignored
+  }
+  try {
+    window.parent?.postMessage({
+      source: 'EldredWelcomeLoader',
+      type: 'runtime-event',
+      name: 'mvu-variable-update-ended',
+      args: ['manual-parse'],
+      at: Date.now(),
+    }, '*');
+  } catch {
+    // ignored
+  }
+};
+
+const syncGeneratedMvuVariables = async (rawText: string) => {
+  if (!/<UpdateVariable\b/i.test(rawText)) return false;
+  const mvu = getMvuBridge();
+  if (!mvu?.getMvuData || !mvu.parseMessage || !mvu.replaceMvuData) {
+    console.warn('[艾尔德雷德] 未检测到完整 MVU 接口，无法解析本次 <UpdateVariable>。');
+    return false;
+  }
+  const { option, oldData } = resolveMvuWriteContext(mvu);
+  const parsed = await mvu.parseMessage(rawText, oldData || {});
+  if (!parsed || typeof parsed !== 'object') {
+    console.warn('[艾尔德雷德] MVU parseMessage 未返回变量对象。');
+    return false;
+  }
+  await mvu.replaceMvuData(parsed, option);
+  notifyRuntimeChanged();
+  return true;
+};
+
+const mergeSyncedRuntime = (previous: EldredRuntimeSave) => {
+  const synced = loadEldredRuntimeSave();
+  if (synced.source !== 'mvu') return previous;
+  return {
+    ...synced,
+    player: synced.player || previous.player,
+    npcs: synced.npcs.length ? synced.npcs : previous.npcs,
+    quests: synced.quests.length ? synced.quests : previous.quests,
+    cluePhases: synced.cluePhases.some(phase => phase.clues.length) ? synced.cluePhases : previous.cluePhases,
+    combat: synced.combat.enemyUnits.length || synced.combat.logs.length ? synced.combat : previous.combat,
+    world: {
+      currentTime: synced.world.currentTime || previous.world.currentTime,
+      currentLocation: synced.world.currentLocation || previous.world.currentLocation,
+      region: synced.world.region || previous.world.region,
+      subRegion: synced.world.subRegion || previous.world.subRegion,
+      landmark: synced.world.landmark || previous.world.landmark,
+      weather: synced.world.weather || previous.world.weather,
+      risk: synced.world.risk || previous.world.risk,
+      travelState: synced.world.travelState || previous.world.travelState,
+      presentCharacters: synced.world.presentCharacters.length ? synced.world.presentCharacters : previous.world.presentCharacters,
+      dynamicBoard: synced.world.dynamicBoard.length ? synced.world.dynamicBoard : previous.world.dynamicBoard,
+    },
+    narration: previous.narration,
+    messages: previous.messages,
+  };
 };
 
 const requestGenerateThroughLoader = (config: AnyRecord) => {
@@ -348,8 +495,10 @@ export const generateEldredNarrationFromInput = async (
       systemPrompt: buildBaseSystemPrompt(runtime, trimmedInput, kind),
       worldbookScanText: buildWorldbookScanText(runtime, trimmedInput, kind),
     });
+    await syncGeneratedMvuVariables(rawText);
+    const syncedRuntime = mergeSyncedRuntime(runtime);
     const content = extractEldredContentBlock(rawText);
-    return appendGeneratedEntry(runtime, {
+    return appendGeneratedEntry(syncedRuntime, {
       kind,
       title: kind === 'combat' ? '战斗回合' : '玩家行动',
       userInput: trimmedInput,
@@ -366,7 +515,7 @@ export const generateEldredNarrationFromOpening = async (runtime: EldredRuntimeS
   const userInput = '进入艾尔德雷德。';
   const systemPrompt = [
     buildBaseSystemPrompt(runtime, openingFacts, 'opening'),
-    '生成第一幕正文。只按入局设定初始化变量；未选择技能、默认剧情、默认队友、默认委托不得写入。需要输出 <content> 与 <UpdateVariable>。',
+    '生成第一幕正文。只按入局设定初始化变量；未选择技能、默认剧情、默认队友、默认背包、默认好感、默认声望不得写入。需要基于出生点和第一幕事实生成4条本地新闻/见闻与4条可接委托，并写入变量。需要输出 <content> 与 <UpdateVariable>。',
   ].join('\n\n');
   try {
     const rawText = await generateWithEldredPreset({
@@ -375,8 +524,10 @@ export const generateEldredNarrationFromOpening = async (runtime: EldredRuntimeS
       systemPrompt,
       worldbookScanText: buildWorldbookScanText(runtime, openingFacts, 'opening_setup'),
     });
+    await syncGeneratedMvuVariables(rawText);
+    const syncedRuntime = mergeSyncedRuntime(runtime);
     const content = extractEldredContentBlock(rawText);
-    return appendGeneratedEntry(runtime, {
+    return appendGeneratedEntry(syncedRuntime, {
       kind: 'opening',
       title: '第一幕',
       userInput: openingFacts,
@@ -409,8 +560,10 @@ export const generateEldredNarrationFromEvent = async (
       systemPrompt,
       worldbookScanText: buildWorldbookScanText(runtime, `${eventPayload}\n${userInput}`, input.eventType),
     });
+    await syncGeneratedMvuVariables(rawText);
+    const syncedRuntime = mergeSyncedRuntime(runtime);
     const content = extractEldredContentBlock(rawText);
-    return appendGeneratedEntry(runtime, {
+    return appendGeneratedEntry(syncedRuntime, {
       kind,
       title: input.title || '事件推进',
       userInput,

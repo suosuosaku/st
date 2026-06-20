@@ -131,8 +131,8 @@ export function NpcPanel({ npcs = [] }: NpcPanelProps) {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="flex justify-between p-2 bg-white/5 rounded text-sm"><span className="text-gray-500">等级</span><span className="font-mono text-gray-300">{selectedNpc.stats.level}</span></div>
                     <div className="flex justify-between p-2 bg-white/5 rounded text-sm"><span className="text-gray-500">护甲</span><span className="font-mono text-gray-300">{selectedNpc.stats.ac}</span></div>
-                    <div className="flex justify-between p-2 bg-white/5 rounded text-sm"><span className="text-gray-500">生命</span><span className="font-mono text-gray-300">{selectedNpc.stats.maxHp}</span></div>
-                    <div className="flex justify-between p-2 bg-white/5 rounded text-sm"><span className="text-gray-500">法力</span><span className="font-mono text-gray-300">{selectedNpc.stats.maxMp}</span></div>
+                    <div className="flex justify-between p-2 bg-white/5 rounded text-sm"><span className="text-gray-500">生命</span><span className="font-mono text-gray-300">{selectedNpc.stats.hp}/{selectedNpc.stats.maxHp}</span></div>
+                    <div className="flex justify-between p-2 bg-white/5 rounded text-sm"><span className="text-gray-500">法力</span><span className="font-mono text-gray-300">{selectedNpc.stats.mp}/{selectedNpc.stats.maxMp}</span></div>
                     {ATTRIBUTE_KEYS.map(key => (
                       <div key={key} className="flex justify-between p-2 bg-white/5 rounded text-sm">
                         <span className="text-gray-500">{ATTRIBUTE_LABELS[key]}</span>

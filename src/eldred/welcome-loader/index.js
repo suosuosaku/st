@@ -1,11 +1,11 @@
 (() => {
-  const BUILD_ID = 'eldred-welcome-loader-v3.5.0';
-  const VERSION_REF = 'eldred-integrated-v3.5.0';
+  const BUILD_ID = 'eldred-welcome-loader-v3.5.1';
+  const VERSION_REF = 'eldred-integrated-v3.5.1';
   const GLOBAL_KEY = '__eldredWelcomeLoader';
   const FRAME_SELECTOR = '[data-eldred-welcome-console="true"]';
   const FULL_UI_BASE = detectFullUiBase();
   const FULL_UI_ASSETS = {
-    script: 'assets/index-CElSoV1a.js',
+    script: 'assets/index-Gln-7-OL.js',
     style: 'assets/index-CuRMzv8z.css',
   };
   let iframeEl = null;
@@ -83,7 +83,7 @@
     return null;
   }
 
-  function findMvuGetter() {
+  function findMvuMethod(name) {
     const scopes = uniqueScopes([
       globalThis,
       window,
@@ -93,10 +93,14 @@
     ]);
     for (const scope of scopes) {
       try {
-        if (typeof scope?.Mvu?.getMvuData === 'function') return scope.Mvu.getMvuData.bind(scope.Mvu);
+        if (typeof scope?.Mvu?.[name] === 'function') return scope.Mvu[name].bind(scope.Mvu);
       } catch (error) {}
     }
     return null;
+  }
+
+  function findMvuGetter() {
+    return findMvuMethod('getMvuData');
   }
 
   function findMvuEvents() {
@@ -216,6 +220,16 @@
           const getMvuData = findMvuGetter();
           if (!getMvuData) return null;
           return getMvuData(option);
+        },
+        parseMessage(message, oldData) {
+          const parseMessage = findMvuMethod('parseMessage');
+          if (!parseMessage) throw Error('未检测到 MVU parseMessage()。请确认 MVU 变量框架已加载。');
+          return parseMessage(message, oldData);
+        },
+        replaceMvuData(data, option) {
+          const replaceMvuData = findMvuMethod('replaceMvuData');
+          if (!replaceMvuData) throw Error('未检测到 MVU replaceMvuData()。请确认 MVU 变量框架已加载。');
+          return replaceMvuData(data, option);
         },
       },
     };

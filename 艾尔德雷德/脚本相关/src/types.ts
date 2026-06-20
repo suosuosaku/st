@@ -260,6 +260,19 @@ export type Quest = {
   reputationReward?: number;
 };
 
+export type DynamicBoardItemType = '新闻' | '见闻' | '委托' | '市场' | '传讯' | '路径行动';
+
+export type DynamicBoardItem = {
+  id: string;
+  type: DynamicBoardItemType;
+  title: string;
+  detail: string;
+  source: string;
+  status: string;
+  location: string;
+  updatedAt?: string;
+};
+
 export type CombatUnit = {
   id: string;
   name: string;

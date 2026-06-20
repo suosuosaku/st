@@ -5,6 +5,8 @@ import {
   CharacterRaceId,
   CluePhase,
   CombatUnit,
+  DynamicBoardItem,
+  DynamicBoardItemType,
   EquipmentLoadout,
   EquipmentSlot,
   ImmersiveNotice,
@@ -89,6 +91,7 @@ export type EldredRuntimeSave = {
     risk: string;
     travelState: string;
     presentCharacters: string[];
+    dynamicBoard: DynamicBoardItem[];
   };
   rawStatData?: AnyRecord;
   narration: EldredNarrationState;
@@ -109,6 +112,7 @@ const emptyWorld = (): EldredRuntimeSave['world'] => ({
   risk: '',
   travelState: '',
   presentCharacters: [],
+  dynamicBoard: [],
 });
 
 export const createEmptyNarrationState = (): EldredNarrationState => ({
@@ -477,11 +481,36 @@ const attributeKeyByChinese: Record<string, AttributeKey> = {
 
 const attributesFrom = (raw: unknown, fallback: Record<AttributeKey, number>): Record<AttributeKey, number> => {
   const source = asRecord(raw);
+  const sourceText = String(raw ?? '');
   return ATTRIBUTE_KEYS.reduce((acc, key) => {
     const chineseKey = Object.entries(attributeKeyByChinese).find(([, mapped]) => mapped === key)?.[0] || key;
-    acc[key] = numberOf(source[key] ?? source[chineseKey], fallback[key]);
+    const textMatch = sourceText.match(new RegExp(`${chineseKey}\\s*[:：]?\\s*(-?\\d+)`));
+    acc[key] = numberOf(source[key] ?? source[chineseKey] ?? textMatch?.[1], fallback[key]);
     return acc;
   }, {} as Record<AttributeKey, number>);
+};
+
+const mechanicsFromText = (raw: unknown): AnyRecord => {
+  const text = textOf(raw);
+  if (!text) return {};
+  const record: AnyRecord = {};
+  const hp = text.match(/(?:生命|HP)\s*[:：]?\s*(\d+\s*\/\s*\d+)/i)?.[1];
+  const mp = text.match(/(?:法力|MP)\s*[:：]?\s*(\d+\s*\/\s*\d+)/i)?.[1];
+  const level = text.match(/等级\s*[:：]?\s*(?:等级)?\s*(\d+)/)?.[1];
+  const ac = text.match(/护甲\s*[:：]?\s*(\d+)/)?.[1];
+  const speed = text.match(/速度\s*[:：]?\s*(\d+)/)?.[1];
+  const initiative = text.match(/先攻\s*[:：]?\s*([+-]?\d+)/)?.[1];
+  const proficiency = text.match(/熟练(?:加值)?\s*[:：]?\s*([+-]?\d+)/)?.[1];
+  const attrs = attributesFrom(text, { str: 0, dex: 0, vit: 0, int: 0, spr: 0 });
+  if (hp) record.生命 = hp.replace(/\s+/g, '');
+  if (mp) record.法力 = mp.replace(/\s+/g, '');
+  if (level) record.等级 = Number(level);
+  if (ac) record.护甲 = Number(ac);
+  if (speed) record.速度 = Number(speed);
+  if (initiative) record.先攻 = Number(initiative);
+  if (proficiency) record.熟练加值 = Number(proficiency);
+  if (ATTRIBUTE_KEYS.some(key => attrs[key] !== 0)) record.五维 = attrs;
+  return record;
 };
 
 const parseVitals = (value: unknown, fallbackCurrent: number, fallbackMax: number) => {
@@ -626,6 +655,75 @@ const noticesFrom = (raw: unknown): ImmersiveNotice[] => {
   });
 };
 
+const dynamicBoardTypes: DynamicBoardItemType[] = ['新闻', '见闻', '委托', '市场', '传讯', '路径行动'];
+
+const primitiveBoardItemsFrom = (raw: unknown, type: DynamicBoardItemType): DynamicBoardItem[] =>
+  textOf(raw)
+    .split(/\n+/)
+    .map(item => item.trim())
+    .filter(Boolean)
+    .map((line, index) => ({
+      id: `${type}-${index}`,
+      type,
+      title: line.split(/[｜|:：]/)[0] || type,
+      detail: line,
+      source: '',
+      status: '记录中',
+      location: '',
+    }));
+
+const boardItemsFrom = (raw: unknown, type: DynamicBoardItemType): DynamicBoardItem[] => {
+  if (raw === undefined || raw === null) return [];
+  if (typeof raw !== 'object') return primitiveBoardItemsFrom(raw, type);
+  const entries = Array.isArray(raw)
+    ? raw.map((value, index) => [String(index + 1), value] as const)
+    : Object.entries(asRecord(raw));
+  return entries.map(([key, value], index) => {
+    const source = asRecord(value);
+    const body = textOf(source.内容 ?? source.说明 ?? source.事项 ?? source.目标 ?? source.详情 ?? value);
+    return {
+      id: textOf(source.id ?? source.ID, `${type}-${key || index}`),
+      type,
+      title: textOf(source.标题 ?? source.名称 ?? source.title, key || type),
+      detail: body,
+      source: textOf(source.来源 ?? source.发布者 ?? source.委托人 ?? source.source),
+      status: textOf(source.状态 ?? source.进展 ?? source.status, '记录中'),
+      location: textOf(source.地点 ?? source.位置 ?? source.地标 ?? source.location),
+      updatedAt: textOf(source.时间 ?? source.更新 ?? source.updatedAt),
+    };
+  }).filter(item => item.title || item.detail);
+};
+
+const dynamicBoardFromStatData = (statData: AnyRecord): DynamicBoardItem[] => {
+  const world = asRecord(statData.世界);
+  const system = asRecord(statData.系统);
+  const board = asRecord(world.动态看板 ?? system.动态看板 ?? system.新闻见闻);
+  const items: DynamicBoardItem[] = [];
+
+  dynamicBoardTypes.forEach(type => {
+    items.push(...boardItemsFrom(board[type], type));
+  });
+
+  const legacyNewsRumors = system.新闻见闻;
+  const legacyNewsRumorsRecord = asRecord(legacyNewsRumors);
+  const legacyNewsRumorsHasTypedGroups = dynamicBoardTypes.some(type => legacyNewsRumorsRecord[type] !== undefined);
+  items.push(...boardItemsFrom(world.新闻 ?? system.新闻, '新闻'));
+  items.push(...boardItemsFrom(world.见闻 ?? system.见闻 ?? (legacyNewsRumorsHasTypedGroups ? undefined : legacyNewsRumors), '见闻'));
+  items.push(...boardItemsFrom(world.市场 ?? system.市场, '市场'));
+  items.push(...boardItemsFrom(world.传讯 ?? system.传讯, '传讯'));
+  items.push(...boardItemsFrom(world.路径行动 ?? system.路径行动, '路径行动'));
+
+  const seen = new Set<string>();
+  return items
+    .filter(item => {
+      const key = `${item.type}:${item.id}:${item.title}:${item.detail}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 24);
+};
+
 const hasPlayerBattleData = (battle: AnyRecord, main: AnyRecord, identityRecord: AnyRecord) => {
   const hp = textOf(firstDefined(battle.生命, battle.HP, battle.生命值));
   const mp = textOf(firstDefined(battle.法力, battle.MP, battle.法力值));
@@ -722,7 +820,16 @@ const playerFromStatData = (statData: AnyRecord): PlayerState | null => {
 
 const characterFromVariable = (name: string, raw: unknown, type: Character['type']): Character => {
   const source = asRecord(raw);
-  const battle = asRecord(source.战斗 ?? source.数值 ?? source);
+  const mechanicText = [
+    typeof raw === 'string' ? raw : '',
+    source.机制数值,
+    source.数值,
+    source.战斗,
+  ].map(value => typeof value === 'string' ? value : '').filter(Boolean).join('；');
+  const battle = {
+    ...mechanicsFromText(mechanicText),
+    ...asRecord(source.战斗 ?? source.数值 ?? source.机制数值 ?? source),
+  };
   const classId = resolveClassId(source.职业 ?? battle.职业 ?? source.profession);
   const raceId = resolveRaceId(source.种族 ?? battle.种族);
   const cls = getClassById(classId);
@@ -736,8 +843,30 @@ const characterFromVariable = (name: string, raw: unknown, type: Character['type
     .slice(0, 4);
   const level = Math.max(1, numberOf(battle.等级 ?? source.等级, 1));
   const derived = calculateDerivedStats(level, classId, baseAttributes, equippedIdsFromLoadout(loadout), raceId);
-  const hp = parseVitals(firstDefined(battle.生命, battle.HP, source.生命, source.HP), derived.hp, derived.maxHp);
-  const mp = parseVitals(firstDefined(battle.法力, battle.MP, source.法力, source.MP), derived.mp, derived.maxMp);
+  const hp = parseVitals(
+    firstDefined(
+      battle.生命,
+      battle.HP,
+      source.生命,
+      source.HP,
+      battle.生命值 !== undefined || battle.生命值上限 !== undefined ? `${battle.生命值 ?? derived.hp}/${battle.生命值上限 ?? derived.maxHp}` : undefined,
+      source.生命值 !== undefined || source.生命值上限 !== undefined ? `${source.生命值 ?? derived.hp}/${source.生命值上限 ?? derived.maxHp}` : undefined,
+    ),
+    derived.hp,
+    derived.maxHp,
+  );
+  const mp = parseVitals(
+    firstDefined(
+      battle.法力,
+      battle.MP,
+      source.法力,
+      source.MP,
+      battle.法力值 !== undefined || battle.法力值上限 !== undefined ? `${battle.法力值 ?? derived.mp}/${battle.法力值上限 ?? derived.maxMp}` : undefined,
+      source.法力值 !== undefined || source.法力值上限 !== undefined ? `${source.法力值 ?? derived.mp}/${source.法力值上限 ?? derived.maxMp}` : undefined,
+    ),
+    derived.mp,
+    derived.maxMp,
+  );
 
   return {
     id: textOf(source.id, name),
@@ -914,6 +1043,7 @@ const worldFromStatData = (statData: AnyRecord): EldredRuntimeSave['world'] => {
     risk: textOf(world.风险等级),
     travelState: textOf(world.旅行状态),
     presentCharacters: splitTextList(world.在场角色),
+    dynamicBoard: dynamicBoardFromStatData(statData),
   };
 };
 
@@ -928,7 +1058,12 @@ const normalizeRuntime = (raw: Partial<EldredRuntimeSave>, source: EldredRuntime
     quests: raw.quests || [],
     cluePhases: raw.cluePhases || [],
     combat: raw.combat || { turn: 1, enemyUnits: [], logs: [] },
-    world: raw.world || emptyWorld(),
+    world: {
+      ...emptyWorld(),
+      ...raw.world,
+      presentCharacters: raw.world?.presentCharacters || [],
+      dynamicBoard: raw.world?.dynamicBoard || [],
+    },
     rawStatData: raw.rawStatData,
     narration: {
       entries: entries
@@ -1006,6 +1141,7 @@ export const loadEldredRuntimeSave = (): EldredRuntimeSave => {
         risk: runtime.world.risk || cachedWorld?.risk || '',
         travelState: runtime.world.travelState || cachedWorld?.travelState || '',
         presentCharacters: runtime.world.presentCharacters.length ? runtime.world.presentCharacters : cachedWorld?.presentCharacters || [],
+        dynamicBoard: runtime.world.dynamicBoard.length ? runtime.world.dynamicBoard : cachedWorld?.dynamicBoard || [],
       };
       return {
         ...runtime,

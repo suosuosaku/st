@@ -41,6 +41,7 @@ export function OverviewPanel({
   const visibleEntries = [...entries].reverse();
   const latestEntry = entries.at(-1);
   const latestQuest = runtime?.quests?.[0];
+  const boardItems = runtime?.world.dynamicBoard?.slice(0, 6) || [];
   const latestRelationship = player.relationships[0];
   const latestReputation = player.reputations[0];
   const latestCombatLog = runtime?.combat.logs.at(-1);
@@ -62,6 +63,15 @@ export function OverviewPanel({
         title: notice.body.split(/[｜|]/)[0] || notice.title,
         detail: notice.meta || notice.body,
         tone: notice.type === 'quest' ? 'quest' : notice.type === 'favor' || notice.type === 'reputation' ? 'relation' : notice.type === 'level' ? 'combat' : 'event',
+      });
+    }
+    for (const item of boardItems) {
+      records.push({
+        id: `board-${item.type}-${item.id}`,
+        label: item.type,
+        title: item.title,
+        detail: [item.location, item.status, item.detail].filter(Boolean).join(' / '),
+        tone: item.type === '委托' ? 'quest' : item.type === '新闻' || item.type === '见闻' ? 'world' : 'event',
       });
     }
     if (latestQuest) {
@@ -108,7 +118,7 @@ export function OverviewPanel({
       tone: 'world',
     });
     return records.slice(0, 9);
-  }, [entries, latestCombatLog, latestEntry, latestQuest, latestRelationship, latestReputation, locationDisplay.fullName, player.notices, riskText, runtime?.combat.turn, timeText, weatherText]);
+  }, [boardItems, entries, latestCombatLog, latestEntry, latestQuest, latestRelationship, latestReputation, locationDisplay.fullName, player.notices, riskText, runtime?.combat.turn, timeText, weatherText]);
 
   useEffect(() => {
     const node = narrativeScrollRef.current;

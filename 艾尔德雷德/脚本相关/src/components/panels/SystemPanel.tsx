@@ -58,6 +58,12 @@ const variableRows = (runtime: EldredRuntimeSave): VariableRow[] => {
     ['风险', '世界.风险等级', '运行档案'],
     ['旅行', '世界.旅行状态', '运行档案'],
     ['在场角色', '世界.在场角色', '运行档案/NPC'],
+    ['动态看板', '世界.动态看板', '概览'],
+    ['新闻', '世界.动态看板.新闻', '概览'],
+    ['见闻', '世界.动态看板.见闻', '概览'],
+    ['市场', '世界.动态看板.市场', '概览'],
+    ['传讯', '世界.动态看板.传讯', '概览'],
+    ['路径行动', '世界.动态看板.路径行动', '概览'],
     ['身份', '主角.身份', '队伍/运行档案'],
     ['战斗面板', '主角.战斗', '队伍/战斗'],
     ['五维', '主角.战斗.五维', '队伍/战斗'],
@@ -132,6 +138,7 @@ export function SystemPanel({ runtime, player }: { runtime: EldredRuntimeSave; p
               <StatusBlock icon={<Activity className="h-4 w-4" />} label="战斗记录" value={`${combatLogCount}条`} />
               <StatusBlock icon={<Users className="h-4 w-4" />} label="收录角色" value={`${runtime.npcs.length}人`} />
               <StatusBlock icon={<Radio className="h-4 w-4" />} label="在场角色" value={presentCharacters} />
+              <StatusBlock icon={<Radio className="h-4 w-4" />} label="新闻见闻" value={`${runtime.world.dynamicBoard.length}条`} />
             </div>
           </section>
 
