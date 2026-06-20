@@ -1,9 +1,9 @@
 import './index.css';
 
 (() => {
-  const BUILD_ID = 'eldred-welcome-v3.3.1';
+  const BUILD_ID = 'eldred-welcome-v3.3.2';
   const HOST_ID = globalThis.__ELDRED_WELCOME_HOST_ID__ || new URLSearchParams(window.location.search).get('hostId') || '';
-  const MAP_BASE = new URL('../maps/', window.location.href).toString();
+  const MAP_BASE = globalThis.__ELDRED_MAP_BASE__ || new URL('../maps/', window.location.href).toString();
 
   const chapters = [
     { id: 'cover', title: '封面', tag: 'PRESS START' },

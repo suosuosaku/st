@@ -1,10 +1,13 @@
+import welcomeScriptSource from '../welcome/index.js?raw';
+import welcomeCssSource from '../welcome/index.css?raw';
+
 (() => {
-  const BUILD_ID = 'eldred-welcome-loader-v3.3.1';
+  const BUILD_ID = 'eldred-welcome-loader-v3.3.2';
+  const VERSION_REF = 'eldred-integrated-v3.3.2';
   const GLOBAL_KEY = '__eldredWelcomeLoader';
   const FRAME_SELECTOR = '[data-eldred-welcome-console="true"]';
-  const EXIT_SELECTOR = '[data-eldred-welcome-exit="true"]';
   const HOST_ID_PREFIX = 'eldred-welcome-';
-  const WELCOME_URL = detectWelcomeUrl();
+  const MAP_BASE = detectMapBase();
   let iframeEl = null;
   let exitButtonEl = null;
   let viewportDestroy = null;
@@ -16,7 +19,7 @@
   try { previous?.unmount?.(); } catch (error) {}
   globalThis[GLOBAL_KEY] = { build: BUILD_ID, mount: mountConsole, unmount: unmountConsole, open: mountConsole };
 
-  function detectWelcomeUrl() {
+  function detectScriptUrl() {
     const candidates = [];
     try {
       if (document.currentScript?.src) candidates.push(document.currentScript.src);
@@ -34,12 +37,13 @@
     const scriptUrl = candidates
       .filter(Boolean)
       .find(url => /\/eldred\/welcome-loader\/index\.js(?:[?#].*)?$/.test(String(url)));
-    if (scriptUrl) {
-      return String(scriptUrl)
-        .replace(/[?#].*$/, '')
-        .replace(/\/welcome-loader\/index\.js$/, '/welcome/index.html');
-    }
-    return 'https://testingcf.jsdelivr.net/gh/suosuosaku/st@eldred-integrated-v3.3.1/dist/eldred/welcome/index.html';
+    return scriptUrl ? String(scriptUrl).replace(/[?#].*$/, '') : '';
+  }
+
+  function detectMapBase() {
+    const scriptUrl = detectScriptUrl();
+    if (scriptUrl) return scriptUrl.replace(/\/welcome-loader\/index\.js$/, '/maps/');
+    return `https://testingcf.jsdelivr.net/gh/suosuosaku/st@${VERSION_REF}/dist/eldred/maps/`;
   }
 
   function hostWindow() {
@@ -65,13 +69,6 @@
       left: Math.floor(viewport?.offsetLeft || 0),
       top: Math.floor(viewport?.offsetTop || 0),
     };
-  }
-
-  function consoleUrl() {
-    const url = new URL(WELCOME_URL);
-    url.searchParams.set('hostId', `${HOST_ID_PREFIX}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`);
-    url.searchParams.set('loaderBuild', BUILD_ID);
-    return url.toString();
   }
 
   function addEscapeKeyTarget(target) {
@@ -155,6 +152,43 @@
     update();
   }
 
+  function scriptText() {
+    return String(welcomeScriptSource || '')
+      .replace(/^\s*import\s+['"]\.\/index\.css['"];\s*/, '')
+      .replace(/<\/script/gi, '<\\/script');
+  }
+
+  function styleText() {
+    return String(welcomeCssSource || '').replace(/<\/style/gi, '<\\/style');
+  }
+
+  function mountWelcomeDocument(iframe) {
+    if (!iframe || iframe.dataset.eldredWelcomeMounted === 'true') return;
+    const doc = iframe.contentDocument;
+    if (!doc) return;
+    iframe.dataset.eldredWelcomeMounted = 'true';
+    const hostId = `${HOST_ID_PREFIX}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    doc.open();
+    doc.write(`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <style>${styleText()}</style>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    globalThis.__ELDRED_WELCOME_HOST_ID__ = ${JSON.stringify(hostId)};
+    globalThis.__ELDRED_MAP_BASE__ = ${JSON.stringify(MAP_BASE)};
+  <\/script>
+  <script type="module">${scriptText()}<\/script>
+</body>
+</html>`);
+    doc.close();
+    syncViewportToIframe();
+  }
+
   function mountConsole() {
     if (stopped) stopped = false;
     if (iframeEl) return;
@@ -169,8 +203,6 @@
     iframe.setAttribute('aria-label', '艾尔德雷德开局控制台');
     iframe.loading = 'eager';
     iframe.referrerPolicy = 'no-referrer';
-    iframe.sandbox = 'allow-scripts allow-forms';
-    iframe.src = consoleUrl();
     iframe.style.cssText = [
       'position:fixed',
       'left:0',
@@ -184,12 +216,14 @@
       'color-scheme:dark',
     ].join(';');
     iframe.addEventListener('load', () => {
+      mountWelcomeDocument(iframe);
       syncViewportToIframe();
     });
 
     iframeEl = iframe;
     bindViewport();
     doc.body.appendChild(iframe);
+    mountWelcomeDocument(iframe);
     setTimeout(syncViewportToIframe, 0);
   }
 

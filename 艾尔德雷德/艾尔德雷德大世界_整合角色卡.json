@@ -14982,10 +14982,10 @@
           {
             "type": "script",
             "enabled": true,
-            "name": "艾尔德雷德开局控制台",
-            "id": "eldred-welcome-console-v331",
-            "content": "import 'https://testingcf.jsdelivr.net/gh/suosuosaku/st@eldred-integrated-v3.3.1/dist/eldred/welcome-loader/index.js'",
-            "info": "艾尔德雷德开局控制台入口。导入后接管页面，可用脚本按钮重新打开。",
+            "name": "艾尔德雷德脚本",
+            "id": "eldred-main-v332",
+            "content": "import 'https://testingcf.jsdelivr.net/gh/suosuosaku/st@eldred-integrated-v3.3.2/dist/eldred/welcome-loader/index.js'",
+            "info": "艾尔德雷德开局入口。导入后接管页面，可用脚本按钮重新打开。",
             "button": {
               "enabled": true,
               "buttons": [
@@ -14996,47 +14996,14 @@
               ]
             },
             "data": {
-              "version": "eldred-integrated-v3.3.1"
-            }
-          },
-          {
-            "type": "script",
-            "enabled": true,
-            "name": "艾尔德雷德智脑",
-            "id": "eldred-brain-20260620-integrated",
-            "content": "import 'https://testingcf.jsdelivr.net/gh/suosuosaku/st@eldred-integrated-v3.3.1/dist/%E6%99%BA%E8%84%91/index.js'",
-            "info": "艾尔德雷德专用智脑入口。当前版本与专用预设绑定。",
-            "button": {
-              "enabled": true,
-              "buttons": [
-                {
-                  "name": "打开艾尔德雷德智脑",
-                  "visible": true
-                }
-              ]
-            },
-            "data": {
-              "source_path": "艾尔德雷德/智脑/index.ts",
-              "scheduler_report": "D:\\sillytavern\\tavern_helper_template-main\\艾尔德雷德\\智脑调度与世界书条目清单_2026-06-20.md",
-              "mqzn_settings": {
-                "settings": {
-                  "eldredWorldbookSchedulerEnabled": true,
-                  "eldredWorldbookAutoInjectEnabled": true,
-                  "eldredWorldbookAlwaysNames": "====核心规则====_开始\n世界引擎\n====核心规则====_结束\n====角色设定====_开始\n====角色设定====_结束\n世界观总览\n魔法与职业\n====世界观====_开始 [mvu_plot]\n====世界基础规则====_开始 [mvu_plot]\n等级制度与数值判定规则\n战斗与职业规则\n技能等级与效果区间规则\n装备与修理\n区域声望\n气候与地脉多样性规则\n====世界基础规则====_结束 [mvu_plot]\n====地标势力与常驻人物====_开始 [mvu_plot]\n====地标势力与常驻人物====_结束 [mvu_plot]\n====主线与暗线====_开始 [mvu_plot]\n主线阶段触发 [mvu_plot]\n====主线与暗线====_结束 [mvu_plot]\n====特殊规则设定====_开始 [mvu_plot]\n敌人生成与威胁等级表\n装备生成与战利品规则\n地区委托生成规则\nNPC生成池与审美规则\n副本与秘境生成规则\n动态看板生成边界\n标签格式模板\n奇遇与翻牌系统规则\n自由探索与路径行动规则\n====特殊规则设定====_结束 [mvu_plot]\n====变量设定====_开始\n变量列表\n[mvu_update]变量更新规则\n[mvu_update]变量输出格式\n====变量设定====_结束\n固定NPC检索索引\n开局地点索引\n正文沉浸美化规则",
-                  "eldredWorldbookScheduledNames": "绯欧菈\n玛洛\n艾米\n妮娅\n帕琪\n玛蒂\n蕾文\n贝琳\n布兰妲\n托兰娜\n萨菈\n奥薇\n茜尔七号\n莱恩\n约娜\n贝尔娜\n托比\n莉亚\n维芙\n露西\n露\n葛蕾娜\n诺拉\n伊薇\n巴丝\n埃利安\n梅莉莎\n罗薇\n佩拉\n小原\n五英雄历史\n龙脉\n行会布告板\n委托等级与报酬\n交通方式与耗时\n旅费与补给\n城门与通行文书\n野营与休整\n安全路段\n边境路线\n禁忌之地探索线\n海路与浮空航线\n食宿价格\n药草与治疗\n行会抽成与担保\n暗市与灰色买卖\n王国税费与港税\n各国特色货品\n魔物分类\n魔物潮阶段\n伤病与恢复\n非致命冲突\n首领级遭遇\n战斗环境互动\n支线收束规则\n节庆与日历\n灾厄新闻\n神圣王国艾琳西亚\n白冠王都\n圣骑士团总部\n晨曦大教堂\n王立档案馆\n白石下城区\n黎明城墙\n艾登海姆旧庭\n岚之领七城邦\n风车港城\n铜桥城\n雾药城\n盐鸢城\n蓝账城\n灯礁城\n七旗城\n小丘铃市\n折断的剑酒馆\n禁忌之地\n灰雾边缘\n灰雾边境营地\n龙鳞避誓塔\n瘴气洗靴棚\n月光苔湿地\n旧药师石屋\n断碑环\n五英雄旧封印地\n无名同行者墓地\n龙骨深渊外缘\n浮空圣都亚雷亚\n星环广场\n祈星水道\n白鸽廊桥\n沉默钟楼\n低层生活区\n记录灵小厅\n光辉封印塔外层\n霜冠王国维尔诺斯\n银霜王城\n极光修道院\n白狼要塞\n雪温泉镇\n冰晶矿场\n月鹿森林埃里林\n月鹿圣林\n唱树大厅\n妖精邮局\n星苔溪谷\n鹿角桥\n银叶边界门\n灰炉矮人诸城\n灰炉王城\n矿轨大站\n锤火工坊街\n熄火旧矿\n炉壁档案厅\n白帆群岛\n白帆港\n潮裔珊瑚埠\n断桅自由港\n蓝鹭灯塔\n沉船圣坛\n潮汐议事棚\n星砂学院邦\n星砂学院\n观星塔\n图书馆城\n学生自治街\n铜壳机关街\n召唤试验场\n镜塔自由市\n万镜塔\n回声市集\n隐私法庭\n镜面旅店\n破镜巷\n琉璃海诸邦\n琉璃港\n星盘灯塔\n香料阶梯街\n玻璃王庭\n船帆档案馆\n红椒佣兵王国瓦尔塔\n红椒斗技场\n佣兵大会场\n辣锅街\n赤岩哨堡\n力量神龛\n翡翠公国米拉温\n翡翠温室\n绿溪病院\n甜露药市\n花园公馆\n曼德拉草棚\n兽铃草原诸部\n风铃营地\n角羊赛道\n旧铃墓地\n星草坡\n长风帐\n黑松边寨群\n霜牙猎寨\n黑松寨门\n烟火哨塔\n边寨饭棚\n木栅训练场\n旧雪路\n封印衰弱主线\n风声阶段\n异象阶段\n接缝阶段\n登空阶段\n重稳阶段\n五神器调查链\n神器共鸣规则\n拂晓之盾\n风暴之钥\n星灯之杯\n炉心之锤\n月根之弦\n龙脉异动调查链\n龙脉异动等级\n教会净化派冲突\n净化令\n病历删改\n灾民安置争议\n暗影龙真相碎片\n魂侧碎片\n躯侧碎片\n五英雄空白\n沉默钟楼断响\n月光苔提前开花\n折断的剑旧账本\n炉壁维修训话\n草原饭前歌\n蓝鹭灯塔暗光\n净化令空白编号\n无名墓牌旧徽\n终局前整备阶段\n灾厄之龙觉醒阶段\n地图静态数据_节点_七旗城\n地图静态数据_节点_白冠王都\n地图静态数据_节点_灰雾边境营地\n地图静态数据_节点_亚雷亚空港\n地图静态数据_节点_灰炉诸城\n地图静态数据_节点_白帆群岛\n地图静态数据_节点_黑松边寨\n地图静态数据_节点_小丘铃市\n地图静态数据_节点_银叶边界门\n地图静态数据_节点_潮裔珊瑚埠\n地图静态数据_节点_铜壳机关街\n地图静态数据_节点_霜牙猎寨\n地图静态数据_节点_龙鳞避誓塔\n地图静态数据_路线_七旗城_白冠王都\n地图静态数据_路线_七旗城_灰雾边境营地\n地图静态数据_路线_白冠王都_亚雷亚空港\n地图静态数据_路线_灰炉诸城_白帆群岛\n地图静态数据_路线_黑松边寨_霜冠王国\n地图静态数据_路线_禁忌地撤回线\n地图静态数据_路线_七旗城_小丘铃市\n地图静态数据_路线_月鹿森林_银叶边界门\n地图静态数据_路线_白帆港_潮裔珊瑚埠\n地图静态数据_路线_星砂学院邦_铜壳机关街\n地图静态数据_路线_黑松边寨_霜牙猎寨\n地图静态数据_路线_灰雾边境营地_龙鳞避誓塔\n地区生成池_七旗城与岚之领\n地区生成池_白冠王都与艾琳西亚\n地区生成池_灰雾边境与禁忌之地\n地区生成池_浮空圣都亚雷亚\n地区生成池_灰炉诸城\n地区生成池_白帆群岛与蓝鹭灯塔\n地区生成池_星砂学院邦\n地区生成池_月鹿森林与湿地\n地区生成池_霜冠与黑松边线\n种族与血脉生成规则_总原则\n种族与血脉生成规则_人类\n种族与血脉生成规则_精灵\n种族与血脉生成规则_半精灵\n种族与血脉生成规则_矮人\n种族与血脉生成规则_妖精\n种族与血脉生成规则_半身人\n种族与血脉生成规则_兽裔\n种族与血脉生成规则_潮裔\n种族与血脉生成规则_侏儒\n种族与血脉生成规则_龙裔\n种族与血脉生成规则_记录灵与构装体\n种族与血脉生成规则_镜裔",
-                  "eldredWorldbookKeepEnabledNames": "",
-                  "eldredWorldbookMaxEntries": 12,
-                  "eldredWorldbookMaxChars": 16000
-                }
-              },
-              "version": "eldred-integrated-v3.3.1"
+              "version": "eldred-integrated-v3.3.2"
             }
           }
         ],
         "variables": {}
       },
       "eldred_bundle": {
-        "version": "2026-06-20-eldred-integrated-v3.3.1",
+        "version": "2026-06-20-eldred-integrated-v3.3.2",
         "worldbook_entry_count": 296,
         "preset_prompt_count": 140,
         "frontend": {
@@ -17848,29 +17815,9 @@
                 {
                   "type": "script",
                   "enabled": true,
-                  "name": "艾尔德雷德开局控制台",
-                  "id": "eldred-welcome-console-v331",
-                  "content": "import 'https://testingcf.jsdelivr.net/gh/suosuosaku/st@eldred-integrated-v3.3.1/dist/eldred/welcome-loader/index.js'",
-                  "info": "艾尔德雷德开局控制台入口。导入后接管页面，可用脚本按钮重新打开。",
-                  "button": {
-                    "enabled": true,
-                    "buttons": [
-                      {
-                        "name": "进入艾尔德雷德开局",
-                        "visible": true
-                      }
-                    ]
-                  },
-                  "data": {
-                    "version": "eldred-integrated-v3.3.1"
-                  }
-                },
-                {
-                  "type": "script",
-                  "enabled": true,
                   "name": "智脑",
                   "id": "3b767bf4-a24a-4b08-a39d-28b1fb90c547",
-                  "content": "import 'https://testingcf.jsdelivr.net/gh/suosuosaku/st@eldred-integrated-v3.3.1/dist/%E6%99%BA%E8%84%91/index.js'",
+                  "content": "import 'https://testingcf.jsdelivr.net/gh/suosuosaku/st@eldred-integrated-v3.3.2/dist/%E6%99%BA%E8%84%91/index.js'",
                   "info": "",
                   "button": {
                     "enabled": true,
@@ -17945,7 +17892,7 @@
                         "smallSummaryApiFormat": "openai"
                       }
                     },
-                    "version": "eldred-integrated-v3.3.1"
+                    "version": "eldred-integrated-v3.3.2"
                   }
                 }
               ],
