@@ -1,19 +1,5 @@
-import { Award, BookMarked, Heart, MapPin, PackagePlus, Shield, Sparkles, Swords, TrendingUp, UserPlus } from 'lucide-react';
 import { characterImage, eldredNPCs } from '../data';
-import { ImmersiveNotice, ImmersiveNoticeType } from '../types';
-
-const iconByType: Record<ImmersiveNoticeType, typeof PackagePlus> = {
-  item: PackagePlus,
-  quest: BookMarked,
-  event: Sparkles,
-  npc: UserPlus,
-  skill: Award,
-  location: MapPin,
-  level: TrendingUp,
-  favor: Heart,
-  reputation: Shield,
-  equipment: PackagePlus,
-};
+import { ImmersiveNotice } from '../types';
 
 const noticeLabels = new Set([
   '获得物品',
@@ -45,19 +31,6 @@ const noticeLabels = new Set([
   '技能演出',
 ]);
 
-const noticeTypeFromTitle = (title: string): ImmersiveNoticeType => {
-  if (/物品|获得/.test(title)) return 'item';
-  if (/委托/.test(title)) return 'quest';
-  if (/NPC|角色|收录/.test(title)) return 'npc';
-  if (/技能/.test(title)) return 'skill';
-  if (/地点|地图/.test(title)) return 'location';
-  if (/升级|等级/.test(title)) return 'level';
-  if (/好感/.test(title)) return 'favor';
-  if (/声望/.test(title)) return 'reputation';
-  if (/装备/.test(title)) return 'equipment';
-  return 'event';
-};
-
 const getAvatar = (name: string) => {
   const known = eldredNPCs.find(npc => npc.name === name || npc.fullName.includes(name));
   return known?.avatarUrl || characterImage(name, '头像');
@@ -80,9 +53,8 @@ export function DialogueLine({ speaker, text }: { speaker: string; text: string 
 }
 
 export function ImmersiveNoticeCard({ notice }: { notice: ImmersiveNotice }) {
-  const Icon = iconByType[notice.type];
   return (
-    <NoticePanel title={notice.title} body={notice.body} meta={notice.meta} Icon={Icon} compact />
+    <NoticePanel title={notice.title} body={notice.body} meta={notice.meta} compact />
   );
 }
 
@@ -90,33 +62,34 @@ function NoticePanel({
   title,
   body,
   meta,
-  Icon,
   compact = false,
 }: {
   title: string;
   body: string;
   meta?: string;
-  Icon: typeof PackagePlus;
   compact?: boolean;
 }) {
   const noticeTitle = title.replace(/^【|】$/g, '');
   const parts = body.split(/[｜|]/).map(part => part.trim()).filter(Boolean);
+  const [primaryPart, ...detailParts] = parts;
   return (
     <div className={`pixel-inline-notice ${compact ? 'pixel-inline-notice-compact' : ''}`}>
-      <div className="pixel-inline-notice-icon">
-        <Icon className="h-5 w-5" />
-      </div>
       <div className="pixel-inline-notice-main">
-        <div className="pixel-inline-notice-title font-serif text-sm md:text-base">【{noticeTitle}】</div>
+        <div className="pixel-inline-notice-title font-serif">【{noticeTitle}】</div>
         <div className="pixel-inline-notice-body text-xs md:text-sm">
           {parts.length > 1 ? (
-            <div className="pixel-inline-notice-body-grid">
-              {parts.map((part, index) => (
-                <span className="pixel-inline-notice-chip" key={`${noticeTitle}-${index}`}>{part}</span>
-              ))}
-            </div>
+            <>
+              <div className="pixel-inline-notice-primary">{primaryPart}</div>
+              {detailParts.length > 0 && (
+                <div className="pixel-inline-notice-body-grid">
+                  {detailParts.map((part, index) => (
+                    <span className="pixel-inline-notice-chip" key={`${noticeTitle}-${index}`}>{part}</span>
+                  ))}
+                </div>
+              )}
+            </>
           ) : (
-            <div className="whitespace-pre-line">{body}</div>
+            <div className="pixel-inline-notice-text whitespace-pre-line">{body}</div>
           )}
           {meta && <div className="pixel-card-meta">{meta}</div>}
         </div>
@@ -126,10 +99,8 @@ function NoticePanel({
 }
 
 function InlineNotice({ title, body }: { title: string; body: string }) {
-  const type = noticeTypeFromTitle(title);
-  const Icon = title.includes('战斗') ? Swords : iconByType[type];
   return (
-    <NoticePanel title={title} body={body} Icon={Icon} />
+    <NoticePanel title={title} body={body} />
   );
 }
 

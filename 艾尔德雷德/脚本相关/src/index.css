@@ -356,10 +356,10 @@ body {
 .pixel-inline-notice {
   position: relative;
   display: block;
-  width: min(100%, 17.5rem);
-  margin: 1.2rem auto 1.35rem;
-  padding: 0.7rem 0.65rem 0.85rem;
-  border: 3px solid #7c4a1d;
+  width: min(100%, 22.5rem);
+  margin: 1.35rem auto 1.55rem;
+  padding: 0.85rem 0.85rem 1rem;
+  border: 4px solid #7c4a1d;
   background:
     linear-gradient(145deg, rgba(111, 72, 15, 0.96), rgba(58, 34, 8, 0.98) 48%, rgba(29, 16, 5, 0.99)),
     repeating-linear-gradient(135deg, rgba(255, 226, 150, 0.07) 0 3px, transparent 3px 12px);
@@ -372,69 +372,31 @@ body {
 }
 
 .pixel-inline-notice-compact {
-  width: min(100%, 16.5rem);
+  width: min(100%, 19.5rem);
   margin-top: 0;
   margin-bottom: 0;
-}
-
-.pixel-inline-notice::before {
-  content: "";
-  position: absolute;
-  left: 1rem;
-  right: 1rem;
-  top: -0.45rem;
-  height: 0.45rem;
-  border: 2px solid #7c4a1d;
-  border-bottom: 0;
-  background: linear-gradient(180deg, #f2d48b, #9d6427);
-  box-shadow: 3px 0 0 rgba(73, 38, 8, 0.18);
-}
-
-.pixel-inline-notice-icon {
-  position: relative;
-  width: 3.15rem;
-  height: 3.15rem;
-  margin: 0.35rem auto 0.6rem;
-  border: 3px solid #7c4a1d;
-  background:
-    linear-gradient(135deg, #3f220e, #805020 48%, #2a1509),
-    repeating-linear-gradient(45deg, rgba(255, 226, 150, 0.16) 0 2px, transparent 2px 8px);
-  box-shadow:
-    inset 0 0 0 2px rgba(255, 226, 150, 0.2),
-    4px 4px 0 rgba(73, 38, 8, 0.18);
-  color: #f0d58a;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.pixel-inline-notice-icon::after {
-  content: "";
-  position: absolute;
-  inset: 0.35rem;
-  border: 1px solid rgba(248, 220, 144, 0.26);
-  pointer-events: none;
 }
 
 .pixel-inline-notice-main {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.65rem;
 }
 
 .pixel-inline-notice-title {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 2.45rem;
-  padding: 0.2rem 0.65rem;
-  border: 2px solid #7c4a1d;
+  min-height: 3rem;
+  padding: 0.35rem 0.8rem;
+  border: 3px solid #7c4a1d;
   background:
-    linear-gradient(180deg, #f1dca2, #d7b46c),
-    repeating-linear-gradient(0deg, rgba(124, 74, 29, 0.08) 0 2px, transparent 2px 8px);
-  color: #713b18;
-  font-weight: 800;
+    linear-gradient(180deg, #ffe7a6, #e2bd70 58%, #c99043),
+    repeating-linear-gradient(0deg, rgba(124, 74, 29, 0.09) 0 2px, transparent 2px 8px);
+  color: #693214;
+  font-size: 1.2rem;
+  font-weight: 900;
   letter-spacing: 0;
   line-height: 1.25;
   text-align: center;
@@ -448,16 +410,38 @@ body {
     linear-gradient(180deg, rgba(255, 232, 172, 0.88), rgba(236, 199, 124, 0.86)),
     repeating-linear-gradient(0deg, rgba(125, 72, 26, 0.04) 0 2px, transparent 2px 9px);
   box-shadow: inset 0 0 0 1px rgba(255, 248, 214, 0.7), 4px 4px 0 rgba(73, 38, 8, 0.14);
-  min-height: 5.3rem;
-  padding: 0.75rem 0.85rem;
+  min-height: 6.2rem;
+  padding: 0.9rem 1rem;
+  font-size: 0.95rem;
   line-height: 1.75;
   color: #5b3b1f;
   overflow-wrap: anywhere;
 }
 
+.pixel-inline-notice-primary {
+  display: flex;
+  align-items: center;
+  min-height: 2.55rem;
+  margin-bottom: 0.55rem;
+  padding: 0.35rem 0.65rem;
+  border-left: 4px solid rgba(124, 74, 29, 0.95);
+  background: rgba(255, 247, 215, 0.34);
+  color: #4d2b16;
+  font-family: "Noto Serif SC", "Songti SC", serif;
+  font-size: 1.08rem;
+  font-weight: 850;
+  line-height: 1.45;
+}
+
+.pixel-inline-notice-text {
+  color: #4d2b16;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
 .pixel-inline-notice-body-grid {
   display: grid;
-  gap: 0.4rem;
+  gap: 0.5rem;
 }
 
 .pixel-inline-notice-chip {
@@ -465,8 +449,8 @@ body {
   align-items: flex-start;
   border-left: 3px solid rgba(124, 74, 29, 0.8);
   background: rgba(255, 247, 215, 0.24);
-  padding: 0.18rem 0.35rem 0.18rem 0.5rem;
-  min-height: 1.4rem;
+  padding: 0.28rem 0.45rem 0.28rem 0.6rem;
+  min-height: 1.55rem;
 }
 
 .map-marker {
@@ -543,28 +527,36 @@ body {
   }
 
   .pixel-inline-notice {
-    width: min(100%, 15.75rem);
-    margin: 0.95rem auto;
-    padding: 0.45rem;
+    width: min(100%, 22rem);
+    margin: 1rem auto;
+    padding: 0.55rem;
+    border-width: 3px;
   }
 
-  .pixel-inline-notice-icon {
-    width: 2.55rem;
-    height: 2.55rem;
-    margin: 0.25rem auto 0.45rem;
-    border-width: 2px;
+  .pixel-inline-notice-main {
+    gap: 0.5rem;
   }
 
   .pixel-inline-notice-title {
-    min-height: 2.55rem;
-    padding: 0 0.45rem;
+    min-height: 2.7rem;
+    padding: 0.25rem 0.5rem;
     border-width: 2px;
+    font-size: 1.05rem;
   }
 
   .pixel-inline-notice-body {
     border-width: 2px;
-    padding: 0.55rem 0.65rem;
+    min-height: 5.4rem;
+    padding: 0.65rem 0.7rem;
+    font-size: 0.88rem;
     line-height: 1.65;
+  }
+
+  .pixel-inline-notice-primary {
+    min-height: 2.25rem;
+    margin-bottom: 0.45rem;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.98rem;
   }
 }
 
