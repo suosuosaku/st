@@ -1,6 +1,7 @@
 import { Activity, Archive, Heart, Shield, Sparkles, User, UserPlus, Zap } from 'lucide-react';
-import { Dispatch, SetStateAction, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AttributeKey, Character, Equipment, EquipmentLoadout, PlayerState, Skill } from '../../types';
+import { EldredFrontendEventInput } from '../../game/eldredEvents';
 import {
   ACTIVE_SKILL_LIMIT,
   ATTRIBUTE_KEYS,
@@ -21,6 +22,13 @@ import {
 
 const defined = <T,>(value: T | undefined | null): value is T => Boolean(value);
 const EMPTY_NPCS: Character[] = [];
+
+type PartyPanelProps = {
+  player: PlayerState;
+  onUpdatePlayer: (updater: PlayerState | ((prev: PlayerState) => PlayerState)) => void;
+  npcs?: Character[];
+  onSubmitEvent?: (event: Omit<EldredFrontendEventInput, 'player' | 'party' | 'enemies'>) => Promise<void>;
+};
 
 const attributeImpact: Record<AttributeKey, string> = {
   str: '近战命中、近战伤害、推拉、负重、重武器与重甲需求。',
@@ -68,7 +76,7 @@ const canNpcEquip = (equipment: Equipment, npc: Character) => {
   });
 };
 
-export function PartyPanel({ player, onUpdatePlayer, npcs = EMPTY_NPCS }: { player: PlayerState; onUpdatePlayer: Dispatch<SetStateAction<PlayerState>>; npcs?: Character[] }) {
+export function PartyPanel({ player, onUpdatePlayer, npcs = EMPTY_NPCS, onSubmitEvent }: PartyPanelProps) {
   const [selectedId, setSelectedId] = useState('player');
   const [npcStates, setNpcStates] = useState<Record<string, Character>>(() =>
     Object.fromEntries(npcs.map(npc => [npc.id, npc])),
@@ -118,16 +126,32 @@ export function PartyPanel({ player, onUpdatePlayer, npcs = EMPTY_NPCS }: { play
   };
 
   const addNpcToParty = (npcId: string) => {
+    const npc = npcStates[npcId];
     onUpdatePlayer(prev => {
       if (prev.partyMemberIds.includes(npcId) || prev.partyMemberIds.length >= 3) return prev;
       return { ...prev, partyMemberIds: [...prev.partyMemberIds, npcId] };
     });
     setSelectedId(npcId);
+    submitPartyEvent(
+      'party_update',
+      `编入同行：${npc?.name || npcId}`,
+      `将「${npc?.name || npcId}」编入当前队伍`,
+      [`当前队伍人数：${1 + partyNpcs.length}/4`, `角色职业：${npc ? getClassById(npc.classId).name : '未登记'}`],
+      { actor: player.name, target: npc?.name || npcId },
+    );
   };
 
   const removeNpcFromParty = (npcId: string) => {
+    const npc = npcStates[npcId];
     onUpdatePlayer(prev => ({ ...prev, partyMemberIds: prev.partyMemberIds.filter(id => id !== npcId) }));
     setSelectedId('player');
+    submitPartyEvent(
+      'party_update',
+      `移出同行：${npc?.name || npcId}`,
+      `将「${npc?.name || npcId}」移出当前队伍`,
+      [`当前队伍人数：${1 + partyNpcs.length}/4`],
+      { actor: player.name, target: npc?.name || npcId },
+    );
   };
 
   const togglePlayerSkill = (skillId: string) => {
@@ -255,24 +279,86 @@ export function PartyPanel({ player, onUpdatePlayer, npcs = EMPTY_NPCS }: { play
   const equippedIds = equippedIdsFromLoadout(selected.equipmentLoadout);
   const talents = player.talentIds.map(id => getTalentById(id)).filter(defined);
 
+  const submitPartyEvent = (
+    eventType: EldredFrontendEventInput['eventType'],
+    title: string,
+    playerIntent: string,
+    extraFacts: string[] = [],
+    extra?: Partial<Omit<EldredFrontendEventInput, 'eventType' | 'title' | 'playerIntent' | 'player' | 'party' | 'enemies' | 'extraFacts'>>,
+  ) => {
+    void onSubmitEvent?.({
+      eventType,
+      title,
+      playerIntent,
+      extraFacts,
+      ...extra,
+    });
+  };
+
   const allocatePoint = (key: AttributeKey) => {
     if (selected.kind === 'player') onUpdatePlayer(prev => allocateAttributePoint(prev, key));
     else allocateNpcPoint(selected.id, key);
+    submitPartyEvent(
+      'attribute_allocate',
+      `分配属性点：${selected.fullName}`,
+      `${selected.fullName} 将1点可分配点投入${ATTRIBUTE_LABELS[key]}`,
+      [`角色：${selected.fullName}`, `属性：${ATTRIBUTE_LABELS[key]}`, `剩余点数：${selected.availablePoints}`],
+      { actor: selected.id, target: ATTRIBUTE_LABELS[key] },
+    );
   };
 
   const toggleSkill = (skillId: string) => {
+    const skill = getSkillById(skillId);
     if (selected.kind === 'player') togglePlayerSkill(skillId);
     else toggleNpcSkill(selected.id, skillId);
+    const equipped = selected.activeSkillIds.includes(skillId);
+    submitPartyEvent(
+      'skill_change',
+      `${equipped ? '卸下' : '装配'}技能：${skill?.name || skillId}`,
+      `${selected.fullName} ${equipped ? '卸下' : '装配'}技能「${skill?.name || skillId}」`,
+      [
+        `角色：${selected.fullName}`,
+        `技能：${skill?.name || skillId}`,
+        `当前激活技能：${selected.activeSkillIds.map(id => getSkillById(id)?.name || id).join('、') || '无'}`,
+        `激活上限：${ACTIVE_SKILL_LIMIT}`,
+      ],
+      { actor: selected.id, skillId },
+    );
   };
 
   const forgetSkill = (skillId: string) => {
+    const skill = getSkillById(skillId);
     if (selected.kind === 'player') forgetPlayerSkill(skillId);
     else forgetNpcSkill(selected.id, skillId);
+    submitPartyEvent(
+      'skill_change',
+      `遗忘技能：${skill?.name || skillId}`,
+      `${selected.fullName} 请求遗忘技能「${skill?.name || skillId}」`,
+      [`角色：${selected.fullName}`, `技能：${skill?.name || skillId}`],
+      { actor: selected.id, skillId },
+    );
   };
 
   const toggleEquipment = (equipmentId: string) => {
+    const item = getEquipmentById(equipmentId);
     if (selected.kind === 'player') togglePlayerEquipment(equipmentId);
     else toggleNpcEquipment(selected.id, equipmentId);
+    const equipped = equippedIds.includes(equipmentId);
+    const slotItemId = item ? selected.equipmentLoadout[item.slot] : undefined;
+    const replacedItem = slotItemId && slotItemId !== equipmentId ? getEquipmentById(slotItemId) : undefined;
+    submitPartyEvent(
+      'equipment_change',
+      `${equipped ? '拆卸' : '穿戴'}装备：${item?.name || equipmentId}`,
+      `${selected.fullName} ${equipped ? '拆卸' : '穿戴'}装备「${item?.name || equipmentId}」`,
+      [
+        `角色：${selected.fullName}`,
+        `装备：${item?.name || equipmentId}`,
+        `槽位：${item ? equipmentSlotLabel[item.slot] || item.slot : '未知'}`,
+        `同槽替换：${replacedItem?.name || '无'}`,
+        `需求：${formatRequirements(item?.requirements)}`,
+      ],
+      { actor: selected.id, equipmentId },
+    );
   };
 
   return (

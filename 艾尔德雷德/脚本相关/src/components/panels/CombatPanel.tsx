@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { Character, CombatUnit, PlayerState, Skill } from '../../types';
 import { equippedIdsFromLoadout, getClassById, getEquipmentById, getSkillById, playerToCombatUnit } from '../../game/rules';
 import { submitPayloadToSillyTavernInput } from '../../game/sillyTavernBridge';
+import { EldredFrontendEventInput } from '../../game/eldredEvents';
 
 type CombatLog = {
   id: string;
@@ -28,6 +29,16 @@ const submitToSillyTavern = async (payload: string) => {
 
 const EMPTY_NPCS: Character[] = [];
 const EMPTY_COMBAT_UNITS: CombatUnit[] = [];
+const EMPTY_LOGS: string[] = [];
+
+type CombatPanelProps = {
+  player: PlayerState;
+  partyNpcs?: Character[];
+  enemyUnits?: CombatUnit[];
+  initialTurn?: number;
+  initialLogs?: string[];
+  onSubmitEvent?: (event: Omit<EldredFrontendEventInput, 'player' | 'party' | 'enemies'>) => Promise<void>;
+};
 
 const npcToCombatUnit = (npc: Character): CombatUnit => {
   return {
@@ -69,7 +80,14 @@ const unitSummary = (unit: CombatUnit) => {
 const skillTargetIsAlly = (skill?: Skill) =>
   Boolean(skill && ['support', 'heal', 'reaction'].includes(skill.actionType));
 
-export function CombatPanel({ player, partyNpcs = EMPTY_NPCS, enemyUnits = EMPTY_COMBAT_UNITS }: { player: PlayerState; partyNpcs?: Character[]; enemyUnits?: CombatUnit[] }) {
+export function CombatPanel({
+  player,
+  partyNpcs = EMPTY_NPCS,
+  enemyUnits = EMPTY_COMBAT_UNITS,
+  initialTurn = 1,
+  initialLogs = EMPTY_LOGS,
+  onSubmitEvent,
+}: CombatPanelProps) {
   const initialUnits = useMemo(() => {
     const party = partyNpcs.map(npcToCombatUnit);
     return [playerToCombatUnit(player), ...party, ...enemyUnits.filter(unit => unit.isEnemy)];
@@ -80,15 +98,19 @@ export function CombatPanel({ player, partyNpcs = EMPTY_NPCS, enemyUnits = EMPTY
   const [selectedTargetId, setSelectedTargetId] = useState('');
   const [selectedAllyTargetId, setSelectedAllyTargetId] = useState('player');
   const [selectedSkillId, setSelectedSkillId] = useState(player.activeSkillIds[0] || '');
-  const [turn, setTurn] = useState(1);
-  const [logs, setLogs] = useState<CombatLog[]>([]);
+  const [turn, setTurn] = useState(initialTurn);
+  const [logs, setLogs] = useState<CombatLog[]>(() =>
+    initialLogs.map((result, index) => ({ id: `mvu-${index}`, actor: '[变量]', action: '回合记录', result })),
+  );
 
   useEffect(() => {
     setUnits(initialUnits);
     setSelectedActorId(initialUnits.find(unit => !unit.isEnemy)?.id || 'player');
     setSelectedTargetId(initialUnits.find(unit => unit.isEnemy)?.id || '');
     setSelectedAllyTargetId(initialUnits.find(unit => !unit.isEnemy)?.id || 'player');
-  }, [initialUnits]);
+    setTurn(initialTurn);
+    setLogs(initialLogs.map((result, index) => ({ id: `mvu-${index}`, actor: '[变量]', action: '回合记录', result })));
+  }, [initialLogs, initialTurn, initialUnits]);
 
   const players = units.filter(unit => !unit.isEnemy);
   const enemies = units.filter(unit => unit.isEnemy);
@@ -118,8 +140,24 @@ export function CombatPanel({ player, partyNpcs = EMPTY_NPCS, enemyUnits = EMPTY
 
   const resetCombat = () => {
     setUnits(initialUnits);
-    setTurn(1);
-    setLogs([{ id: 'log-reset', actor: '[战斗台]', action: '重整', result: '战斗面板已刷新。' }]);
+    setTurn(initialTurn);
+    setLogs(initialLogs.map((result, index) => ({ id: `mvu-${index}`, actor: '[变量]', action: '回合记录', result })));
+  };
+
+  const commandFacts = (kind: CombatCommandKind) => {
+    const facts = [
+      `回合：${turn}`,
+      `行动者：${selectedActor?.name || '未选择'}`,
+      `行动：${kind === 'skill' && selectedSkill ? `使用${selectedSkill.name}` : commandLabel[kind]}`,
+      `目标：${selectedTarget?.name || '待正文确认'}`,
+      `地点：${player.location.name} / ${player.location.landmarkName}`,
+      `主角方：${players.map(unitSummary).join('；') || '无'}`,
+      `敌方：${enemies.map(unitSummary).join('；') || '无'}`,
+    ];
+    if (kind === 'skill' && selectedSkill) {
+      facts.push(`技能：${selectedSkill.name}｜${selectedSkill.rank}｜消耗${selectedSkill.mpCost}法力｜属性${selectedSkill.attribute}｜目标${selectedSkill.target}｜效果${selectedSkill.desc}`);
+    }
+    return facts;
   };
 
   const buildCommandPayload = (kind: CombatCommandKind) => {
@@ -160,8 +198,21 @@ ${skillLine}
       return;
     }
 
-    const payload = buildCommandPayload(kind);
-    const status = await submitToSillyTavern(payload);
+    let status = '已提交事件';
+    if (onSubmitEvent) {
+      await onSubmitEvent({
+        eventType: 'combat_command',
+        title: `回合${turn}：${selectedActor.name}${commandLabel[kind]}`,
+        playerIntent: kind === 'skill' && selectedSkill ? `${selectedActor.name} 使用「${selectedSkill.name}」` : `${selectedActor.name} 执行${commandLabel[kind]}`,
+        actor: selectedActor.id,
+        target: selectedTarget?.id || selectedTarget?.name,
+        skillId: kind === 'skill' ? selectedSkill?.id : undefined,
+        extraFacts: commandFacts(kind),
+      });
+    } else {
+      const payload = buildCommandPayload(kind);
+      status = await submitToSillyTavern(payload);
+    }
     addLog({
       actor: `[${selectedActor.name}]`,
       action: commandLabel[kind],

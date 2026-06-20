@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { GameState, PlayerState, TabState } from './types';
 import { CreationFlow } from './components/CreationFlow';
@@ -10,16 +10,44 @@ import { QuestPanel } from './components/panels/QuestPanel';
 import { CombatPanel } from './components/panels/CombatPanel';
 import { NpcPanel } from './components/panels/NpcPanel';
 import { EmptyPanel } from './components/panels/EmptyPanel';
-import { ATTRIBUTE_LABELS, buildPlayerState, getClassById, getEquipmentById, getRaceById, getSkillById, getTalentById } from './game/rules';
+import { ATTRIBUTE_LABELS, getClassById, getEquipmentById, getRaceById, getSkillById, getTalentById } from './game/rules';
 import { submitPayloadToSillyTavernInput } from './game/sillyTavernBridge';
+import {
+  EldredRuntimeSave,
+  loadEldredRuntimeSave,
+  persistEldredRuntimeCache,
+  runtimeFromCreatedPlayer,
+} from './game/eldredSave';
+import { EldredFrontendEventInput, submitEldredFrontendEvent } from './game/eldredEvents';
 
 export default function App() {
-  const [gameState, setGameState] = useState<GameState>('creation');
-  const [playerState, setPlayerState] = useState<PlayerState>(() => buildPlayerState('ranger', 'broken-sword'));
+  const [runtime, setRuntime] = useState<EldredRuntimeSave>(() => loadEldredRuntimeSave());
+  const [gameState, setGameState] = useState<GameState>(() => loadEldredRuntimeSave().player ? 'playing' : 'creation');
+  const [playerState, setPlayerState] = useState<PlayerState | null>(() => loadEldredRuntimeSave().player);
   const [activeTab, setActiveTab] = useState<TabState>('overview');
   const [hudExpanded, setHudExpanded] = useState(true);
   const [openingPayload, setOpeningPayload] = useState('');
   const [openingStatus, setOpeningStatus] = useState('待提交');
+
+  const refreshRuntime = useCallback(() => {
+    const nextRuntime = loadEldredRuntimeSave();
+    setRuntime(nextRuntime);
+    if (nextRuntime.player) {
+      setPlayerState(nextRuntime.player);
+      setGameState('playing');
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshRuntime();
+    const onFocus = () => refreshRuntime();
+    window.addEventListener('focus', onFocus);
+    const timer = window.setInterval(refreshRuntime, 5000);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      window.clearInterval(timer);
+    };
+  }, [refreshRuntime]);
 
   const generateOpeningPrompt = (state: PlayerState) => {
     const cls = getClassById(state.classId);
@@ -54,6 +82,8 @@ export default function App() {
   const handleCreationComplete = (state: PlayerState) => {
     setPlayerState(state);
     setGameState('playing');
+    const nextRuntime = persistEldredRuntimeCache(runtimeFromCreatedPlayer(state));
+    setRuntime(nextRuntime);
     const prompt = generateOpeningPrompt(state);
     setOpeningPayload(prompt);
     setOpeningStatus('提交中');
@@ -64,14 +94,32 @@ export default function App() {
     });
   };
 
+  const submitRuntimeEvent = async (event: Omit<EldredFrontendEventInput, 'player' | 'party' | 'enemies'>) => {
+    const status = await submitEldredFrontendEvent({
+      ...event,
+      player: playerState,
+      party: runtime.npcs.filter(npc => playerState?.partyMemberIds.includes(npc.id) || playerState?.partyMemberIds.includes(npc.name)),
+      enemies: runtime.combat.enemyUnits,
+    });
+    setOpeningStatus(status);
+  };
+
+  const updatePlayerPreview = (updater: PlayerState | ((prev: PlayerState) => PlayerState)) => {
+    setPlayerState(prev => {
+      if (!prev) return prev;
+      return typeof updater === 'function' ? updater(prev) : updater;
+    });
+  };
+
   const renderActivePanel = () => {
+    if (!playerState) return <EmptyPanel title="等待入局" message="尚未读取到角色变量" />;
     switch (activeTab) {
-      case 'overview': return <OverviewPanel player={playerState} openingPayload={openingPayload} openingStatus={openingStatus} />;
+      case 'overview': return <OverviewPanel player={playerState} openingPayload={openingPayload} openingStatus={openingStatus} runtime={runtime} />;
       case 'map': return <MapPanel player={playerState} />;
-      case 'party': return <PartyPanel player={playerState} onUpdatePlayer={setPlayerState} />;
-      case 'npc': return <NpcPanel />;
-      case 'quests': return <QuestPanel />;
-      case 'combat': return <CombatPanel player={playerState} />;
+      case 'party': return <PartyPanel player={playerState} onUpdatePlayer={updatePlayerPreview} npcs={runtime.npcs} onSubmitEvent={submitRuntimeEvent} />;
+      case 'npc': return <NpcPanel npcs={runtime.npcs} />;
+      case 'quests': return <QuestPanel quests={runtime.quests} onSubmitEvent={submitRuntimeEvent} />;
+      case 'combat': return <CombatPanel player={playerState} partyNpcs={runtime.npcs.filter(npc => playerState.partyMemberIds.includes(npc.id) || playerState.partyMemberIds.includes(npc.name))} enemyUnits={runtime.combat.enemyUnits} initialTurn={runtime.combat.turn} initialLogs={runtime.combat.logs} onSubmitEvent={submitRuntimeEvent} />;
       case 'inventory': return <EmptyPanel title="行囊与物资" message={playerState.inventory.join('、')} />;
       case 'system': return <EmptyPanel title="旅程札记" message={`${playerState.location.name} / ${playerState.location.landmarkName}`} />;
       default: return <EmptyPanel title="未知区域" />;

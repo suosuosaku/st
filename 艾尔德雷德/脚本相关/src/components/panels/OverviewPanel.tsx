@@ -1,17 +1,25 @@
 import { Clock, MapPin, ShieldAlert, ScrollText } from 'lucide-react';
 import { ImmersiveNoticeCard, RichNarrative } from '../ImmersiveText';
 import { PlayerState } from '../../types';
+import { EldredRuntimeSave } from '../../game/eldredSave';
 
 export function OverviewPanel({
   player,
   openingPayload,
   openingStatus,
+  runtime,
 }: {
   player: PlayerState;
   openingPayload: string;
   openingStatus: string;
+  runtime?: EldredRuntimeSave;
 }) {
   const narrative = openingPayload || '等待入局设定';
+  const world = runtime?.world;
+  const locationName = world?.currentLocation || player.location.name;
+  const landmarkName = world?.landmark || player.location.landmarkName;
+  const timeText = world?.currentTime || '待正文落定';
+  const weatherText = world?.weather || player.location.weather || '未登记';
 
   return (
     <div className="h-full w-full flex flex-col xl:flex-row gap-4 xl:gap-6 overflow-y-auto xl:overflow-hidden">
@@ -40,8 +48,8 @@ export function OverviewPanel({
               <MapPin className="w-5 h-5" />
             </div>
             <div>
-              <div className="text-base md:text-lg text-gray-200 font-serif">{player.location.name}·{player.location.landmarkName}</div>
-              <div className="text-xs text-gray-400">{player.location.summary}</div>
+              <div className="text-base md:text-lg text-gray-200 font-serif">{locationName}·{landmarkName}</div>
+              <div className="text-xs text-gray-400">{world?.subRegion || player.location.summary}</div>
             </div>
           </div>
         </div>
@@ -50,9 +58,9 @@ export function OverviewPanel({
           <div className="text-fantasy-gold font-serif text-sm border-b border-fantasy-gold/20 pb-2">入局状态</div>
           <div className="flex items-center gap-3">
             <Clock className="w-5 h-5 text-gray-400" />
-            <div className="text-gray-300 text-sm">辉光减退期 / 待正文落定</div>
+            <div className="text-gray-300 text-sm">{timeText}</div>
           </div>
-          <div className="text-blue-400/80 text-sm pl-8">{openingStatus}</div>
+          <div className="text-blue-400/80 text-sm pl-8">{weatherText}</div>
         </div>
 
         <div className="glass-panel p-5 rounded-lg min-h-48 xl:flex-1 flex flex-col gap-3">
