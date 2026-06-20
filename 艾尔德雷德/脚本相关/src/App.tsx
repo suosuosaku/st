@@ -10,15 +10,18 @@ import { QuestPanel } from './components/panels/QuestPanel';
 import { CombatPanel } from './components/panels/CombatPanel';
 import { NpcPanel } from './components/panels/NpcPanel';
 import { EmptyPanel } from './components/panels/EmptyPanel';
-import { ATTRIBUTE_LABELS, getClassById, getEquipmentById, getRaceById, getSkillById, getTalentById } from './game/rules';
-import { submitPayloadToSillyTavernInput } from './game/sillyTavernBridge';
 import {
   EldredRuntimeSave,
   loadEldredRuntimeSave,
   persistEldredRuntimeCache,
   runtimeFromCreatedPlayer,
 } from './game/eldredSave';
-import { EldredFrontendEventInput, submitEldredFrontendEvent } from './game/eldredEvents';
+import { EldredFrontendEventInput } from './game/eldredEvents';
+import {
+  generateEldredNarrationFromEvent,
+  generateEldredNarrationFromInput,
+  generateEldredNarrationFromOpening,
+} from './game/eldredNarration';
 
 export default function App() {
   const [runtime, setRuntime] = useState<EldredRuntimeSave>(() => loadEldredRuntimeSave());
@@ -26,8 +29,8 @@ export default function App() {
   const [playerState, setPlayerState] = useState<PlayerState | null>(() => loadEldredRuntimeSave().player);
   const [activeTab, setActiveTab] = useState<TabState>('overview');
   const [hudExpanded, setHudExpanded] = useState(true);
-  const [openingPayload, setOpeningPayload] = useState('');
-  const [openingStatus, setOpeningStatus] = useState('待提交');
+  const [interactionStatus, setInteractionStatus] = useState('待生成');
+  const [isGeneratingNarration, setIsGeneratingNarration] = useState(false);
 
   const refreshRuntime = useCallback(() => {
     const nextRuntime = loadEldredRuntimeSave();
@@ -49,59 +52,74 @@ export default function App() {
     };
   }, [refreshRuntime]);
 
-  const generateOpeningPrompt = (state: PlayerState) => {
-    const cls = getClassById(state.classId);
-    const race = getRaceById(state.raceId);
-    const stats = (['str', 'dex', 'vit', 'int', 'spr'] as const)
-      .map(key => `${ATTRIBUTE_LABELS[key]}${state.stats[key]}`)
-      .join(' / ');
-    const skillNames = state.activeSkillIds.map(id => getSkillById(id)?.name).filter(Boolean).join('、');
-    const talentNames = state.talentIds.map(id => getTalentById(id)?.name).filter(Boolean).join('、');
-    return `【艾尔德雷德入局设定】
-姓名：${state.name}
-性别：${state.identity.gender || '未记录'}
-年龄：${state.identity.age || '未记录'}
-经历：${state.identity.background || '未记录'}
-种族：${race.name}｜${race.auraName}｜${race.auraEffect}
-职业：${cls.name}｜${cls.classAuraName}｜${cls.classAuraEffect}
-伴生天赋：${talentNames || '无'}
-出生点：${state.location.name}｜${state.location.landmarkName}
-五维：${stats}
-等级：1
-战斗底值：生命${state.stats.maxHp}｜法力${state.stats.maxMp}｜护甲${state.stats.ac}｜熟练+${state.stats.proficiency}
-已选开局技能：${skillNames || '无'}
-初始装备：${state.equipmentIds.map(id => getEquipmentById(id)?.name).filter(Boolean).join('、') || '按职业装备登记'}
-
-入局请求：生成第一幕正文；只按以上已选内容初始化变量；未选择技能、默认剧情、默认队友、默认委托不得写入；输出 <UpdateVariable>。`;
-  };
-
-  const submitToSillyTavern = async (payload: string) => {
-    return submitPayloadToSillyTavernInput(payload, '已复制载荷');
-  };
-
   const handleCreationComplete = (state: PlayerState) => {
     setPlayerState(state);
     setGameState('playing');
     const nextRuntime = persistEldredRuntimeCache(runtimeFromCreatedPlayer(state));
     setRuntime(nextRuntime);
-    const prompt = generateOpeningPrompt(state);
-    setOpeningPayload(prompt);
-    setOpeningStatus('提交中');
-    window.dispatchEvent(new CustomEvent('eldred:opening-ready', { detail: { prompt, state } }));
-    void submitToSillyTavern(prompt).then(setOpeningStatus).catch(error => {
-      console.warn('[艾尔德雷德] 入局载荷提交失败', error);
-      setOpeningStatus('载荷已生成');
-    });
+    setInteractionStatus('第一幕生成中');
+    setIsGeneratingNarration(true);
+    void generateEldredNarrationFromOpening(nextRuntime, state).then(generatedRuntime => {
+      setRuntime(generatedRuntime);
+      setPlayerState(generatedRuntime.player || state);
+      setInteractionStatus(generatedRuntime.narration.lastError ? generatedRuntime.narration.lastError : '第一幕已生成');
+    }).catch(error => {
+      console.warn('[艾尔德雷德] 第一幕生成失败', error);
+      setInteractionStatus(error instanceof Error ? error.message : '第一幕生成失败');
+    }).finally(() => setIsGeneratingNarration(false));
   };
 
   const submitRuntimeEvent = async (event: Omit<EldredFrontendEventInput, 'player' | 'party' | 'enemies'>) => {
-    const status = await submitEldredFrontendEvent({
-      ...event,
-      player: playerState,
-      party: runtime.npcs.filter(npc => playerState?.partyMemberIds.includes(npc.id) || playerState?.partyMemberIds.includes(npc.name)),
-      enemies: runtime.combat.enemyUnits,
-    });
-    setOpeningStatus(status);
+    if (!playerState) return;
+    setInteractionStatus('正文生成中');
+    setIsGeneratingNarration(true);
+    try {
+      const sourceRuntime = {
+        ...loadEldredRuntimeSave(),
+        player: playerState,
+        npcs: runtime.npcs,
+        quests: runtime.quests,
+        combat: runtime.combat,
+        world: runtime.world,
+      };
+      const generatedRuntime = await generateEldredNarrationFromEvent(sourceRuntime, {
+        ...event,
+        player: playerState,
+        party: runtime.npcs.filter(npc => playerState?.partyMemberIds.includes(npc.id) || playerState?.partyMemberIds.includes(npc.name)),
+        enemies: runtime.combat.enemyUnits,
+      });
+      setRuntime(generatedRuntime);
+      setPlayerState(generatedRuntime.player || playerState);
+      setInteractionStatus(generatedRuntime.narration.lastError ? generatedRuntime.narration.lastError : '正文已生成');
+    } catch (error) {
+      setInteractionStatus(error instanceof Error ? error.message : '正文生成失败');
+    } finally {
+      setIsGeneratingNarration(false);
+    }
+  };
+
+  const submitFreeInput = async (text: string) => {
+    if (!playerState || !text.trim()) return;
+    setInteractionStatus('正文生成中');
+    setIsGeneratingNarration(true);
+    try {
+      const sourceRuntime = {
+        ...loadEldredRuntimeSave(),
+        player: playerState,
+        npcs: runtime.npcs,
+        quests: runtime.quests,
+        combat: runtime.combat,
+        world: runtime.world,
+      };
+      const generatedRuntime = await generateEldredNarrationFromInput(sourceRuntime, text, 'free');
+      setRuntime(generatedRuntime);
+      setPlayerState(generatedRuntime.player || playerState);
+      setInteractionStatus(generatedRuntime.narration.lastError ? generatedRuntime.narration.lastError : '正文已生成');
+    } catch (error) {
+      setInteractionStatus(error instanceof Error ? error.message : '正文生成失败');
+    } finally {
+      setIsGeneratingNarration(false);
+    }
   };
 
   const updatePlayerPreview = (updater: PlayerState | ((prev: PlayerState) => PlayerState)) => {
@@ -114,7 +132,7 @@ export default function App() {
   const renderActivePanel = () => {
     if (!playerState) return <EmptyPanel title="等待入局" message="尚未读取到角色变量" />;
     switch (activeTab) {
-      case 'overview': return <OverviewPanel player={playerState} openingPayload={openingPayload} openingStatus={openingStatus} runtime={runtime} />;
+      case 'overview': return <OverviewPanel player={playerState} interactionStatus={interactionStatus} isGenerating={isGeneratingNarration} runtime={runtime} onSubmitFreeInput={submitFreeInput} />;
       case 'map': return <MapPanel player={playerState} />;
       case 'party': return <PartyPanel player={playerState} onUpdatePlayer={updatePlayerPreview} npcs={runtime.npcs} onSubmitEvent={submitRuntimeEvent} />;
       case 'npc': return <NpcPanel npcs={runtime.npcs} />;

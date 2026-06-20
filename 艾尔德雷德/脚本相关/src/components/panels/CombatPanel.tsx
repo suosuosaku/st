@@ -3,7 +3,6 @@ import { Info, Play, RefreshCcw, Shield as ShieldIcon, Sword } from 'lucide-reac
 import { motion } from 'motion/react';
 import { Character, CombatUnit, PlayerState, Skill } from '../../types';
 import { equippedIdsFromLoadout, getClassById, getEquipmentById, getSkillById, playerToCombatUnit } from '../../game/rules';
-import { submitPayloadToSillyTavernInput } from '../../game/sillyTavernBridge';
 import { EldredFrontendEventInput } from '../../game/eldredEvents';
 
 type CombatLog = {
@@ -21,10 +20,6 @@ const commandLabel: Record<CombatCommandKind, string> = {
   guard: '防御',
   escape: '撤离',
   skill: '技能',
-};
-
-const submitToSillyTavern = async (payload: string) => {
-  return submitPayloadToSillyTavernInput(payload, '已复制指令');
 };
 
 const EMPTY_NPCS: Character[] = [];
@@ -160,25 +155,6 @@ export function CombatPanel({
     return facts;
   };
 
-  const buildCommandPayload = (kind: CombatCommandKind) => {
-    if (!selectedActor) return '';
-    const skillLine = kind === 'skill' && selectedSkill
-      ? `技能：${selectedSkill.name}｜${selectedSkill.rank}｜消耗${selectedSkill.mpCost}法力｜属性${selectedSkill.attribute}｜目标${selectedSkill.target}｜效果${selectedSkill.desc}`
-      : '技能：无';
-    const actionLine = kind === 'skill' && selectedSkill ? `使用【${selectedSkill.name}】` : commandLabel[kind];
-    return `【艾尔德雷德战斗指令】
-回合：${turn}
-行动者：${selectedActor.name}
-行动：${actionLine}
-目标：${selectedTarget?.name || '待正文确认'}
-${skillLine}
-地点：${player.location.name}｜${player.location.landmarkName}
-主角方：${players.map(unitSummary).join('\n')}
-敌方：${enemies.map(unitSummary).join('\n')}
-
-裁决请求：按当前正文、变量与世界书裁决本回合；本指令只是行动意图，不是既成结果。普通攻击、防御、撤离和技能都必须计算命中、目标值、伤害/治疗、状态、资源消耗、耐久与变量写回。输出 <战斗实况>；若使用技能或装备技，同时输出 <技能演出>。`;
-  };
-
   const submitCommand = async (kind: CombatCommandKind) => {
     if (!selectedActor) return;
     if ((kind === 'attack' || (kind === 'skill' && !selectedSkillTargetsAlly)) && !selectedTarget) {
@@ -198,7 +174,7 @@ ${skillLine}
       return;
     }
 
-    let status = '已提交事件';
+    let status = '已提交正文生成';
     if (onSubmitEvent) {
       await onSubmitEvent({
         eventType: 'combat_command',
@@ -210,8 +186,7 @@ ${skillLine}
         extraFacts: commandFacts(kind),
       });
     } else {
-      const payload = buildCommandPayload(kind);
-      status = await submitToSillyTavern(payload);
+      status = '未连接正文生成器';
     }
     addLog({
       actor: `[${selectedActor.name}]`,

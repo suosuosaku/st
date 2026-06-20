@@ -1,6 +1,5 @@
 import { Character, CombatUnit, PlayerState, Quest } from '../types';
 import { getEquipmentById, getSkillById } from './rules';
-import { submitPayloadToSillyTavernInput } from './sillyTavernBridge';
 
 export type EldredFrontendEventType =
   | 'opening_setup'
@@ -95,9 +94,4 @@ export const buildEldredFrontendEventPayload = (input: EldredFrontendEventInput)
     '',
     '裁决请求：按当前正文、变量与世界书裁决此事件；前端事件只代表玩家操作意图，不代表结果已经发生。若事件成立，正文输出对应美化标签并在 <UpdateVariable> 写回变量。',
   ].join('\n');
-};
-
-export const submitEldredFrontendEvent = async (input: EldredFrontendEventInput) => {
-  const payload = buildEldredFrontendEventPayload(input);
-  return submitPayloadToSillyTavernInput(payload, '已复制事件载荷');
 };

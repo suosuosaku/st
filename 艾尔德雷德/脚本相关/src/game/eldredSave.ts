@@ -38,6 +38,32 @@ export const ELDRED_SAVE_SCHEMA_VERSION = 1;
 
 export type EldredRuntimeSource = 'mvu' | 'cache' | 'empty';
 
+export type EldredNarrationKind = 'opening' | 'free' | 'event' | 'combat';
+
+export type EldredNarrationEntry = {
+  id: string;
+  kind: EldredNarrationKind;
+  title: string;
+  userInput: string;
+  text: string;
+  createdAt: string;
+  sourceEventType?: string;
+  characterTags?: string[];
+};
+
+export type EldredRuntimeMessage = {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  text: string;
+  createdAt: string;
+};
+
+export type EldredNarrationState = {
+  entries: EldredNarrationEntry[];
+  lastGeneratedAt?: string;
+  lastError?: string;
+};
+
 export type EldredRuntimeSave = {
   schemaVersion: number;
   source: EldredRuntimeSource;
@@ -61,6 +87,8 @@ export type EldredRuntimeSave = {
     presentCharacters: string[];
   };
   rawStatData?: AnyRecord;
+  narration: EldredNarrationState;
+  messages: EldredRuntimeMessage[];
   updatedAt: string;
 };
 
@@ -78,6 +106,10 @@ const emptyWorld = (): EldredRuntimeSave['world'] => ({
   presentCharacters: [],
 });
 
+export const createEmptyNarrationState = (): EldredNarrationState => ({
+  entries: [],
+});
+
 export const createEmptyEldredRuntimeSave = (): EldredRuntimeSave => ({
   schemaVersion: ELDRED_SAVE_SCHEMA_VERSION,
   source: 'empty',
@@ -90,11 +122,44 @@ export const createEmptyEldredRuntimeSave = (): EldredRuntimeSave => ({
     logs: [],
   },
   world: emptyWorld(),
+  narration: createEmptyNarrationState(),
+  messages: [],
   updatedAt: new Date().toISOString(),
 });
 
 const asRecord = (value: unknown): AnyRecord => (value && typeof value === 'object' && !Array.isArray(value) ? value as AnyRecord : {});
 const asArray = (value: unknown): any[] => Array.isArray(value) ? value : [];
+
+const safeScope = (scopeFactory: () => unknown): AnyRecord | null => {
+  try {
+    const scope = scopeFactory();
+    return scope && typeof scope === 'object' ? scope as AnyRecord : null;
+  } catch {
+    return null;
+  }
+};
+
+const hostScopes = (): AnyRecord[] => {
+  const scopes = [
+    safeScope(() => globalThis),
+    safeScope(() => window),
+    safeScope(() => window.parent),
+    safeScope(() => window.top),
+    safeScope(() => window.opener),
+  ].filter((scope): scope is AnyRecord => Boolean(scope));
+  return Array.from(new Set(scopes));
+};
+
+const hostFunction = <T extends (...args: any[]) => any>(name: string): T | null => {
+  for (const scope of hostScopes()) {
+    try {
+      if (typeof scope[name] === 'function') return scope[name] as T;
+    } catch {
+      // Cross-origin windows can throw.
+    }
+  }
+  return null;
+};
 
 const textOf = (value: unknown, fallback = ''): string => {
   if (value === undefined || value === null) return fallback;
@@ -118,20 +183,20 @@ const splitTextList = (value: unknown): string[] => {
 };
 
 const readVariables = (option: VariableOption): AnyRecord | null => {
-  const api = globalThis as AnyRecord;
-  if (typeof api.getVariables !== 'function') return null;
+  const getVariables = hostFunction<(option: VariableOption) => unknown>('getVariables');
+  if (!getVariables) return null;
   try {
-    return asRecord(api.getVariables(option));
+    return asRecord(getVariables(option));
   } catch {
     return null;
   }
 };
 
 const writeChatVariables = (variables: AnyRecord) => {
-  const api = globalThis as AnyRecord;
-  if (typeof api.replaceVariables !== 'function') return false;
+  const replaceVariables = hostFunction<(variables: AnyRecord, option: VariableOption) => unknown>('replaceVariables');
+  if (!replaceVariables) return false;
   try {
-    api.replaceVariables(variables, { type: 'chat' });
+    replaceVariables(variables, { type: 'chat' });
     return true;
   } catch {
     return false;
@@ -139,15 +204,16 @@ const writeChatVariables = (variables: AnyRecord) => {
 };
 
 const readMvuData = (): AnyRecord | null => {
-  const api = globalThis as AnyRecord;
-  try {
-    if (api.Mvu && typeof api.Mvu.getMvuData === 'function') {
-      const messageData = api.Mvu.getMvuData({ type: 'message', message_id: 'latest' });
-      const statData = asRecord(messageData?.stat_data);
-      if (Object.keys(statData).length > 0) return statData;
+  for (const api of hostScopes()) {
+    try {
+      if (api.Mvu && typeof api.Mvu.getMvuData === 'function') {
+        const messageData = api.Mvu.getMvuData({ type: 'message', message_id: 'latest' });
+        const statData = asRecord(messageData?.stat_data);
+        if (Object.keys(statData).length > 0) return statData;
+      }
+    } catch {
+      // ignored: the UI must also work as a standalone html file.
     }
-  } catch {
-    // ignored: the UI must also work as a standalone html file.
   }
 
   const messageVariables = readVariables({ type: 'message', message_id: 'latest' });
@@ -593,6 +659,8 @@ const worldFromStatData = (statData: AnyRecord): EldredRuntimeSave['world'] => {
 
 const normalizeRuntime = (raw: Partial<EldredRuntimeSave>, source: EldredRuntimeSource): EldredRuntimeSave => {
   const cacheOnly = source === 'cache';
+  const entries = Array.isArray(raw.narration?.entries) ? raw.narration.entries : [];
+  const messages = Array.isArray(raw.messages) ? raw.messages : [];
   return {
     schemaVersion: ELDRED_SAVE_SCHEMA_VERSION,
     source,
@@ -602,6 +670,30 @@ const normalizeRuntime = (raw: Partial<EldredRuntimeSave>, source: EldredRuntime
     combat: cacheOnly ? { turn: 1, enemyUnits: [], logs: [] } : raw.combat || { turn: 1, enemyUnits: [], logs: [] },
     world: raw.world || emptyWorld(),
     rawStatData: raw.rawStatData,
+    narration: {
+      entries: entries
+        .filter(entry => entry && typeof entry === 'object')
+        .map(entry => ({
+          id: textOf(entry.id, `nar-${Date.now()}`),
+          kind: (['opening', 'free', 'event', 'combat'].includes(textOf(entry.kind)) ? entry.kind : 'event') as EldredNarrationKind,
+          title: textOf(entry.title, '正文'),
+          userInput: textOf(entry.userInput),
+          text: textOf(entry.text),
+          createdAt: textOf(entry.createdAt, new Date().toISOString()),
+          sourceEventType: textOf(entry.sourceEventType),
+          characterTags: splitTextList(entry.characterTags),
+        })),
+      lastGeneratedAt: textOf(raw.narration?.lastGeneratedAt),
+      lastError: textOf(raw.narration?.lastError),
+    },
+    messages: messages
+      .filter(message => message && typeof message === 'object')
+      .map(message => ({
+        id: textOf(message.id, `msg-${Date.now()}`),
+        role: (['user', 'assistant', 'system'].includes(textOf(message.role)) ? message.role : 'user') as EldredRuntimeMessage['role'],
+        text: textOf(message.text),
+        createdAt: textOf(message.createdAt, new Date().toISOString()),
+      })),
     updatedAt: raw.updatedAt || new Date().toISOString(),
   };
 };
@@ -615,19 +707,26 @@ export const runtimeFromStatData = (statData: AnyRecord): EldredRuntimeSave => (
   combat: combatFromStatData(statData),
   world: worldFromStatData(statData),
   rawStatData: statData,
+  narration: createEmptyNarrationState(),
+  messages: [],
   updatedAt: new Date().toISOString(),
 });
 
 export const loadEldredRuntimeSave = (): EldredRuntimeSave => {
+  const cachedRuntime = readCachedRuntime();
   const statData = readMvuData();
   if (statData) {
     const runtime = runtimeFromStatData(statData);
     if (runtime.player || runtime.npcs.length || runtime.quests.length || runtime.combat.enemyUnits.length) {
-      return runtime;
+      return {
+        ...runtime,
+        narration: cachedRuntime?.narration || runtime.narration,
+        messages: cachedRuntime?.messages || runtime.messages,
+      };
     }
   }
 
-  return readCachedRuntime() || createEmptyEldredRuntimeSave();
+  return cachedRuntime || createEmptyEldredRuntimeSave();
 };
 
 export const runtimeFromCreatedPlayer = (player: PlayerState): EldredRuntimeSave => ({

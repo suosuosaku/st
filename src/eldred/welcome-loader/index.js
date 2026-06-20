@@ -1,12 +1,12 @@
 (() => {
-  const BUILD_ID = 'eldred-welcome-loader-v3.3.3';
-  const VERSION_REF = 'eldred-integrated-v3.3.3';
+  const BUILD_ID = 'eldred-welcome-loader-v3.3.4';
+  const VERSION_REF = 'eldred-integrated-v3.3.4';
   const GLOBAL_KEY = '__eldredWelcomeLoader';
   const FRAME_SELECTOR = '[data-eldred-welcome-console="true"]';
   const FULL_UI_BASE = detectFullUiBase();
   const FULL_UI_ASSETS = {
-    script: 'assets/index-DiBdrHY-.js',
-    style: 'assets/index-DelN8k02.css',
+    script: 'assets/index-CtYX08oX.js',
+    style: 'assets/index-zfLregNA.css',
   };
   let iframeEl = null;
   let exitButtonEl = null;
@@ -236,57 +236,6 @@
     removeEscapeControls();
   }
 
-  function findSendTextarea() {
-    const doc = hostDocument();
-    const selectors = ['#send_textarea', 'textarea#send_textarea', 'textarea[name="text"]', 'textarea'];
-    for (const selector of selectors) {
-      try {
-        const nodes = Array.from(doc.querySelectorAll(selector));
-        const visible = nodes.find(node => {
-          const rect = node.getBoundingClientRect();
-          return rect.width > 0 && rect.height > 0;
-        });
-        if (visible) return visible;
-        if (nodes[0]) return nodes[0];
-      } catch (error) {}
-    }
-    return null;
-  }
-
-  function setTextareaValue(textarea, text) {
-    const win = hostWindow();
-    const proto = textarea instanceof win.HTMLTextAreaElement
-      ? win.HTMLTextAreaElement.prototype
-      : win.HTMLInputElement?.prototype;
-    const setter = proto && Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-    if (setter) setter.call(textarea, text);
-    else textarea.value = text;
-    textarea.dispatchEvent(new win.Event('input', { bubbles: true }));
-    textarea.dispatchEvent(new win.Event('change', { bubbles: true }));
-    textarea.focus();
-  }
-
-  async function submitPrompt(text) {
-    const scopes = [globalThis, window, hostWindow(), window.parent, window.top].filter(Boolean);
-    for (const scope of scopes) {
-      try {
-        if (typeof scope.createChatMessages === 'function') {
-          await scope.createChatMessages([{ role: 'user', message: text }]);
-          if (typeof scope.triggerSlash === 'function') await scope.triggerSlash('/trigger');
-          return true;
-        }
-      } catch (error) {
-        console.warn('[EldredWelcomeLoader] createChatMessages failed', error);
-      }
-    }
-    const textarea = findSendTextarea();
-    if (textarea) {
-      setTextareaValue(textarea, text);
-      return true;
-    }
-    return false;
-  }
-
   function handleMessage(event) {
     const data = event.data || {};
     if (data.source !== 'EldredWelcome') return;
@@ -297,17 +246,6 @@
     if (data.type === 'resize') {
       syncViewportToIframe();
       return;
-    }
-    if (data.type === 'submit' && typeof data.text === 'string') {
-      submitPrompt(data.text).then(ok => {
-        iframeEl?.contentWindow?.postMessage({
-          source: 'EldredWelcomeLoader',
-          build: BUILD_ID,
-          type: 'submitted',
-          ok,
-        }, '*');
-        if (ok) setTimeout(unmountConsole, 180);
-      });
     }
   }
 
