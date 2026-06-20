@@ -228,7 +228,7 @@ export default function App() {
         ) : (
           <motion.div
             key="playing"
-            className="w-full h-full p-3 pb-20 sm:pl-20 sm:pr-4 sm:py-4 lg:pl-24 lg:pr-8 lg:py-8 relative flex"
+            className="w-full h-full p-3 pt-16 lg:pl-24 lg:pr-8 lg:py-8 relative flex"
             initial={{ opacity: 0, backdropFilter: 'blur(10px)' }}
             animate={{ opacity: 1, backdropFilter: 'blur(0px)' }}
             transition={{ duration: 1.0, delay: 0.2 }}
@@ -240,7 +240,7 @@ export default function App() {
               onToggleExpand={() => setHudExpanded(!hudExpanded)}
             />
 
-            <div className="flex-1 ml-0 sm:ml-4 relative min-w-0">
+            <div className="flex-1 ml-0 lg:ml-4 relative min-w-0">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={activeTab}
