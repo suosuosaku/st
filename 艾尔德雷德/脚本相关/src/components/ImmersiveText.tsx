@@ -15,6 +15,36 @@ const iconByType: Record<ImmersiveNoticeType, typeof PackagePlus> = {
   equipment: PackagePlus,
 };
 
+const noticeLabels = new Set([
+  '获得物品',
+  '获得技能',
+  '技能入库',
+  '委托更新',
+  '委托接取',
+  '委托生成',
+  '委托完成',
+  'NPC收录',
+  '地点解锁',
+  '地图加载',
+  '路径行动',
+  '事件推进',
+  '事件进展',
+  '奇遇事件',
+  '翻牌结果',
+  '主线进展',
+  '好感变化',
+  '声望变化',
+  '装备变更',
+  '角色升级',
+  '升级提示',
+  '队伍编成',
+  '购买结算',
+  '战斗回合',
+  '战斗结算',
+  '战斗实况',
+  '技能演出',
+]);
+
 const noticeTypeFromTitle = (title: string): ImmersiveNoticeType => {
   if (/物品|获得/.test(title)) return 'item';
   if (/委托/.test(title)) return 'quest';
@@ -108,14 +138,20 @@ export function RichNarrative({ text }: { text: string }) {
   return (
     <>
       {lines.map((line, index) => {
-        const dialogue = line.match(/^【([^】]{1,32})】[：:]\s*[“"]?(.+?)[”"]?$/);
+        const notice = line.match(/^【([^】]{1,32})】[：:]\s*(.+)$/);
+        if (notice && noticeLabels.has(notice[1])) {
+          return <InlineNotice key={`notice-${index}`} title={notice[1]} body={notice[2]} />;
+        }
+
+        const dialogue = line.match(/^【([^】]{1,32})】[：:]\s*[“"](.+?)[”"]?$/);
         if (dialogue) {
           return <DialogueLine key={`${dialogue[1]}-${index}`} speaker={dialogue[1]} text={dialogue[2]} />;
         }
-        const notice = line.match(/^【(获得物品|获得技能|委托更新|NPC收录|地点解锁|事件推进|好感变化|声望变化|装备变更|角色升级|战斗回合|战斗结算)】[：:：]?\s*(.+)$/);
+
         if (notice) {
           return <InlineNotice key={`notice-${index}`} title={notice[1]} body={notice[2]} />;
         }
+
         return (
           <p key={index}>
             {index === 0 && <span className="text-2xl md:text-3xl font-bold float-left mr-2 text-[#8b4513]">{line.slice(0, 1)}</span>}
