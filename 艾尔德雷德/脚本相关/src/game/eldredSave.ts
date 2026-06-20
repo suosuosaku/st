@@ -708,10 +708,12 @@ const dynamicBoardFromStatData = (statData: AnyRecord): DynamicBoardItem[] => {
   const legacyNewsRumorsRecord = asRecord(legacyNewsRumors);
   const legacyNewsRumorsHasTypedGroups = dynamicBoardTypes.some(type => legacyNewsRumorsRecord[type] !== undefined);
   items.push(...boardItemsFrom(world.新闻 ?? system.新闻, '新闻'));
-  items.push(...boardItemsFrom(world.见闻 ?? system.见闻 ?? (legacyNewsRumorsHasTypedGroups ? undefined : legacyNewsRumors), '见闻'));
-  items.push(...boardItemsFrom(world.市场 ?? system.市场, '市场'));
-  items.push(...boardItemsFrom(world.传讯 ?? system.传讯, '传讯'));
+  items.push(...boardItemsFrom(system.新闻板, '新闻'));
+  items.push(...boardItemsFrom(world.见闻 ?? system.见闻 ?? system.传闻板 ?? (legacyNewsRumorsHasTypedGroups ? undefined : legacyNewsRumors), '见闻'));
+  items.push(...boardItemsFrom(world.市场 ?? system.市场 ?? system.市场看板, '市场'));
+  items.push(...boardItemsFrom(world.传讯 ?? system.传讯 ?? system.最新传讯 ?? system.消息板, '传讯'));
   items.push(...boardItemsFrom(world.路径行动 ?? system.路径行动, '路径行动'));
+  items.push(...boardItemsFrom(system.委托板, '委托'));
 
   const seen = new Set<string>();
   return items
