@@ -593,6 +593,442 @@ body {
   min-height: 1.55rem;
 }
 
+.eldred-notice {
+  position: relative;
+  width: min(100%, 40rem);
+  margin: 1.5rem auto 1.8rem;
+  color: #f8e8b6;
+  image-rendering: pixelated;
+}
+
+.eldred-notice-compact {
+  width: 100%;
+  margin: 0;
+}
+
+.eldred-notice-frame {
+  position: relative;
+  overflow: hidden;
+  border: 5px solid #a57933;
+  background:
+    linear-gradient(180deg, rgba(34, 22, 13, 0.99), rgba(10, 10, 13, 0.99)),
+    repeating-linear-gradient(90deg, rgba(255, 221, 112, 0.045) 0 3px, transparent 3px 12px);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 231, 151, 0.18),
+    inset 0 0 44px rgba(212, 175, 55, 0.11),
+    6px 6px 0 rgba(65, 36, 12, 0.22),
+    0 12px 28px rgba(0, 0, 0, 0.28);
+  padding: 1.15rem;
+}
+
+.eldred-notice-frame::before,
+.eldred-notice-frame::after {
+  content: "";
+  position: absolute;
+  top: 0.55rem;
+  width: 4.5rem;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(255, 231, 151, 0.8), transparent);
+}
+
+.eldred-notice-frame::before {
+  left: 0.75rem;
+}
+
+.eldred-notice-frame::after {
+  right: 0.75rem;
+}
+
+.eldred-notice-kicker {
+  width: fit-content;
+  min-width: 10.5rem;
+  margin: 0 auto 1rem;
+  padding: 0.42rem 1.1rem;
+  border: 2px solid rgba(231, 187, 89, 0.84);
+  background:
+    linear-gradient(180deg, rgba(137, 88, 24, 0.96), rgba(45, 27, 11, 0.99)),
+    repeating-linear-gradient(0deg, rgba(255, 234, 154, 0.08) 0 2px, transparent 2px 7px);
+  color: #fff0b2;
+  font-family: "Noto Serif SC", "Songti SC", serif;
+  font-size: 1.08rem;
+  font-weight: 900;
+  line-height: 1.25;
+  text-align: center;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.65);
+  box-shadow: inset 0 0 0 1px rgba(255, 243, 188, 0.14), 3px 3px 0 rgba(0, 0, 0, 0.25);
+}
+
+.eldred-notice-primary {
+  min-height: 3.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.8rem;
+  padding: 0.75rem 0.95rem;
+  border: 2px solid rgba(255, 231, 151, 0.28);
+  background: linear-gradient(135deg, rgba(255, 222, 128, 0.1), rgba(255, 255, 255, 0.035));
+  color: #fff8d8;
+  font-family: "Noto Serif SC", "Songti SC", serif;
+  font-size: 1.2rem;
+  font-weight: 850;
+  line-height: 1.55;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.eldred-notice-detail-grid {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.eldred-notice-detail,
+.eldred-notice-meta {
+  border-left: 4px solid rgba(231, 187, 89, 0.72);
+  background: rgba(255, 255, 255, 0.07);
+  padding: 0.52rem 0.72rem;
+  color: #ffe8b0;
+  font-size: 0.93rem;
+  font-weight: 650;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.eldred-notice-meta {
+  margin-top: 0.7rem;
+  border-color: rgba(116, 214, 255, 0.7);
+  color: #bfefff;
+}
+
+.eldred-notice-item .eldred-notice-kicker,
+.eldred-notice-skill .eldred-notice-kicker {
+  border-color: rgba(255, 218, 105, 0.92);
+  color: #ffe27d;
+}
+
+.eldred-notice-quest .eldred-notice-kicker {
+  border-color: rgba(116, 214, 255, 0.86);
+  color: #bfefff;
+}
+
+.eldred-notice-relation .eldred-notice-kicker {
+  border-color: rgba(255, 143, 186, 0.86);
+  color: #ffc2d7;
+}
+
+.eldred-notice-combat .eldred-notice-kicker {
+  border-color: rgba(255, 112, 91, 0.88);
+  color: #ffb3a5;
+}
+
+.eldred-notice-level .eldred-notice-kicker {
+  border-color: rgba(157, 246, 178, 0.88);
+  color: #c6ffd0;
+}
+
+.eldred-npc-archive {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr);
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.eldred-npc-portrait {
+  min-height: 9.5rem;
+  border: 3px solid rgba(231, 187, 89, 0.82);
+  background: linear-gradient(160deg, rgba(45, 31, 18, 0.98), rgba(5, 8, 12, 0.98));
+  box-shadow: inset 0 0 0 1px rgba(255, 235, 162, 0.16), 4px 4px 0 rgba(0, 0, 0, 0.26);
+  overflow: hidden;
+}
+
+.eldred-npc-portrait img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: auto;
+}
+
+.eldred-npc-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.eldred-npc-name {
+  border-bottom: 2px solid rgba(231, 187, 89, 0.28);
+  color: #fff6c9;
+  font-family: "Noto Serif SC", serif;
+  font-size: 1.7rem;
+  font-weight: 900;
+  line-height: 1.35;
+  padding-bottom: 0.45rem;
+  overflow-wrap: anywhere;
+}
+
+.eldred-npc-detail-grid {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.eldred-npc-detail {
+  border: 1px solid rgba(255, 231, 151, 0.15);
+  border-left: 4px solid rgba(116, 214, 255, 0.75);
+  background: rgba(255, 255, 255, 0.075);
+  color: #ffe8b0;
+  font-size: 0.94rem;
+  line-height: 1.65;
+  padding: 0.45rem 0.6rem;
+}
+
+.eldred-clue-board {
+  display: grid;
+  gap: 0.62rem;
+}
+
+.eldred-clue-row {
+  display: grid;
+  grid-template-columns: 5rem minmax(0, 1fr) 1.15rem minmax(7rem, 0.8fr);
+  gap: 0.58rem;
+  align-items: center;
+  min-height: 3.45rem;
+  border: 2px solid rgba(255, 231, 151, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.5rem;
+  color: rgba(255, 238, 194, 0.72);
+}
+
+.eldred-clue-row.is-active {
+  border-color: rgba(255, 218, 105, 0.96);
+  background:
+    linear-gradient(90deg, rgba(255, 190, 72, 0.24), rgba(71, 43, 14, 0.25)),
+    rgba(255, 255, 255, 0.075);
+  color: #fff8cf;
+  box-shadow: inset 0 0 0 1px rgba(255, 239, 180, 0.12);
+}
+
+.eldred-clue-row.is-collected {
+  border-color: rgba(116, 214, 255, 0.5);
+  color: rgba(207, 244, 255, 0.88);
+}
+
+.eldred-clue-phase {
+  color: #ffd979;
+  font-family: "Noto Serif SC", serif;
+  font-size: 0.86rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.eldred-clue-slots {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.eldred-clue-token,
+.eldred-clue-event {
+  min-height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 231, 151, 0.25);
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.24rem 0.42rem;
+  color: inherit;
+  font-size: 0.82rem;
+  font-weight: 760;
+  line-height: 1.35;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.eldred-clue-arrow {
+  color: #ffe27d;
+  font-weight: 900;
+  text-align: center;
+}
+
+.eldred-clue-event {
+  color: #fff0b7;
+}
+
+.eldred-location-line,
+.eldred-tagged-line {
+  margin: 0.75rem 0;
+  padding: 0.5rem 0.72rem;
+  border-left: 4px solid rgba(139, 69, 19, 0.55);
+  background: rgba(255, 242, 205, 0.42);
+  color: #4f2d13;
+  font-size: 0.95rem;
+  font-weight: 650;
+  line-height: 1.7;
+}
+
+.eldred-location-line span,
+.eldred-tagged-line span:first-child {
+  margin-right: 0.35rem;
+  color: #7a3e12;
+  font-weight: 900;
+}
+
+.eldred-text-number {
+  color: #fff08a;
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 900;
+}
+
+.eldred-text-name {
+  color: #a7f0ff;
+  font-weight: 900;
+}
+
+.eldred-text-good {
+  color: #a8ffbb;
+  font-weight: 900;
+}
+
+.eldred-text-danger {
+  color: #ffb09b;
+  font-weight: 900;
+}
+
+.eldred-location-line .eldred-text-number,
+.eldred-tagged-line .eldred-text-number {
+  color: #8e3f12;
+}
+
+.eldred-location-line .eldred-text-name,
+.eldred-tagged-line .eldred-text-name {
+  color: #075f73;
+}
+
+.eldred-location-line .eldred-text-good,
+.eldred-tagged-line .eldred-text-good {
+  color: #2d7028;
+}
+
+.eldred-location-line .eldred-text-danger,
+.eldred-tagged-line .eldred-text-danger {
+  color: #a12d1c;
+}
+
+.overview-state-panel {
+  color: #f8e8b6;
+}
+
+.overview-state-row,
+.overview-state-line {
+  display: grid;
+  grid-template-columns: 3.2rem minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: center;
+  min-height: 2.35rem;
+  border: 1px solid rgba(255, 224, 128, 0.14);
+  background: rgba(255, 255, 255, 0.045);
+  padding: 0.45rem 0.6rem;
+}
+
+.overview-state-row {
+  grid-template-columns: 1.2rem 2.4rem minmax(0, 1fr);
+}
+
+.overview-state-row span,
+.overview-state-line span {
+  color: rgba(255, 221, 128, 0.82);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.overview-state-row strong,
+.overview-state-line strong {
+  min-width: 0;
+  color: #fff4c7;
+  font-size: 0.84rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.overview-state-line-blue strong {
+  color: #bfefff;
+}
+
+.overview-state-line-green strong {
+  color: #bfffd0;
+}
+
+.overview-state-line-red strong {
+  color: #ffb19e;
+}
+
+.overview-record {
+  border: 2px solid rgba(255, 224, 128, 0.24);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(0, 0, 0, 0.18)),
+    rgba(7, 8, 10, 0.55);
+  padding: 0.62rem 0.7rem;
+  box-shadow: inset 0 0 0 1px rgba(255, 239, 180, 0.05);
+}
+
+.overview-record-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.38rem;
+}
+
+.overview-record-head span {
+  flex-shrink: 0;
+  color: #ffd979;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.overview-record-head strong {
+  min-width: 0;
+  color: #fff2c4;
+  font-family: "Noto Serif SC", serif;
+  font-size: 0.9rem;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-record-detail {
+  color: rgba(255, 241, 205, 0.88);
+  font-size: 0.76rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.overview-record-quest {
+  border-color: rgba(116, 214, 255, 0.36);
+}
+
+.overview-record-combat {
+  border-color: rgba(255, 112, 91, 0.42);
+}
+
+.overview-record-relation {
+  border-color: rgba(255, 143, 186, 0.38);
+}
+
+.glass-panel .text-gray-500,
+.glass-panel-light .text-gray-500 {
+  color: rgba(247, 225, 179, 0.68) !important;
+}
+
+.glass-panel .text-gray-400,
+.glass-panel-light .text-gray-400 {
+  color: rgba(246, 230, 192, 0.76) !important;
+}
+
+.glass-panel .text-gray-300,
+.glass-panel-light .text-gray-300 {
+  color: rgba(255, 239, 204, 0.86) !important;
+}
+
 .map-marker {
   filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.85));
 }
@@ -735,6 +1171,88 @@ body {
     margin-bottom: 0.45rem;
     padding: 0.34rem 0.55rem;
     font-size: 1.04rem;
+  }
+
+  .eldred-notice {
+    width: 100%;
+    margin: 1rem auto 1.15rem;
+  }
+
+  .eldred-notice-frame {
+    border-width: 3px;
+    padding: 0.72rem;
+  }
+
+  .eldred-notice-kicker {
+    min-width: 7.5rem;
+    font-size: 0.92rem;
+    margin-bottom: 0.65rem;
+  }
+
+  .eldred-notice-primary {
+    min-height: 2.6rem;
+    padding: 0.55rem 0.65rem;
+    font-size: 1rem;
+  }
+
+  .eldred-notice-detail,
+  .eldred-notice-meta,
+  .eldred-npc-detail {
+    font-size: 0.82rem;
+    line-height: 1.55;
+  }
+
+  .eldred-npc-archive {
+    grid-template-columns: 1fr;
+  }
+
+  .eldred-npc-portrait {
+    width: 7.4rem;
+    min-height: 7.4rem;
+    margin: 0 auto;
+  }
+
+  .eldred-npc-name {
+    text-align: center;
+    font-size: 1.25rem;
+  }
+
+  .eldred-clue-row {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+
+  .eldred-clue-slots {
+    grid-template-columns: 1fr;
+  }
+
+  .eldred-clue-arrow {
+    display: none;
+  }
+
+  .eldred-location-line,
+  .eldred-tagged-line {
+    font-size: 0.86rem;
+    line-height: 1.6;
+  }
+
+  .overview-state-row,
+  .overview-state-line {
+    grid-template-columns: 2.8rem minmax(0, 1fr);
+  }
+
+  .overview-state-row {
+    grid-template-columns: 1.1rem 2.1rem minmax(0, 1fr);
+  }
+
+  .overview-record-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.18rem;
+  }
+
+  .overview-record-head strong {
+    white-space: normal;
   }
 }
 

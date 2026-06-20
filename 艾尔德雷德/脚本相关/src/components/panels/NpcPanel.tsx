@@ -70,32 +70,32 @@ export function NpcPanel({ npcs = [] }: NpcPanelProps) {
           </div>
         ) : (
           <>
-            <div className="dossier-hero relative z-10 bg-gradient-to-b from-white/5 to-transparent">
-              <div className="dossier-portrait dossier-portrait-lg">
+            <div className="p-5 md:p-8 border-b border-white/10 relative z-10 flex flex-col sm:flex-row gap-5 md:gap-8 bg-gradient-to-b from-white/5 to-transparent">
+              <div className="w-28 h-28 md:w-32 md:h-32 bg-fantasy-darker border-2 border-fantasy-gold rounded flex items-center justify-center text-fantasy-gold shadow-lg shadow-black overflow-hidden shrink-0">
                 {selectedNpc.portraitUrl ? (
-                  <img src={selectedNpc.portraitUrl} alt={selectedNpc.fullName} className="h-full w-full object-contain" />
+                  <img src={selectedNpc.portraitUrl} alt={selectedNpc.fullName} className="w-full h-full object-contain" />
                 ) : (
-                  <span>人物档案</span>
+                  <span className="text-sm font-serif opacity-50">人物档案</span>
                 )}
               </div>
-              <div className="min-w-0 flex-1 text-center">
-                <div className="mx-auto mb-2 w-fit border border-blue-400/25 bg-fantasy-blue/20 px-3 py-1 text-xs text-blue-200">{selectedNpc.type} / Lv.{selectedNpc.stats.level}</div>
-                <h1 className="font-serif text-2xl font-bold leading-tight tracking-widest text-white md:text-4xl">{selectedNpc.fullName}</h1>
-                <div className="mt-2 text-sm text-gray-400">
+              <div className="flex flex-col justify-center min-w-0">
+                <div className="flex flex-wrap items-center gap-3 mb-2">
+                  <span className="px-2 py-0.5 rounded text-[10px] bg-fantasy-blue/20 border border-blue-400/30 text-blue-300">{selectedNpc.type}</span>
+                  <h1 className="text-2xl md:text-3xl font-serif text-white tracking-widest leading-tight">{selectedNpc.fullName}</h1>
+                </div>
+                <div className="text-gray-400 text-sm mb-4">
                   {selectedNpc.race} / {selectedNpc.gender} / {selectedNpc.age}岁 / {selectedClass.name}
                 </div>
-                <div className="dossier-attributes mt-5">
-                  {ATTRIBUTE_KEYS.map(key => (
-                    <div key={key} className="dossier-attribute">
-                      <span>{ATTRIBUTE_LABELS[key].slice(0, 1)}</span>
-                      <strong>{selectedNpc.stats[key]}</strong>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-5 grid gap-2 md:grid-cols-3">
-                  <div className="dossier-meter"><MapPin className="h-4 w-4 text-fantasy-gold" /><span>所属 {selectedNpc.affiliation}</span></div>
-                  <div className="dossier-meter"><Info className="h-4 w-4 text-fantasy-gold" /><span>身份 {selectedNpc.identity}</span></div>
-                  <div className="dossier-meter"><Heart className="h-4 w-4 text-red-400" /><span>好感 {selectedNpc.favorability} / {selectedNpc.relationshipStage}</span></div>
+                <div className="flex flex-col md:flex-row gap-2 md:gap-4">
+                  <div className="text-xs text-gray-300 flex items-center gap-1 bg-black/40 px-3 py-1.5 rounded border border-white/10">
+                    <MapPin className="w-3 h-3 text-fantasy-gold" /> 所属 {selectedNpc.affiliation}
+                  </div>
+                  <div className="text-xs text-gray-300 flex items-center gap-1 bg-black/40 px-3 py-1.5 rounded border border-white/10">
+                    <Info className="w-3 h-3 text-fantasy-gold" /> 身份 {selectedNpc.identity}
+                  </div>
+                  <div className="text-xs text-gray-300 flex items-center gap-1 bg-black/40 px-3 py-1.5 rounded border border-white/10">
+                    <Heart className="w-3 h-3 text-red-400" /> 好感 {selectedNpc.favorability} / {selectedNpc.relationshipStage}
+                  </div>
                 </div>
               </div>
             </div>

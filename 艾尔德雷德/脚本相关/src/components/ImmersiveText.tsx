@@ -1,40 +1,120 @@
 import { characterImage, eldredNPCs } from '../data';
 import { ImmersiveNotice } from '../types';
 
-const noticeLabels = new Set([
-  '获得物品',
-  '获得技能',
-  '技能入库',
-  '委托更新',
-  '委托接取',
-  '委托生成',
-  '委托完成',
-  'NPC收录',
-  '地点解锁',
-  '地图加载',
-  '路径行动',
-  '事件推进',
-  '事件进展',
-  '奇遇事件',
-  '翻牌结果',
-  '主线进展',
-  '好感变化',
-  '声望变化',
-  '装备变更',
-  '角色升级',
-  '升级提示',
-  '队伍编成',
-  '购买结算',
-  '战斗回合',
-  '战斗结算',
-  '战斗实况',
-  '技能演出',
-]);
+type NoticeKind = 'item' | 'skill' | 'quest' | 'npc' | 'clue' | 'relation' | 'combat' | 'level' | 'event' | 'soft-location';
+
+const noticeKindMap: Record<string, NoticeKind> = {
+  获得物品: 'item',
+  获得技能: 'skill',
+  技能入库: 'skill',
+  装备变更: 'item',
+  购买结算: 'item',
+  委托更新: 'quest',
+  委托接取: 'quest',
+  委托生成: 'quest',
+  委托完成: 'quest',
+  NPC收录: 'npc',
+  线索收录: 'clue',
+  线索更新: 'clue',
+  线索进展: 'clue',
+  地点解锁: 'soft-location',
+  地图加载: 'soft-location',
+  路径行动: 'soft-location',
+  事件推进: 'event',
+  事件进展: 'event',
+  奇遇事件: 'event',
+  翻牌结果: 'event',
+  主线进展: 'event',
+  好感变化: 'relation',
+  声望变化: 'relation',
+  角色升级: 'level',
+  升级提示: 'level',
+  队伍编成: 'event',
+  战斗回合: 'combat',
+  战斗结算: 'combat',
+  战斗实况: 'combat',
+  技能演出: 'combat',
+};
+
+const phaseNames = ['阶段一', '阶段二', '阶段三', '阶段四', '阶段五', '阶段六', '阶段七'];
 
 const getAvatar = (name: string) => {
   const known = eldredNPCs.find(npc => npc.name === name || npc.fullName.includes(name));
   return known?.avatarUrl || characterImage(name, '头像');
 };
+
+const stripLabel = (title: string) => title.replace(/^【|】$/g, '').trim();
+
+const splitNoticeParts = (body: string) =>
+  body
+    .split(/[｜|]/)
+    .map(part => part.trim())
+    .filter(Boolean);
+
+const phaseIndexFrom = (text: string) => {
+  const normalized = text.trim();
+  const direct = phaseNames.findIndex(name => normalized.includes(name));
+  if (direct >= 0) return direct;
+  const numberMatch = normalized.match(/阶段\s*([1-7一二三四五六七])/);
+  if (!numberMatch) return 0;
+  const phaseMap: Record<string, number> = { '1': 0, 一: 0, '2': 1, 二: 1, '3': 2, 三: 2, '4': 3, 四: 3, '5': 4, 五: 4, '6': 5, 六: 5, '7': 6, 七: 6 };
+  return phaseMap[numberMatch[1]] ?? 0;
+};
+
+type CluePhaseRecord = {
+  phase: string;
+  clues: string[];
+  event: string;
+};
+
+const clueGroupsFrom = (body: string): Map<number, CluePhaseRecord> => {
+  const groups = new Map<number, CluePhaseRecord>();
+  const rawGroups = body
+    .split(/[；;]\s*(?=阶段[一二三四五六七1-7])/)
+    .map(group => group.trim())
+    .filter(Boolean);
+  const candidates = rawGroups.length > 1 ? rawGroups : [body];
+
+  for (const group of candidates) {
+    const parts = splitNoticeParts(group);
+    if (parts.length === 0) continue;
+    const phaseSource = parts.find(part => /阶段[一二三四五六七1-7]/.test(part)) || parts[0];
+    const index = phaseIndexFrom(phaseSource);
+    const startsWithPhase = /阶段[一二三四五六七1-7]/.test(parts[0]);
+    const payload = startsWithPhase ? parts.slice(1) : parts;
+    groups.set(index, {
+      phase: phaseNames[index] || phaseSource,
+      clues: payload.slice(0, 3),
+      event: payload[3] || payload.find(part => /事件|真相|节点|结论/.test(part)) || '',
+    });
+  }
+
+  return groups;
+};
+
+function HighlightText({ text }: { text: string }) {
+  const tokens = String(text || '').split(/(「[^」]+」|《[^》]+》|Lv\.?\d+|\d+\/\d+|[+-]?\d+点?|S[1-5]|极高|高|中|低|成功|失败|未命中|命中|获得|完成|升级)/g).filter(Boolean);
+  return (
+    <>
+      {tokens.map((token, index) => {
+        const isNumber = /^([+-]?\d+点?|\d+\/\d+|Lv\.?\d+|S[1-5])$/.test(token);
+        const isQuote = /^「|^《/.test(token);
+        const isGood = /成功|获得|完成|升级/.test(token);
+        const isBad = /失败|未命中|极高|高/.test(token);
+        const className = isNumber
+          ? 'eldred-text-number'
+          : isQuote
+            ? 'eldred-text-name'
+            : isGood
+              ? 'eldred-text-good'
+              : isBad
+                ? 'eldred-text-danger'
+                : undefined;
+        return className ? <span key={`${token}-${index}`} className={className}>{token}</span> : <span key={`${token}-${index}`}>{token}</span>;
+      })}
+    </>
+  );
+}
 
 export function DialogueLine({ speaker, text }: { speaker: string; text: string }) {
   return (
@@ -58,6 +138,111 @@ export function ImmersiveNoticeCard({ notice }: { notice: ImmersiveNotice }) {
   );
 }
 
+function NpcArchiveNotice({ body, compact = false }: { body: string; compact?: boolean }) {
+  const parts = splitNoticeParts(body);
+  const name = parts[0]?.replace(/^姓名[:：]/, '').trim() || '未知角色';
+  const details = parts.slice(1);
+  return (
+    <div className={`eldred-notice eldred-notice-npc ${compact ? 'eldred-notice-compact' : ''}`}>
+      <div className="eldred-notice-frame">
+        <div className="eldred-notice-kicker">NPC 收录</div>
+        <div className="eldred-npc-archive">
+          <div className="eldred-npc-portrait">
+            <img src={getAvatar(name)} alt={name} />
+          </div>
+          <div className="eldred-npc-body">
+            <div className="eldred-npc-name">{name}</div>
+            <div className="eldred-npc-detail-grid">
+              {(details.length ? details : ['资料待补全']).map((part, index) => (
+                <div className="eldred-npc-detail" key={`${name}-${index}`}><HighlightText text={part} /></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ClueArchiveNotice({ body, compact = false }: { body: string; compact?: boolean }) {
+  const records = clueGroupsFrom(body);
+  const activeIndex = Math.max(0, ...Array.from(records.keys()));
+
+  return (
+    <div className={`eldred-notice eldred-notice-clue ${compact ? 'eldred-notice-compact' : ''}`}>
+      <div className="eldred-notice-frame">
+        <div className="eldred-notice-kicker">线索收录</div>
+        <div className="eldred-clue-board">
+          {phaseNames.map((phase, index) => {
+            const record = records.get(index);
+            const active = index === activeIndex && Boolean(record);
+            const collected = Boolean(record) && !active;
+            const clueParts = record?.clues || [];
+            const event = record?.event || `${phase}事件`;
+            return (
+              <div className={`eldred-clue-row ${active ? 'is-active' : ''} ${collected ? 'is-collected' : ''}`} key={phase}>
+                <div className="eldred-clue-phase">{phase}</div>
+                <div className="eldred-clue-slots">
+                  {[0, 1, 2].map(slot => (
+                    <span className="eldred-clue-token" key={`${phase}-${slot}`}>
+                      {record ? <HighlightText text={clueParts[slot] || `线索${slot + 1}`} /> : `线索${slot + 1}`}
+                    </span>
+                  ))}
+                </div>
+                <div className="eldred-clue-arrow">→</div>
+                <div className="eldred-clue-event">{record ? <HighlightText text={event} /> : `${phase}事件`}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LocationLineNotice({ title, body }: { title: string; body: string }) {
+  return (
+    <p className="eldred-location-line">
+      <span>【{stripLabel(title)}】</span>
+      <HighlightText text={body} />
+    </p>
+  );
+}
+
+function StandardNotice({
+  title,
+  body,
+  meta,
+  kind,
+  compact = false,
+}: {
+  title: string;
+  body: string;
+  meta?: string;
+  kind: NoticeKind;
+  compact?: boolean;
+}) {
+  const noticeTitle = stripLabel(title);
+  const parts = splitNoticeParts(body);
+  const [primaryPart, ...detailParts] = parts.length ? parts : [body];
+  return (
+    <div className={`eldred-notice eldred-notice-${kind} ${compact ? 'eldred-notice-compact' : ''}`}>
+      <div className="eldred-notice-frame">
+        <div className="eldred-notice-kicker">{noticeTitle}</div>
+        <div className="eldred-notice-primary"><HighlightText text={primaryPart} /></div>
+        {detailParts.length > 0 && (
+          <div className="eldred-notice-detail-grid">
+            {detailParts.map((part, index) => (
+              <div className="eldred-notice-detail" key={`${noticeTitle}-${index}`}><HighlightText text={part} /></div>
+            ))}
+          </div>
+        )}
+        {meta && <div className="eldred-notice-meta"><HighlightText text={meta} /></div>}
+      </div>
+    </div>
+  );
+}
+
 function NoticePanel({
   title,
   body,
@@ -69,38 +254,26 @@ function NoticePanel({
   meta?: string;
   compact?: boolean;
 }) {
-  const noticeTitle = title.replace(/^【|】$/g, '');
-  const parts = body.split(/[｜|]/).map(part => part.trim()).filter(Boolean);
-  const [primaryPart, ...detailParts] = parts;
-  return (
-    <div className={`pixel-inline-notice ${compact ? 'pixel-inline-notice-compact' : ''}`}>
-      <div className="pixel-inline-notice-main">
-        <div className="pixel-inline-notice-title font-serif">【{noticeTitle}】</div>
-        <div className="pixel-inline-notice-body text-xs md:text-sm">
-          {parts.length > 1 ? (
-            <>
-              <div className="pixel-inline-notice-primary">{primaryPart}</div>
-              {detailParts.length > 0 && (
-                <div className="pixel-inline-notice-body-grid">
-                  {detailParts.map((part, index) => (
-                    <span className="pixel-inline-notice-chip" key={`${noticeTitle}-${index}`}>{part}</span>
-                  ))}
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="pixel-inline-notice-text whitespace-pre-line">{body}</div>
-          )}
-          {meta && <div className="pixel-card-meta">{meta}</div>}
-        </div>
-      </div>
-    </div>
-  );
+  const noticeTitle = stripLabel(title);
+  const kind = noticeKindMap[noticeTitle] || 'event';
+  if (kind === 'soft-location') return <LocationLineNotice title={noticeTitle} body={body} />;
+  if (kind === 'npc') return <NpcArchiveNotice body={body} compact={compact} />;
+  if (kind === 'clue') return <ClueArchiveNotice body={body} compact={compact} />;
+  return <StandardNotice title={noticeTitle} body={body} meta={meta} kind={kind} compact={compact} />;
 }
 
 function InlineNotice({ title, body }: { title: string; body: string }) {
   return (
     <NoticePanel title={title} body={body} />
+  );
+}
+
+function TaggedLine({ title, body }: { title: string; body: string }) {
+  return (
+    <p className="eldred-tagged-line">
+      <span>【{stripLabel(title)}】</span>
+      <HighlightText text={body} />
+    </p>
   );
 }
 
@@ -110,7 +283,7 @@ export function RichNarrative({ text }: { text: string }) {
     <>
       {lines.map((line, index) => {
         const notice = line.match(/^【([^】]{1,32})】[：:]\s*(.+)$/);
-        if (notice && noticeLabels.has(notice[1])) {
+        if (notice && noticeKindMap[notice[1]]) {
           return <InlineNotice key={`notice-${index}`} title={notice[1]} body={notice[2]} />;
         }
 
@@ -120,7 +293,7 @@ export function RichNarrative({ text }: { text: string }) {
         }
 
         if (notice) {
-          return <InlineNotice key={`notice-${index}`} title={notice[1]} body={notice[2]} />;
+          return <TaggedLine key={`tagged-${index}`} title={notice[1]} body={notice[2]} />;
         }
 
         return (

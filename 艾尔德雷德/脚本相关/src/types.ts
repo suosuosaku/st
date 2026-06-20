@@ -184,6 +184,7 @@ export type ImmersiveNoticeType =
   | 'npc'
   | 'skill'
   | 'location'
+  | 'clue'
   | 'level'
   | 'favor'
   | 'reputation'

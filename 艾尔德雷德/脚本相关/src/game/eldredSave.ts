@@ -7,6 +7,7 @@ import {
   EquipmentLoadout,
   EquipmentSlot,
   ImmersiveNotice,
+  ImmersiveNoticeType,
   OriginLocation,
   PlayerState,
   Quest,
@@ -35,6 +36,7 @@ type AnyRecord = Record<string, any>;
 
 export const ELDRED_SAVE_KEY = 'eldred_save_v1';
 export const ELDRED_SAVE_SCHEMA_VERSION = 1;
+const ELDRED_LOCAL_SAVE_KEY_PREFIX = `${ELDRED_SAVE_KEY}:`;
 
 export type EldredRuntimeSource = 'mvu' | 'cache' | 'empty';
 
@@ -90,6 +92,7 @@ export type EldredRuntimeSave = {
   narration: EldredNarrationState;
   messages: EldredRuntimeMessage[];
   updatedAt: string;
+  contextKey?: string;
 };
 
 type VariableOption = { type: string; [key: string]: unknown };
@@ -165,6 +168,73 @@ const hostFunction = <T extends (...args: any[]) => any>(name: string): T | null
 
 const hasTavernVariableBridge = () => Boolean(hostFunction('getVariables'));
 
+const hostContextValue = (scope: AnyRecord, key: string): string => {
+  try {
+    const value = scope[key];
+    if (typeof value === 'function') return textOf(value.call(scope));
+    return textOf(value);
+  } catch {
+    return '';
+  }
+};
+
+const readCurrentCharacterData = () => {
+  for (const scope of hostScopes()) {
+    try {
+      const rawCharacter = scope.RawCharacter;
+      if (rawCharacter && typeof rawCharacter.find === 'function') {
+        const data = rawCharacter.find({ name: 'current', allowAvatar: true });
+        if (data && typeof data === 'object') return data as AnyRecord;
+      }
+      if (typeof scope.getCharData === 'function') {
+        const data = scope.getCharData('current');
+        if (data && typeof data === 'object') return data as AnyRecord;
+      }
+    } catch {
+      // ignored
+    }
+  }
+  return null;
+};
+
+const currentRuntimeContextKey = () => {
+  const character = readCurrentCharacterData();
+  const cardData = asRecord(character?.data);
+  const extensions = asRecord(cardData.extensions ?? character?.extensions);
+  const characterName = textOf(cardData.name ?? character?.name);
+  const avatar = textOf(character?.avatar ?? character?.avatar_url ?? cardData.avatar);
+  const createDate = textOf(cardData.create_date ?? character?.create_date ?? extensions.create_date);
+  const updateDate = textOf(cardData.character_version ?? character?.version ?? extensions.character_version);
+  const worldName = textOf(character?.world ?? cardData.world ?? extensions.world);
+  const scopeParts = hostScopes().flatMap(scope => {
+    const tavern = asRecord(scope.SillyTavern);
+    return [
+      hostContextValue(scope, 'this_chid'),
+      hostContextValue(scope, 'name2'),
+      typeof tavern.getCurrentChatId === 'function' ? textOf(tavern.getCurrentChatId()) : '',
+      typeof scope.getCurrentChatId === 'function' ? textOf(scope.getCurrentChatId()) : '',
+    ];
+  }).filter(Boolean);
+  const parts = [
+    'eldred',
+    ...scopeParts,
+    characterName,
+    avatar,
+    createDate,
+    updateDate,
+    worldName,
+  ].filter(Boolean);
+  return parts.length > 1 ? parts.join('|') : 'eldred-standalone';
+};
+
+const localStorageKey = () => `${ELDRED_LOCAL_SAVE_KEY_PREFIX}${encodeURIComponent(currentRuntimeContextKey())}`;
+
+const cacheMatchesCurrentContext = (runtime: EldredRuntimeSave) => {
+  const currentContext = currentRuntimeContextKey();
+  if (!hasTavernVariableBridge()) return !runtime.contextKey || runtime.contextKey === currentContext || runtime.contextKey === 'eldred-standalone';
+  return Boolean(runtime.contextKey && runtime.contextKey === currentContext);
+};
+
 const textOf = (value: unknown, fallback = ''): string => {
   if (value === undefined || value === null) return fallback;
   const text = String(value).trim();
@@ -239,10 +309,14 @@ const readMvuData = (): AnyRecord | null => {
 const readCachedRuntime = (): EldredRuntimeSave | null => {
   const chatVariables = readVariables({ type: 'chat' });
   const stored = chatVariables?.[ELDRED_SAVE_KEY];
-  if (stored && typeof stored === 'object') return normalizeRuntime(stored as EldredRuntimeSave, 'cache');
+  if (stored && typeof stored === 'object') {
+    const runtime = normalizeRuntime(stored as EldredRuntimeSave, 'cache');
+    return cacheMatchesCurrentContext(runtime) ? runtime : null;
+  }
   if (typeof stored === 'string') {
     try {
-      return normalizeRuntime(JSON.parse(stored), 'cache');
+      const runtime = normalizeRuntime(JSON.parse(stored), 'cache');
+      return cacheMatchesCurrentContext(runtime) ? runtime : null;
     } catch {
       // ignored
     }
@@ -251,8 +325,11 @@ const readCachedRuntime = (): EldredRuntimeSave | null => {
   if (hasTavernVariableBridge()) return null;
 
   try {
-    const local = localStorage.getItem(ELDRED_SAVE_KEY);
-    if (local) return normalizeRuntime(JSON.parse(local), 'cache');
+    const local = localStorage.getItem(localStorageKey()) || localStorage.getItem(ELDRED_SAVE_KEY);
+    if (local) {
+      const runtime = normalizeRuntime(JSON.parse(local), 'cache');
+      return cacheMatchesCurrentContext(runtime) ? runtime : null;
+    }
   } catch {
     // ignored
   }
@@ -265,10 +342,11 @@ export const persistEldredRuntimeCache = (runtime: EldredRuntimeSave) => {
     ...runtime,
     source: 'cache' as const,
     updatedAt: new Date().toISOString(),
+    contextKey: currentRuntimeContextKey(),
   };
 
   try {
-    localStorage.setItem(ELDRED_SAVE_KEY, JSON.stringify(cached));
+    localStorage.setItem(localStorageKey(), JSON.stringify(cached));
   } catch {
     // ignored
   }
@@ -449,14 +527,29 @@ const reputationRecordsFrom = (raw: unknown): ReputationRecord[] =>
     };
   });
 
+const noticeTypeFromTitle = (title: string): ImmersiveNoticeType => {
+  if (/NPC|角色/.test(title)) return 'npc';
+  if (/线索/.test(title)) return 'clue';
+  if (/物品|购买|背包/.test(title)) return 'item';
+  if (/技能/.test(title)) return 'skill';
+  if (/委托|任务/.test(title)) return 'quest';
+  if (/地点|地图|路径/.test(title)) return 'location';
+  if (/升级|等级/.test(title)) return 'level';
+  if (/好感/.test(title)) return 'favor';
+  if (/声望/.test(title)) return 'reputation';
+  if (/装备/.test(title)) return 'equipment';
+  return 'event';
+};
+
 const noticesFrom = (raw: unknown): ImmersiveNotice[] => {
   const values = Array.isArray(raw) ? raw : Object.values(asRecord(raw));
   return values.slice(-12).map((value, index) => {
     const source = asRecord(value);
+    const title = textOf(source.标题 ?? source.title ?? source.类型, '事件进展');
     return {
       id: textOf(source.id, `notice-${index}`),
-      type: 'event',
-      title: textOf(source.标题 ?? source.title ?? source.类型, '事件进展'),
+      type: noticeTypeFromTitle(title),
+      title,
       body: textOf(source.内容 ?? source.body ?? value),
       meta: textOf(source.来源 ?? source.meta),
     };
@@ -705,6 +798,7 @@ const normalizeRuntime = (raw: Partial<EldredRuntimeSave>, source: EldredRuntime
         createdAt: textOf(message.createdAt, new Date().toISOString()),
       })),
     updatedAt: raw.updatedAt || new Date().toISOString(),
+    contextKey: textOf(raw.contextKey),
   };
 };
 
@@ -720,7 +814,20 @@ export const runtimeFromStatData = (statData: AnyRecord): EldredRuntimeSave => (
   narration: createEmptyNarrationState(),
   messages: [],
   updatedAt: new Date().toISOString(),
+  contextKey: currentRuntimeContextKey(),
 });
+
+const sameRuntimeIdentity = (left?: EldredRuntimeSave | null, right?: EldredRuntimeSave | null) => {
+  if (!left || !right) return false;
+  if (left.contextKey && right.contextKey) return left.contextKey === right.contextKey;
+  const leftPlayer = left.player;
+  const rightPlayer = right.player;
+  if (!leftPlayer || !rightPlayer) return false;
+  return leftPlayer.name === rightPlayer.name
+    && leftPlayer.classId === rightPlayer.classId
+    && leftPlayer.raceId === rightPlayer.raceId
+    && leftPlayer.originId === rightPlayer.originId;
+};
 
 export const loadEldredRuntimeSave = (): EldredRuntimeSave => {
   const cachedRuntime = readCachedRuntime();
@@ -728,7 +835,8 @@ export const loadEldredRuntimeSave = (): EldredRuntimeSave => {
   if (statData) {
     const runtime = runtimeFromStatData(statData);
     if (runtime.player || runtime.npcs.length || runtime.quests.length || runtime.combat.enemyUnits.length) {
-      const cachedWorld = cachedRuntime?.world;
+      const canUseCachedRuntime = sameRuntimeIdentity(cachedRuntime, runtime);
+      const cachedWorld = canUseCachedRuntime ? cachedRuntime?.world : undefined;
       const world = {
         ...runtime.world,
         currentTime: runtime.world.currentTime || cachedWorld?.currentTime || '',
@@ -743,15 +851,15 @@ export const loadEldredRuntimeSave = (): EldredRuntimeSave => {
       };
       return {
         ...runtime,
-        player: runtime.player || cachedRuntime?.player || null,
-        npcs: runtime.npcs.length ? runtime.npcs : cachedRuntime?.npcs || [],
-        quests: runtime.quests.length ? runtime.quests : cachedRuntime?.quests || [],
+        player: runtime.player || (canUseCachedRuntime ? cachedRuntime?.player : null) || null,
+        npcs: runtime.npcs.length ? runtime.npcs : canUseCachedRuntime ? cachedRuntime?.npcs || [] : [],
+        quests: runtime.quests.length ? runtime.quests : canUseCachedRuntime ? cachedRuntime?.quests || [] : [],
         combat: runtime.combat.enemyUnits.length || runtime.combat.logs.length
           ? runtime.combat
-          : cachedRuntime?.combat || runtime.combat,
+          : canUseCachedRuntime ? cachedRuntime?.combat || runtime.combat : runtime.combat,
         world,
-        narration: cachedRuntime?.narration || runtime.narration,
-        messages: cachedRuntime?.messages || runtime.messages,
+        narration: canUseCachedRuntime ? cachedRuntime?.narration || runtime.narration : runtime.narration,
+        messages: canUseCachedRuntime ? cachedRuntime?.messages || runtime.messages : runtime.messages,
       };
     }
   }
@@ -763,6 +871,7 @@ export const runtimeFromCreatedPlayer = (player: PlayerState): EldredRuntimeSave
   ...createEmptyEldredRuntimeSave(),
   source: 'cache',
   player,
+  contextKey: currentRuntimeContextKey(),
   world: {
     ...emptyWorld(),
     currentLocation: player.location.name,

@@ -1,9 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Clock, Loader2, MapPin, Send, ShieldAlert, ScrollText } from 'lucide-react';
-import { ImmersiveNoticeCard, RichNarrative } from '../ImmersiveText';
+import { RichNarrative } from '../ImmersiveText';
 import { PlayerState } from '../../types';
 import { EldredRuntimeSave } from '../../game/eldredSave';
 import { formatEldredLocation } from '../../game/locationFormat';
+
+let overviewNarrativeScrollTop = 0;
+
+type OverviewRecord = {
+  id: string;
+  label: string;
+  title: string;
+  detail: string;
+  tone: 'event' | 'quest' | 'combat' | 'relation' | 'world';
+};
 
 export function OverviewPanel({
   player,
@@ -19,12 +29,95 @@ export function OverviewPanel({
   onSubmitFreeInput?: (text: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState('');
+  const narrativeScrollRef = useRef<HTMLDivElement>(null);
   const entries = runtime?.narration.entries || [];
   const world = runtime?.world;
   const locationDisplay = formatEldredLocation(world, player.location);
   const timeText = world?.currentTime || '待正文落定';
   const weatherText = world?.weather || player.location.weather || '未登记';
+  const riskText = world?.risk || player.location.trouble || '未登记';
+  const travelText = world?.travelState || '未移动';
+  const presentCharacters = world?.presentCharacters?.length ? world.presentCharacters.join('、') : '未登记';
   const visibleEntries = [...entries].reverse();
+  const latestEntry = entries[0];
+  const latestQuest = runtime?.quests?.[0];
+  const latestRelationship = player.relationships[0];
+  const latestReputation = player.reputations[0];
+  const latestCombatLog = runtime?.combat.logs[0];
+  const sideRecords = useMemo<OverviewRecord[]>(() => {
+    const records: OverviewRecord[] = [];
+    if (latestEntry) {
+      records.push({
+        id: `entry-${latestEntry.id}`,
+        label: '正文',
+        title: latestEntry.title,
+        detail: latestEntry.text.slice(0, 72),
+        tone: 'event',
+      });
+    }
+    for (const notice of player.notices.slice(0, 4)) {
+      records.push({
+        id: notice.id,
+        label: notice.title,
+        title: notice.body.split(/[｜|]/)[0] || notice.title,
+        detail: notice.meta || notice.body,
+        tone: notice.type === 'quest' ? 'quest' : notice.type === 'favor' || notice.type === 'reputation' ? 'relation' : notice.type === 'level' ? 'combat' : 'event',
+      });
+    }
+    if (latestQuest) {
+      records.push({
+        id: `quest-${latestQuest.id}`,
+        label: '委托',
+        title: latestQuest.title,
+        detail: `${latestQuest.risk}风险 / Lv.${latestQuest.recLevel} / ${latestQuest.task}`,
+        tone: 'quest',
+      });
+    }
+    if (latestCombatLog) {
+      records.push({
+        id: `combat-${latestCombatLog}`,
+        label: '战斗',
+        title: `第${runtime?.combat.turn || 1}回合`,
+        detail: latestCombatLog,
+        tone: 'combat',
+      });
+    }
+    if (latestRelationship) {
+      records.push({
+        id: `relationship-${latestRelationship.characterId}`,
+        label: '好感',
+        title: latestRelationship.name,
+        detail: `${latestRelationship.favorability} / ${latestRelationship.stage}${latestRelationship.lastChange ? ` / ${latestRelationship.lastChange}` : ''}`,
+        tone: 'relation',
+      });
+    }
+    if (latestReputation) {
+      records.push({
+        id: `reputation-${latestReputation.regionId}`,
+        label: '声望',
+        title: latestReputation.label,
+        detail: `${latestReputation.value} / ${latestReputation.tier}`,
+        tone: 'relation',
+      });
+    }
+    records.push({
+      id: 'world-state',
+      label: '局势',
+      title: locationDisplay.fullName,
+      detail: `${timeText} / ${weatherText} / ${riskText}`,
+      tone: 'world',
+    });
+    return records.slice(0, 9);
+  }, [entries, latestCombatLog, latestEntry, latestQuest, latestRelationship, latestReputation, locationDisplay.fullName, player.notices, riskText, runtime?.combat.turn, timeText, weatherText]);
+
+  useEffect(() => {
+    const node = narrativeScrollRef.current;
+    if (!node) return;
+    const frame = window.requestAnimationFrame(() => {
+      node.scrollTop = overviewNarrativeScrollTop;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   const submitDraft = async () => {
     const text = draft.trim();
@@ -41,7 +134,13 @@ export function OverviewPanel({
           <h2 className="text-xl font-bold text-[#5c3a21] tracking-widest">正文控制台</h2>
         </div>
 
-        <div className="flex-1 overflow-y-auto pr-2 md:pr-4 space-y-5 md:space-y-6 text-[#3A2C1D] leading-relaxed relative z-10 text-sm sm:text-base">
+        <div
+          ref={narrativeScrollRef}
+          onScroll={event => {
+            overviewNarrativeScrollTop = event.currentTarget.scrollTop;
+          }}
+          className="flex-1 overflow-y-auto pr-2 md:pr-4 space-y-5 md:space-y-6 text-[#3A2C1D] leading-relaxed relative z-10 text-sm sm:text-base"
+        >
           {visibleEntries.length === 0 && (
             <div className="rounded border border-[#8b4513]/25 bg-[#f8edd4]/55 px-4 py-5 text-sm text-[#6b4b2e]">
               等待第一幕生成。
@@ -93,19 +192,23 @@ export function OverviewPanel({
               <MapPin className="w-5 h-5" />
             </div>
             <div>
-              <div className="text-base md:text-lg text-gray-200 font-serif">{locationDisplay.fullName}</div>
-              <div className="text-xs text-gray-400">{locationDisplay.detail || player.location.summary}</div>
+              <div className="text-base md:text-lg text-amber-50 font-serif">{locationDisplay.fullName}</div>
+              <div className="text-xs text-amber-100/75">{locationDisplay.detail || player.location.summary}</div>
             </div>
           </div>
         </div>
 
-        <div className="glass-panel p-5 rounded-lg flex flex-col gap-3">
+        <div className="glass-panel p-5 rounded-lg flex flex-col gap-3 overview-state-panel">
           <div className="text-fantasy-gold font-serif text-sm border-b border-fantasy-gold/20 pb-2">入局状态</div>
-          <div className="flex items-center gap-3">
-            <Clock className="w-5 h-5 text-gray-400" />
-            <div className="text-gray-300 text-sm">{timeText}</div>
+          <div className="overview-state-row">
+            <Clock className="w-4 h-4 text-fantasy-gold" />
+            <span>时间</span>
+            <strong>{timeText}</strong>
           </div>
-          <div className="text-blue-400/80 text-sm pl-8">{weatherText}</div>
+          <InfoLine label="天气" value={weatherText} tone="blue" />
+          <InfoLine label="风险" value={riskText} tone={riskText.includes('高') ? 'red' : 'gold'} />
+          <InfoLine label="旅行" value={travelText} tone="green" />
+          <InfoLine label="在场" value={presentCharacters} tone="gold" />
         </div>
 
         <div className="glass-panel p-5 rounded-lg min-h-48 xl:flex-1 flex flex-col gap-3">
@@ -113,16 +216,31 @@ export function OverviewPanel({
             <span>交互记录</span>
             <ShieldAlert className="w-4 h-4 text-fantasy-gold/50" />
           </div>
-          <div className="flex-1 overflow-y-auto space-y-3 pr-2">
-            {player.notices.length === 0 && (
-              <div className="text-xs text-gray-500 leading-5">暂无记录</div>
+          <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+            {sideRecords.length === 0 && (
+              <div className="text-xs text-amber-100/55 leading-5">暂无记录</div>
             )}
-            {player.notices.map(notice => (
-              <ImmersiveNoticeCard key={notice.id} notice={notice} />
+            {sideRecords.map(record => (
+              <div className={`overview-record overview-record-${record.tone}`} key={record.id}>
+                <div className="overview-record-head">
+                  <span>{record.label}</span>
+                  <strong>{record.title}</strong>
+                </div>
+                <div className="overview-record-detail">{record.detail}</div>
+              </div>
             ))}
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function InfoLine({ label, value, tone }: { label: string; value: string; tone: 'gold' | 'blue' | 'green' | 'red' }) {
+  return (
+    <div className={`overview-state-line overview-state-line-${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
 }
