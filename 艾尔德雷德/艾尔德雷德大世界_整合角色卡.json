@@ -14982,10 +14982,30 @@
           {
             "type": "script",
             "enabled": true,
+            "name": "艾尔德雷德开局控制台",
+            "id": "eldred-welcome-console-v331",
+            "content": "import 'https://testingcf.jsdelivr.net/gh/suosuosaku/st@eldred-integrated-v3.3.1/dist/eldred/welcome-loader/index.js'",
+            "info": "艾尔德雷德开局控制台入口。导入后接管页面，可用脚本按钮重新打开。",
+            "button": {
+              "enabled": true,
+              "buttons": [
+                {
+                  "name": "进入艾尔德雷德开局",
+                  "visible": true
+                }
+              ]
+            },
+            "data": {
+              "version": "eldred-integrated-v3.3.1"
+            }
+          },
+          {
+            "type": "script",
+            "enabled": true,
             "name": "艾尔德雷德智脑",
             "id": "eldred-brain-20260620-integrated",
-            "content": "import 'https://cdn.jsdelivr.net/gh/suosuosaku/st@master/dist/%E6%99%BA%E8%84%91/index.js'\n",
-            "info": "艾尔德雷德智脑入口。当前仓库源码位于 艾尔德雷德/智脑。",
+            "content": "import 'https://testingcf.jsdelivr.net/gh/suosuosaku/st@eldred-integrated-v3.3.1/dist/%E6%99%BA%E8%84%91/index.js'",
+            "info": "艾尔德雷德专用智脑入口。当前版本与专用预设绑定。",
             "button": {
               "enabled": true,
               "buttons": [
@@ -15008,14 +15028,15 @@
                   "eldredWorldbookMaxEntries": 12,
                   "eldredWorldbookMaxChars": 16000
                 }
-              }
+              },
+              "version": "eldred-integrated-v3.3.1"
             }
           }
         ],
         "variables": {}
       },
       "eldred_bundle": {
-        "version": "2026-06-20-智脑调度与正文指令修订",
+        "version": "2026-06-20-eldred-integrated-v3.3.1",
         "worldbook_entry_count": 296,
         "preset_prompt_count": 140,
         "frontend": {
@@ -17827,9 +17848,29 @@
                 {
                   "type": "script",
                   "enabled": true,
+                  "name": "艾尔德雷德开局控制台",
+                  "id": "eldred-welcome-console-v331",
+                  "content": "import 'https://testingcf.jsdelivr.net/gh/suosuosaku/st@eldred-integrated-v3.3.1/dist/eldred/welcome-loader/index.js'",
+                  "info": "艾尔德雷德开局控制台入口。导入后接管页面，可用脚本按钮重新打开。",
+                  "button": {
+                    "enabled": true,
+                    "buttons": [
+                      {
+                        "name": "进入艾尔德雷德开局",
+                        "visible": true
+                      }
+                    ]
+                  },
+                  "data": {
+                    "version": "eldred-integrated-v3.3.1"
+                  }
+                },
+                {
+                  "type": "script",
+                  "enabled": true,
                   "name": "智脑",
                   "id": "3b767bf4-a24a-4b08-a39d-28b1fb90c547",
-                  "content": "import 'https://testingcf.jsdelivr.net/gh/suosuosaku/st@zhino-eldred-v0.2.4/dist/智脑/index.js'",
+                  "content": "import 'https://testingcf.jsdelivr.net/gh/suosuosaku/st@eldred-integrated-v3.3.1/dist/%E6%99%BA%E8%84%91/index.js'",
                   "info": "",
                   "button": {
                     "enabled": true,
@@ -17903,7 +17944,8 @@
                         "smallSummaryApiModel": "",
                         "smallSummaryApiFormat": "openai"
                       }
-                    }
+                    },
+                    "version": "eldred-integrated-v3.3.1"
                   }
                 }
               ],
