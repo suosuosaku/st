@@ -3,6 +3,7 @@ import {
   Character,
   CharacterClassId,
   CharacterRaceId,
+  CluePhase,
   CombatUnit,
   EquipmentLoadout,
   EquipmentSlot,
@@ -72,6 +73,7 @@ export type EldredRuntimeSave = {
   player: PlayerState | null;
   npcs: Character[];
   quests: Quest[];
+  cluePhases: CluePhase[];
   combat: {
     turn: number;
     enemyUnits: CombatUnit[];
@@ -119,6 +121,7 @@ export const createEmptyEldredRuntimeSave = (): EldredRuntimeSave => ({
   player: null,
   npcs: [],
   quests: [],
+  cluePhases: [],
   combat: {
     turn: 1,
     enemyUnits: [],
@@ -132,6 +135,18 @@ export const createEmptyEldredRuntimeSave = (): EldredRuntimeSave => ({
 
 const asRecord = (value: unknown): AnyRecord => (value && typeof value === 'object' && !Array.isArray(value) ? value as AnyRecord : {});
 const asArray = (value: unknown): any[] => Array.isArray(value) ? value : [];
+
+const getPath = (source: unknown, path: string): unknown => {
+  const keys = path.split('.');
+  let current: any = source;
+  for (const key of keys) {
+    if (!current || typeof current !== 'object') return undefined;
+    current = current[key];
+  }
+  return current;
+};
+
+const firstDefined = (...values: unknown[]) => values.find(value => value !== undefined && value !== null);
 
 const safeScope = (scopeFactory: () => unknown): AnyRecord | null => {
   try {
@@ -238,7 +253,7 @@ const cacheMatchesCurrentContext = (runtime: EldredRuntimeSave) => {
 const textOf = (value: unknown, fallback = ''): string => {
   if (value === undefined || value === null) return fallback;
   const text = String(value).trim();
-  return text && text !== '待开局' && text !== '未记录' ? text : fallback;
+  return text && text !== '待开局' && text !== '待定' && text !== '未记录' ? text : fallback;
 };
 
 const numberOf = (value: unknown, fallback = 0): number => {
@@ -277,31 +292,86 @@ const writeChatVariables = (variables: AnyRecord) => {
   }
 };
 
+const currentMessageIds = () => {
+  const ids: Array<number | 'latest'> = ['latest', -1, -2];
+  const getCurrentMessageId = hostFunction<() => number>('getCurrentMessageId');
+  if (getCurrentMessageId) {
+    try {
+      const id = Number(getCurrentMessageId());
+      if (Number.isFinite(id)) ids.push(id);
+    } catch {
+      // ignored
+    }
+  }
+  const getLastMessageId = hostFunction<() => number>('getLastMessageId');
+  if (getLastMessageId) {
+    try {
+      const id = Number(getLastMessageId());
+      if (Number.isFinite(id)) {
+        ids.push(id);
+        if (id > 0) ids.push(id - 1);
+        if (id > 1) ids.push(id - 2);
+      }
+    } catch {
+      // ignored
+    }
+  }
+  return [...new Set(ids)];
+};
+
+const extractStatData = (value: unknown): AnyRecord | null => {
+  const direct = asRecord(value);
+  if (['世界', '主角', '主线', '关系', '系统'].some(key => direct[key] !== undefined)) {
+    return direct;
+  }
+  const statData = asRecord(
+    direct.stat_data ??
+    getPath(direct, 'data.stat_data') ??
+    getPath(direct, 'variables.stat_data') ??
+    getPath(direct, 'message.variables.stat_data')
+  );
+  return Object.keys(statData).length > 0 ? statData : null;
+};
+
 const readMvuData = (): AnyRecord | null => {
   for (const api of hostScopes()) {
     try {
       if (api.Mvu && typeof api.Mvu.getMvuData === 'function') {
-        const messageData = api.Mvu.getMvuData({ type: 'message', message_id: 'latest' });
-        const statData = asRecord(messageData?.stat_data);
-        if (Object.keys(statData).length > 0) return statData;
+        for (const messageId of currentMessageIds()) {
+          try {
+            const statData = extractStatData(api.Mvu.getMvuData({ type: 'message', message_id: messageId }));
+            if (statData) return statData;
+          } catch {
+            // Try the next message id shape.
+          }
+        }
       }
       if (api.__eldredWelcomeBridge?.Mvu && typeof api.__eldredWelcomeBridge.Mvu.getMvuData === 'function') {
-        const messageData = api.__eldredWelcomeBridge.Mvu.getMvuData({ type: 'message', message_id: 'latest' });
-        const statData = asRecord(messageData?.stat_data);
-        if (Object.keys(statData).length > 0) return statData;
+        for (const messageId of currentMessageIds()) {
+          try {
+            const statData = extractStatData(api.__eldredWelcomeBridge.Mvu.getMvuData({ type: 'message', message_id: messageId }));
+            if (statData) return statData;
+          } catch {
+            // Try the next message id shape.
+          }
+        }
       }
     } catch {
       // ignored: the UI must also work as a standalone html file.
     }
   }
 
-  const messageVariables = readVariables({ type: 'message', message_id: 'latest' });
-  const statData = asRecord(messageVariables?.stat_data);
-  if (Object.keys(statData).length > 0) return statData;
+  const currentMessageStatData = extractStatData(readVariables({ type: 'message' }));
+  if (currentMessageStatData) return currentMessageStatData;
+
+  for (const messageId of currentMessageIds()) {
+    const statData = extractStatData(readVariables({ type: 'message', message_id: messageId }));
+    if (statData) return statData;
+  }
 
   const chatVariables = readVariables({ type: 'chat' });
-  const chatStatData = asRecord(chatVariables?.stat_data);
-  if (Object.keys(chatStatData).length > 0) return chatStatData;
+  const chatStatData = extractStatData(chatVariables);
+  if (chatStatData) return chatStatData;
 
   return null;
 };
@@ -556,10 +626,23 @@ const noticesFrom = (raw: unknown): ImmersiveNotice[] => {
   });
 };
 
-const hasPlayerBattleData = (battle: AnyRecord) => {
-  const hp = textOf(battle.生命);
-  const attrs = asRecord(battle.五维);
-  return Boolean(hp || Object.keys(attrs).length || textOf(battle.职业));
+const hasPlayerBattleData = (battle: AnyRecord, main: AnyRecord, identityRecord: AnyRecord) => {
+  const hp = textOf(firstDefined(battle.生命, battle.HP, battle.生命值));
+  const mp = textOf(firstDefined(battle.法力, battle.MP, battle.法力值));
+  const attrs = asRecord(firstDefined(battle.五维, battle.属性, main.五维, main.属性, identityRecord.五维));
+  const skills = asRecord(firstDefined(battle.已知技能, battle.技能库, battle.技能, main.技能库, main.已知技能));
+  const equipment = asRecord(firstDefined(battle.装备栏, battle.装备位, main.装备栏, main.装备位));
+  const identityName = textOf(identityRecord.姓名 ?? main.姓名 ?? battle.姓名);
+  const className = textOf(identityRecord.职业 ?? battle.职业 ?? main.职业);
+  return Boolean(
+    hp ||
+    mp ||
+    Object.keys(attrs).length ||
+    Object.keys(skills).length ||
+    Object.keys(equipment).length ||
+    identityName ||
+    className
+  );
 };
 
 const playerFromStatData = (statData: AnyRecord): PlayerState | null => {
@@ -567,28 +650,42 @@ const playerFromStatData = (statData: AnyRecord): PlayerState | null => {
   const main = asRecord(statData.主角);
   const identityRecord = asRecord(main.身份 ?? main.角色 ?? main.基本信息);
   const battle = asRecord(main.战斗);
-  if (!hasPlayerBattleData(battle) && Object.keys(identityRecord).length === 0) return null;
+  const legacyAttributes = asRecord(main.属性);
+  if (!hasPlayerBattleData(battle, main, identityRecord) && Object.keys(identityRecord).length === 0 && Object.keys(legacyAttributes).length === 0) return null;
 
   const classId = resolveClassId(identityRecord.职业 ?? battle.职业 ?? main.职业);
   const raceId = resolveRaceId(identityRecord.种族 ?? battle.种族 ?? main.种族);
   const cls = getClassById(classId);
-  const baseAttributes = attributesFrom(battle.五维 ?? identityRecord.五维, cls.presetStats);
+  const baseAttributes = attributesFrom(firstDefined(battle.五维, battle.属性, main.五维, main.属性, identityRecord.五维), cls.presetStats);
   const location = findOrigin(world, identityRecord);
-  const loadout = loadoutFrom(battle.装备栏 ?? main.装备栏);
-  const equipmentIds = [...new Set([...equipmentIdsFrom(battle.装备栏), ...equippedIdsFromLoadout(loadout)])];
-  const knownSkillIds = skillIdsFrom(battle.已知技能 ?? main.技能库);
-  const activeSkillIds = skillIdsFrom(battle.激活技能).filter(id => knownSkillIds.length === 0 || knownSkillIds.includes(id)).slice(0, 4);
+  const loadout = loadoutFrom(firstDefined(battle.装备栏, battle.装备位, main.装备栏, main.装备位));
+  const equipmentIds = [...new Set([
+    ...equipmentIdsFrom(firstDefined(battle.装备栏, battle.装备位, main.装备栏, main.装备位)),
+    ...equippedIdsFromLoadout(loadout),
+  ])];
+  const knownSkillIds = skillIdsFrom(firstDefined(battle.已知技能, battle.技能库, battle.技能, main.技能库, main.已知技能));
+  const activeSkillIds = skillIdsFrom(firstDefined(battle.激活技能, battle.已激活技能, battle.当前技能))
+    .filter(id => knownSkillIds.length === 0 || knownSkillIds.includes(id))
+    .slice(0, 4);
   const level = Math.max(1, numberOf(battle.等级 ?? identityRecord.等级, 1));
   const derived = calculateDerivedStats(level, classId, baseAttributes, equippedIdsFromLoadout(loadout), raceId);
-  const hp = parseVitals(battle.生命, derived.hp, derived.maxHp);
-  const mp = parseVitals(battle.法力, derived.mp, derived.maxMp);
+  const hp = parseVitals(
+    firstDefined(battle.生命, battle.HP, battle.生命值 !== undefined || battle.生命值上限 !== undefined ? `${battle.生命值 ?? derived.hp}/${battle.生命值上限 ?? derived.maxHp}` : undefined),
+    derived.hp,
+    derived.maxHp,
+  );
+  const mp = parseVitals(
+    firstDefined(battle.法力, battle.MP, battle.法力值 !== undefined || battle.法力值上限 !== undefined ? `${battle.法力值 ?? derived.mp}/${battle.法力值上限 ?? derived.maxMp}` : undefined),
+    derived.mp,
+    derived.maxMp,
+  );
   const stats = {
     ...derived,
     hp: hp.current,
     maxHp: hp.max,
     mp: mp.current,
     maxMp: mp.max,
-    ac: numberOf(battle.护甲, derived.ac),
+    ac: numberOf(firstDefined(battle.护甲, battle.护甲等级, battle.AC), derived.ac),
   };
   const name = textOf(identityRecord.姓名 ?? main.姓名 ?? battle.姓名, '{{user}}');
 
@@ -616,7 +713,7 @@ const playerFromStatData = (statData: AnyRecord): PlayerState | null => {
     equipmentIds,
     equipmentLoadout: loadout,
     inventory: Object.keys(asRecord(main.背包)),
-    partyMemberIds: Object.keys(asRecord(main.当前队伍)).filter(id => id !== name && id !== '{{user}}'),
+    partyMemberIds: Object.keys(asRecord(main.当前队伍)).filter(id => id !== name && id !== '{{user}}' && id !== '主角'),
     relationships: relationshipRecordsFrom(asRecord(statData.关系).好感),
     reputations: reputationRecordsFrom(asRecord(statData.关系).地区声望),
     notices: noticesFrom(asRecord(statData.系统).前端提示 ?? asRecord(statData.系统).事件记录),
@@ -629,15 +726,18 @@ const characterFromVariable = (name: string, raw: unknown, type: Character['type
   const classId = resolveClassId(source.职业 ?? battle.职业 ?? source.profession);
   const raceId = resolveRaceId(source.种族 ?? battle.种族);
   const cls = getClassById(classId);
-  const baseAttributes = attributesFrom(battle.五维 ?? source.五维, cls.presetStats);
-  const loadout = loadoutFrom(battle.装备栏 ?? source.装备 ?? source.装备栏);
-  const equipmentIds = [...new Set([...equipmentIdsFrom(battle.装备栏 ?? source.装备), ...equippedIdsFromLoadout(loadout)])];
-  const knownSkillIds = skillIdsFrom(battle.已知技能 ?? source.已知技能);
-  const activeSkillIds = skillIdsFrom(battle.激活技能 ?? source.激活技能).filter(id => knownSkillIds.length === 0 || knownSkillIds.includes(id)).slice(0, 4);
+  const baseAttributes = attributesFrom(firstDefined(battle.五维, battle.属性, source.五维, source.属性), cls.presetStats);
+  const equipmentSource = firstDefined(battle.装备栏, battle.装备位, source.装备, source.装备栏, source.装备位);
+  const loadout = loadoutFrom(equipmentSource);
+  const equipmentIds = [...new Set([...equipmentIdsFrom(equipmentSource), ...equippedIdsFromLoadout(loadout)])];
+  const knownSkillIds = skillIdsFrom(firstDefined(battle.已知技能, battle.技能库, battle.技能, source.已知技能, source.技能库, source.技能));
+  const activeSkillIds = skillIdsFrom(firstDefined(battle.激活技能, battle.已激活技能, source.激活技能, source.当前技能))
+    .filter(id => knownSkillIds.length === 0 || knownSkillIds.includes(id))
+    .slice(0, 4);
   const level = Math.max(1, numberOf(battle.等级 ?? source.等级, 1));
   const derived = calculateDerivedStats(level, classId, baseAttributes, equippedIdsFromLoadout(loadout), raceId);
-  const hp = parseVitals(battle.生命, derived.hp, derived.maxHp);
-  const mp = parseVitals(battle.法力, derived.mp, derived.maxMp);
+  const hp = parseVitals(firstDefined(battle.生命, battle.HP, source.生命, source.HP), derived.hp, derived.maxHp);
+  const mp = parseVitals(firstDefined(battle.法力, battle.MP, source.法力, source.MP), derived.mp, derived.maxMp);
 
   return {
     id: textOf(source.id, name),
@@ -648,7 +748,7 @@ const characterFromVariable = (name: string, raw: unknown, type: Character['type
     raceId,
     gender: textOf(source.性别, '未记录'),
     age: textOf(source.年龄, '未记录'),
-    affiliation: textOf(source.所属 ?? source.势力 ?? source.affiliation, '未登记'),
+    affiliation: textOf(source.所属 ?? source.所属地区 ?? source.所属地标 ?? source.势力 ?? source.affiliation, '未登记'),
     identity: textOf(source.身份 ?? source.职责, '未登记'),
     classId,
     profession: textOf(source.职业 ?? source.职责, getClassById(classId).name),
@@ -660,7 +760,7 @@ const characterFromVariable = (name: string, raw: unknown, type: Character['type
       maxHp: hp.max,
       mp: mp.current,
       maxMp: mp.max,
-      ac: numberOf(battle.护甲, derived.ac),
+      ac: numberOf(firstDefined(battle.护甲, battle.护甲等级, battle.AC, source.护甲, source.AC), derived.ac),
     },
     experience: numberOf(battle.经验 ?? source.经验, 0),
     nextLevelExperience: numberOf(battle.下级经验 ?? source.下级经验, experienceForNextLevel(level)),
@@ -677,12 +777,18 @@ const characterFromVariable = (name: string, raw: unknown, type: Character['type
 };
 
 const npcsFromStatData = (statData: AnyRecord): Character[] => {
-  const collection = asRecord(asRecord(statData.主角).角色收集);
+  const mainRecord = asRecord(statData.主角);
+  const collection = asRecord(mainRecord.角色收集);
   const major = asRecord(collection.主要NPC);
   const other = asRecord(collection.其他NPC);
+  const legacy = asRecord(mainRecord.NPC名册);
+  const existingNames = new Set([...Object.keys(major), ...Object.keys(other)]);
   return [
     ...Object.entries(major).map(([name, value]) => characterFromVariable(name, value, 'NPC登记')),
     ...Object.entries(other).map(([name, value]) => characterFromVariable(name, value, 'NPC登记')),
+    ...Object.entries(legacy)
+      .filter(([name]) => name && name !== '无' && !existingNames.has(name))
+      .map(([name, value]) => characterFromVariable(name, value, 'NPC登记')),
   ];
 };
 
@@ -707,11 +813,11 @@ const combatUnitFrom = (name: string, raw: unknown, isEnemy: boolean): CombatUni
   const source = asRecord(raw);
   const level = Math.max(1, numberOf(source.等级, 1));
   const classId = resolveClassId(source.职业);
-  const attrs = attributesFrom(source.五维, getClassById(classId).presetStats);
-  const loadout = loadoutFrom(source.装备 ?? source.装备栏);
+  const attrs = attributesFrom(firstDefined(source.五维, source.属性), getClassById(classId).presetStats);
+  const loadout = loadoutFrom(firstDefined(source.装备, source.装备栏, source.装备位));
   const derived = calculateDerivedStats(level, classId, attrs, equippedIdsFromLoadout(loadout));
-  const hp = parseVitals(source.生命, derived.hp, derived.maxHp);
-  const mp = parseVitals(source.法力, derived.mp, derived.maxMp);
+  const hp = parseVitals(firstDefined(source.生命, source.HP), derived.hp, derived.maxHp);
+  const mp = parseVitals(firstDefined(source.法力, source.MP), derived.mp, derived.maxMp);
   return {
     id: textOf(source.id, name),
     name,
@@ -721,10 +827,10 @@ const combatUnitFrom = (name: string, raw: unknown, isEnemy: boolean): CombatUni
     maxHp: hp.max,
     mp: mp.current,
     maxMp: mp.max,
-    ac: numberOf(source.护甲, derived.ac),
+    ac: numberOf(firstDefined(source.护甲, source.护甲等级, source.AC), derived.ac),
     stats: attrs,
     skillIds: skillIdsFrom(source.激活技能 ?? source.技能),
-    equipmentIds: equipmentIdsFrom(source.装备 ?? source.装备栏),
+    equipmentIds: equipmentIdsFrom(firstDefined(source.装备, source.装备栏, source.装备位)),
     ap: numberOf(source.行动点, 1),
     maxAp: numberOf(source.最大行动点, 1),
     shield: numberOf(source.护盾, 0),
@@ -744,6 +850,56 @@ const combatFromStatData = (statData: AnyRecord): EldredRuntimeSave['combat'] =>
     enemyUnits: [...enemyUnits, ...directEnemies],
     logs: splitTextList(cache.回合变化 ?? cache.日志),
   };
+};
+
+const cluePhaseNames = [
+  '风声汇账',
+  '异象三地对照',
+  '断碑十八号',
+  '外环记录灵',
+  '七旗日期会',
+  '勇者集结',
+  '灾厄之龙觉醒',
+];
+
+const clueRecordFrom = (id: string, raw: unknown): CluePhase['clues'][number] => {
+  const source = asRecord(raw);
+  return {
+    id,
+    label: id,
+    status: textOf(source.状态, '未解锁'),
+    display: textOf(source.显示 ?? source.内容 ?? source.名称, id),
+    location: textOf(source.发现地点 ?? source.地点 ?? source.大地标提示),
+    carrier: textOf(source.载体),
+    detail: textOf(source.展开详情 ?? source.指向 ?? source.详情),
+  };
+};
+
+const cluePhasesFromStatData = (statData: AnyRecord): CluePhase[] => {
+  const mainline = asRecord(statData.主线);
+  const book = asRecord(mainline.阶段钥匙册);
+  const matrix = asRecord(mainline.线索矩阵);
+  const matrixClues = Object.entries(matrix).map(([id, value]) => clueRecordFrom(id, value));
+
+  return cluePhaseNames.map((phase, index) => {
+    const row = asRecord(book[phase]);
+    const rowClues = Object.entries(asRecord(row.线索)).map(([id, value]) => clueRecordFrom(id, value));
+    const clues = rowClues.length
+      ? rowClues
+      : index === 0
+        ? matrixClues.slice(0, 3)
+        : [];
+    const fallbackProgress = clues.length ? `${Math.min(3, clues.filter(clue => clue.status !== '未解锁').length)}/3` : '0/3';
+    return {
+      id: `phase-${index + 1}`,
+      phase,
+      eventName: textOf(row.阶段完成显示 ?? row.阶段按钮文本, `${phase}事件`).replace(/[【】]/g, ''),
+      status: textOf(row.状态, clues.length ? '记录中' : '锁定'),
+      progress: textOf(row.完成度, fallbackProgress),
+      buttonText: textOf(row.阶段按钮文本, clues.length ? '线索记录中' : '待解锁主线阶段'),
+      clues: clues.slice(0, 3),
+    };
+  });
 };
 
 const worldFromStatData = (statData: AnyRecord): EldredRuntimeSave['world'] => {
@@ -770,6 +926,7 @@ const normalizeRuntime = (raw: Partial<EldredRuntimeSave>, source: EldredRuntime
     player: raw.player || null,
     npcs: raw.npcs || [],
     quests: raw.quests || [],
+    cluePhases: raw.cluePhases || [],
     combat: raw.combat || { turn: 1, enemyUnits: [], logs: [] },
     world: raw.world || emptyWorld(),
     rawStatData: raw.rawStatData,
@@ -808,6 +965,7 @@ export const runtimeFromStatData = (statData: AnyRecord): EldredRuntimeSave => (
   player: playerFromStatData(statData),
   npcs: npcsFromStatData(statData),
   quests: questsFromStatData(statData),
+  cluePhases: cluePhasesFromStatData(statData),
   combat: combatFromStatData(statData),
   world: worldFromStatData(statData),
   rawStatData: statData,
@@ -834,7 +992,7 @@ export const loadEldredRuntimeSave = (): EldredRuntimeSave => {
   const statData = readMvuData();
   if (statData) {
     const runtime = runtimeFromStatData(statData);
-    if (runtime.player || runtime.npcs.length || runtime.quests.length || runtime.combat.enemyUnits.length) {
+    if (Object.keys(statData).length > 0) {
       const canUseCachedRuntime = sameRuntimeIdentity(cachedRuntime, runtime);
       const cachedWorld = canUseCachedRuntime ? cachedRuntime?.world : undefined;
       const world = {
@@ -854,6 +1012,9 @@ export const loadEldredRuntimeSave = (): EldredRuntimeSave => {
         player: runtime.player || (canUseCachedRuntime ? cachedRuntime?.player : null) || null,
         npcs: runtime.npcs.length ? runtime.npcs : canUseCachedRuntime ? cachedRuntime?.npcs || [] : [],
         quests: runtime.quests.length ? runtime.quests : canUseCachedRuntime ? cachedRuntime?.quests || [] : [],
+        cluePhases: runtime.cluePhases.some(phase => phase.clues.length)
+          ? runtime.cluePhases
+          : canUseCachedRuntime ? cachedRuntime?.cluePhases || runtime.cluePhases : runtime.cluePhases,
         combat: runtime.combat.enemyUnits.length || runtime.combat.logs.length
           ? runtime.combat
           : canUseCachedRuntime ? cachedRuntime?.combat || runtime.combat : runtime.combat,

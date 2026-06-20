@@ -198,6 +198,26 @@ export type ImmersiveNotice = {
   meta?: string;
 };
 
+export type ClueRecord = {
+  id: string;
+  label: string;
+  status: string;
+  display: string;
+  location: string;
+  carrier: string;
+  detail: string;
+};
+
+export type CluePhase = {
+  id: string;
+  phase: string;
+  eventName: string;
+  status: string;
+  progress: string;
+  buttonText: string;
+  clues: ClueRecord[];
+};
+
 export type Character = {
   id: string;
   name: string;
@@ -260,4 +280,4 @@ export type CombatUnit = {
   cooldowns?: Record<string, number>;
 };
 
-export type TabState = 'overview' | 'map' | 'party' | 'npc' | 'quests' | 'inventory' | 'combat' | 'system';
+export type TabState = 'overview' | 'map' | 'party' | 'npc' | 'quests' | 'clues' | 'inventory' | 'combat' | 'system';

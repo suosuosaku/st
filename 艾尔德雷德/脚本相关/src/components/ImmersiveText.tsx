@@ -30,6 +30,10 @@ const noticeKindMap: Record<string, NoticeKind> = {
   角色升级: 'level',
   升级提示: 'level',
   队伍编成: 'event',
+  行动判定: 'combat',
+  战斗开始: 'combat',
+  先攻判定: 'combat',
+  战斗行动: 'combat',
   战斗回合: 'combat',
   战斗结算: 'combat',
   战斗实况: 'combat',
@@ -43,6 +47,19 @@ const getAvatar = (name: string) => {
   return known?.avatarUrl || characterImage(name, '头像');
 };
 
+const getPortrait = (name: string) => {
+  const known = eldredNPCs.find(npc => npc.name === name || npc.fullName.includes(name));
+  return known?.portraitUrl || characterImage(name, '立绘');
+};
+
+const imageFromField = (value: string | undefined, name: string, type: '头像' | '立绘') => {
+  const raw = String(value || '').trim();
+  if (!raw) return type === '头像' ? getAvatar(name) : getPortrait(name);
+  if (/^(https?:|data:|blob:)/i.test(raw)) return raw;
+  const baseName = raw.replace(/\.(png|jpg|jpeg|webp)$/i, '').replace(/头像$|立绘$/g, '') || name;
+  return characterImage(baseName, type);
+};
+
 const stripLabel = (title: string) => title.replace(/^【|】$/g, '').trim();
 
 const splitNoticeParts = (body: string) =>
@@ -50,6 +67,33 @@ const splitNoticeParts = (body: string) =>
     .split(/[｜|]/)
     .map(part => part.trim())
     .filter(Boolean);
+
+const splitField = (part: string): [string, string] | null => {
+  const match = part.match(/^([^:：/]{1,12})[:：/]\s*(.+)$/);
+  if (!match) return null;
+  return [match[1].trim(), match[2].trim()];
+};
+
+const noticeFieldsFrom = (body: string) => {
+  const parts = splitNoticeParts(body);
+  const fields = new Map<string, string>();
+  parts.forEach(part => {
+    const field = splitField(part);
+    if (field) fields.set(field[0], field[1]);
+  });
+  return { parts, fields };
+};
+
+const pickPart = (parts: string[], pattern: RegExp) => parts.find(part => pattern.test(part));
+
+const fieldOrPart = (fields: Map<string, string>, parts: string[], keys: string[], pattern?: RegExp, fallback = '') => {
+  for (const key of keys) {
+    const value = fields.get(key);
+    if (value) return value;
+  }
+  if (pattern) return pickPart(parts, pattern)?.replace(pattern, '$1').trim() || '';
+  return fallback;
+};
 
 const phaseIndexFrom = (text: string) => {
   const normalized = text.trim();
@@ -139,16 +183,49 @@ export function ImmersiveNoticeCard({ notice }: { notice: ImmersiveNotice }) {
 }
 
 function NpcArchiveNotice({ body, compact = false }: { body: string; compact?: boolean }) {
-  const parts = splitNoticeParts(body);
-  const name = parts[0]?.replace(/^姓名[:：]/, '').trim() || '未知角色';
-  const details = parts.slice(1);
+  const { parts, fields } = noticeFieldsFrom(body);
+  const name = fields.get('姓名') || parts[0]?.replace(/^姓名[:：]/, '').trim() || '未知角色';
+  const identity = fieldOrPart(fields, parts, ['身份', '职责'], undefined, parts[1] || '身份待登记');
+  const level = fields.get('等级')
+    || fields.get('机制数值')?.match(/(?:Lv\.?|等级)\s*([0-9]+)/i)?.[1]
+    || pickPart(parts, /(?:Lv\.?|等级)\s*([0-9]+)/i)?.match(/(?:Lv\.?|等级)\s*([0-9]+)/i)?.[1]
+    || '1';
+  const hp = fields.get('生命')
+    || fields.get('HP')
+    || fields.get('机制数值')?.match(/(?:HP|生命)[:：]?\s*([0-9]+\/[0-9]+)/i)?.[1]
+    || pickPart(parts, /(?:HP|生命)[:：]?\s*([0-9]+\/[0-9]+)/i)?.match(/(?:HP|生命)[:：]?\s*([0-9]+\/[0-9]+)/i)?.[1]
+    || '未登记';
+  const mp = fields.get('法力')
+    || fields.get('MP')
+    || fields.get('机制数值')?.match(/(?:MP|法力)[:：]?\s*([0-9]+\/[0-9]+)/i)?.[1]
+    || pickPart(parts, /(?:MP|法力)[:：]?\s*([0-9]+\/[0-9]+)/i)?.match(/(?:MP|法力)[:：]?\s*([0-9]+\/[0-9]+)/i)?.[1]
+    || '未登记';
+  const ac = fields.get('护甲')
+    || fields.get('AC')
+    || fields.get('机制数值')?.match(/(?:AC|护甲)[:：]?\s*([0-9]+)/i)?.[1]
+    || pickPart(parts, /(?:AC|护甲)[:：]?\s*([0-9]+)/i)?.match(/(?:AC|护甲)[:：]?\s*([0-9]+)/i)?.[1]
+    || '未登记';
+  const attributes = fields.get('属性') || fields.get('五维') || pickPart(parts, /力量|敏捷|体质|智力|精神/) || '';
+  const portrait = imageFromField(fields.get('立绘'), name, '立绘');
+  const affiliation = fields.get('所属') || fields.get('所属地区') || fields.get('所属地标') || fields.get('势力') || '';
+  const revisit = fields.get('可回访') || fields.get('可回访地点') || fields.get('可回访事项') || parts.find(part => /可回访|回访/.test(part)) || '';
+  const details = [
+    `身份：${identity}`,
+    `等级：Lv.${level}`,
+    `生命：${hp}`,
+    `法力：${mp}`,
+    `护甲：${ac}`,
+    attributes ? `属性：${attributes}` : '',
+    affiliation ? `所属：${affiliation}` : '',
+    revisit ? `可回访：${revisit}` : '',
+  ].filter(Boolean);
   return (
     <div className={`eldred-notice eldred-notice-npc ${compact ? 'eldred-notice-compact' : ''}`}>
       <div className="eldred-notice-frame">
         <div className="eldred-notice-kicker">NPC 收录</div>
         <div className="eldred-npc-archive">
           <div className="eldred-npc-portrait">
-            <img src={getAvatar(name)} alt={name} />
+            <img src={portrait} alt={name} />
           </div>
           <div className="eldred-npc-body">
             <div className="eldred-npc-name">{name}</div>
@@ -158,6 +235,42 @@ function NpcArchiveNotice({ body, compact = false }: { body: string; compact?: b
               ))}
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CombatNotice({ title, body, compact = false }: { title: string; body: string; compact?: boolean }) {
+  const noticeTitle = stripLabel(title);
+  const { parts, fields } = noticeFieldsFrom(body);
+  const round = fields.get('回合') || fields.get('触发') || parts[0] || noticeTitle;
+  const actor = fields.get('行动者') || fields.get('执行者') || fields.get('单位') || fields.get('触发') || '';
+  const action = fields.get('招式') || fields.get('技能名') || fields.get('行动') || fields.get('阶段') || parts[1] || '';
+  const result = fields.get('结果') || fields.get('命中') || fields.get('判定') || '';
+  const damage = fields.get('伤害') || fields.get('威力') || fields.get('消耗') || '';
+  const status = fields.get('状态') || fields.get('状态变化') || fields.get('下一压力') || fields.get('环境') || '';
+  const detailParts = [
+    actor ? `行动者：${actor}` : '',
+    action ? `行动：${action}` : '',
+    result ? `判定：${result}` : '',
+    damage ? `数值：${damage}` : '',
+    status ? `状态：${status}` : '',
+    ...parts.slice(2),
+  ].filter(Boolean);
+
+  return (
+    <div className={`eldred-notice eldred-notice-combat eldred-combat-notice ${compact ? 'eldred-notice-compact' : ''}`}>
+      <div className="eldred-combat-frame">
+        <div className="eldred-combat-head">
+          <span>{noticeTitle}</span>
+          <strong><HighlightText text={round} /></strong>
+        </div>
+        {action && <div className="eldred-combat-action"><HighlightText text={action} /></div>}
+        <div className="eldred-combat-grid">
+          {detailParts.map((part, index) => (
+            <div className="eldred-combat-cell" key={`${noticeTitle}-${index}`}><HighlightText text={part} /></div>
+          ))}
         </div>
       </div>
     </div>
@@ -259,6 +372,7 @@ function NoticePanel({
   if (kind === 'soft-location') return <LocationLineNotice title={noticeTitle} body={body} />;
   if (kind === 'npc') return <NpcArchiveNotice body={body} compact={compact} />;
   if (kind === 'clue') return <ClueArchiveNotice body={body} compact={compact} />;
+  if (kind === 'combat') return <CombatNotice title={noticeTitle} body={body} compact={compact} />;
   return <StandardNotice title={noticeTitle} body={body} meta={meta} kind={kind} compact={compact} />;
 }
 

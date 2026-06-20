@@ -7,8 +7,18 @@ type NpcPanelProps = {
   npcs?: Character[];
 };
 
+type NpcDetailPage = 'stats' | 'traits' | 'skills' | 'equipment';
+
+const npcDetailPages: { id: NpcDetailPage; label: string }[] = [
+  { id: 'stats', label: '数值' },
+  { id: 'traits', label: '特质' },
+  { id: 'skills', label: '技能' },
+  { id: 'equipment', label: '装备' },
+];
+
 export function NpcPanel({ npcs = [] }: NpcPanelProps) {
   const [selectedNpcId, setSelectedNpcId] = useState('');
+  const [detailPage, setDetailPage] = useState<NpcDetailPage>('stats');
   const selectedNpc = useMemo(
     () => npcs.find(npc => npc.id === selectedNpcId) || npcs[0] || null,
     [npcs, selectedNpcId],
@@ -100,8 +110,22 @@ export function NpcPanel({ npcs = [] }: NpcPanelProps) {
               </div>
             </div>
 
-            <div className="p-5 md:p-8 flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 relative z-10 overflow-y-auto">
-              <div className="space-y-6">
+            <div className="relative z-10 border-b border-white/10 px-4 py-3 md:px-6">
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {npcDetailPages.map(page => (
+                  <button
+                    key={page.id}
+                    onClick={() => setDetailPage(page.id)}
+                    className={`px-3 py-2 rounded border text-xs font-serif tracking-widest whitespace-nowrap ${detailPage === page.id ? 'border-fantasy-gold bg-fantasy-gold/15 text-fantasy-gold' : 'border-white/10 bg-black/20 text-gray-300 hover:border-fantasy-gold/40'}`}
+                  >
+                    {page.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-5 md:p-8 flex-1 relative z-10 overflow-y-auto">
+              {detailPage === 'stats' && (
                 <section className="space-y-4">
                   <h3 className="text-sm font-serif text-fantasy-gold border-b border-white/10 pb-2">机制数值</h3>
                   <div className="grid grid-cols-2 gap-3">
@@ -121,7 +145,9 @@ export function NpcPanel({ npcs = [] }: NpcPanelProps) {
                     <div className="p-2 bg-white/5 rounded text-sm flex justify-between"><span className="text-gray-500">可分配点</span><span className="font-mono text-gray-300">{selectedNpc.availableAttributePoints}</span></div>
                   </div>
                 </section>
+              )}
 
+              {detailPage === 'traits' && (
                 <section className="space-y-4">
                   <h3 className="text-sm font-serif text-fantasy-gold pb-2 border-b border-white/10">情报特质</h3>
                   <div className="flex flex-wrap gap-2">
@@ -130,9 +156,9 @@ export function NpcPanel({ npcs = [] }: NpcPanelProps) {
                     ))}
                   </div>
                 </section>
-              </div>
+              )}
 
-              <div className="space-y-6">
+              {detailPage === 'skills' && (
                 <section className="space-y-4">
                   <h3 className="text-sm font-serif text-fantasy-gold pb-2 border-b border-white/10">已知技能</h3>
                   <div className="space-y-2">
@@ -147,7 +173,9 @@ export function NpcPanel({ npcs = [] }: NpcPanelProps) {
                     ))}
                   </div>
                 </section>
+              )}
 
+              {detailPage === 'equipment' && (
                 <section className="space-y-4">
                   <h3 className="text-sm font-serif text-fantasy-gold pb-2 border-b border-white/10 flex items-center gap-2">
                     <Shield className="w-4 h-4" />
@@ -165,7 +193,7 @@ export function NpcPanel({ npcs = [] }: NpcPanelProps) {
                     ))}
                   </div>
                 </section>
-              </div>
+              )}
             </div>
           </>
         )}

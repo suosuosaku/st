@@ -39,11 +39,11 @@ export function OverviewPanel({
   const travelText = world?.travelState || '未移动';
   const presentCharacters = world?.presentCharacters?.length ? world.presentCharacters.join('、') : '未登记';
   const visibleEntries = [...entries].reverse();
-  const latestEntry = entries[0];
+  const latestEntry = entries.at(-1);
   const latestQuest = runtime?.quests?.[0];
   const latestRelationship = player.relationships[0];
   const latestReputation = player.reputations[0];
-  const latestCombatLog = runtime?.combat.logs[0];
+  const latestCombatLog = runtime?.combat.logs.at(-1);
   const sideRecords = useMemo<OverviewRecord[]>(() => {
     const records: OverviewRecord[] = [];
     if (latestEntry) {

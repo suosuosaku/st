@@ -1,6 +1,6 @@
 import { motion } from 'motion/react';
 import { TabState } from '../types';
-import { LayoutDashboard, Map as MapIcon, Users, Contact, ClipboardList, Package, Sword, Settings } from 'lucide-react';
+import { LayoutDashboard, Map as MapIcon, Users, Contact, ClipboardList, Package, Sword, Settings, SearchCheck } from 'lucide-react';
 
 const TABS: { id: TabState; label: string; icon: any }[] = [
   { id: 'overview', label: '总览', icon: LayoutDashboard },
@@ -8,6 +8,7 @@ const TABS: { id: TabState; label: string; icon: any }[] = [
   { id: 'party', label: '队伍', icon: Users },
   { id: 'npc', label: 'NPC', icon: Contact },
   { id: 'quests', label: '看板', icon: ClipboardList },
+  { id: 'clues', label: '线索', icon: SearchCheck },
   { id: 'inventory', label: '行囊', icon: Package },
   { id: 'combat', label: '战斗', icon: Sword },
   { id: 'system', label: '札记', icon: Settings },

@@ -7,6 +7,7 @@ import { OverviewPanel } from './components/panels/OverviewPanel';
 import { MapPanel } from './components/panels/MapPanel';
 import { PartyPanel } from './components/panels/PartyPanel';
 import { QuestPanel } from './components/panels/QuestPanel';
+import { CluePanel } from './components/panels/CluePanel';
 import { CombatPanel } from './components/panels/CombatPanel';
 import { NpcPanel } from './components/panels/NpcPanel';
 import { EmptyPanel } from './components/panels/EmptyPanel';
@@ -53,10 +54,20 @@ export default function App() {
   useEffect(() => {
     refreshRuntime();
     const onFocus = () => refreshRuntime();
+    const onHostRuntimeEvent = (event: MessageEvent) => {
+      const data = event.data || {};
+      if (data.source !== 'EldredWelcomeLoader' || data.type !== 'runtime-event') return;
+      refreshRuntime();
+    };
+    const onCustomRuntimeEvent = () => refreshRuntime();
     window.addEventListener('focus', onFocus);
+    window.addEventListener('message', onHostRuntimeEvent);
+    window.addEventListener('eldred-runtime-event', onCustomRuntimeEvent);
     const timer = window.setInterval(refreshRuntime, 5000);
     return () => {
       window.removeEventListener('focus', onFocus);
+      window.removeEventListener('message', onHostRuntimeEvent);
+      window.removeEventListener('eldred-runtime-event', onCustomRuntimeEvent);
       window.clearInterval(timer);
     };
   }, [refreshRuntime]);
@@ -192,6 +203,7 @@ export default function App() {
       case 'party': return <PartyPanel player={playerState} onUpdatePlayer={updatePlayerPreview} onUpdateNpcs={updateNpcs} npcs={runtime.npcs} onSubmitEvent={submitRuntimeEvent} />;
       case 'npc': return <NpcPanel npcs={runtime.npcs} />;
       case 'quests': return <QuestPanel quests={runtime.quests} onSubmitEvent={submitRuntimeEvent} />;
+      case 'clues': return <CluePanel cluePhases={runtime.cluePhases} />;
       case 'combat': return <CombatPanel player={playerState} partyNpcs={runtime.npcs.filter(npc => playerState.partyMemberIds.includes(npc.id) || playerState.partyMemberIds.includes(npc.name))} enemyUnits={runtime.combat.enemyUnits} initialTurn={runtime.combat.turn} initialLogs={runtime.combat.logs} runtime={runtime} onSubmitEvent={submitRuntimeEvent} onSubmitCommand={submitCombatCommand} />;
       case 'inventory': return <InventoryPanel player={playerState} />;
       case 'system': return <SystemPanel runtime={runtime} player={playerState} />;

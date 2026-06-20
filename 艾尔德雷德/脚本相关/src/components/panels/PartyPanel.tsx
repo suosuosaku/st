@@ -23,6 +23,16 @@ import {
 
 const defined = <T,>(value: T | undefined | null): value is T => Boolean(value);
 const EMPTY_NPCS: Character[] = [];
+type PartyDetailPage = 'summary' | 'attributes' | 'talents' | 'skills' | 'equipment' | 'relations';
+
+const detailPages: { id: PartyDetailPage; label: string }[] = [
+  { id: 'summary', label: '总览' },
+  { id: 'attributes', label: '五维' },
+  { id: 'talents', label: '天赋' },
+  { id: 'skills', label: '技能' },
+  { id: 'equipment', label: '装备' },
+  { id: 'relations', label: '关系' },
+];
 
 type PartyPanelProps = {
   player: PlayerState;
@@ -80,6 +90,7 @@ const canNpcEquip = (equipment: Equipment, npc: Character) => {
 
 export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_NPCS, onSubmitEvent }: PartyPanelProps) {
   const [selectedId, setSelectedId] = useState('player');
+  const [detailPage, setDetailPage] = useState<PartyDetailPage>('summary');
   const [npcStates, setNpcStates] = useState<Record<string, Character>>(() =>
     Object.fromEntries(npcs.map(npc => [npc.id, npc])),
   );
@@ -92,8 +103,10 @@ export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_
   const race = getRaceById(player.raceId);
   const playerLocationDisplay = formatEldredLocation(undefined, player.location);
   const rosterNpcs = useMemo(() => Object.values(npcStates), [npcStates]);
-  const partyNpcs = useMemo(() => player.partyMemberIds.map(id => npcStates[id]).filter(defined), [npcStates, player.partyMemberIds]);
-  const selectedNpc = selectedId === 'player' ? null : npcStates[selectedId] || null;
+  const partyNpcs = useMemo(() => player.partyMemberIds
+    .map(id => npcStates[id] || Object.values(npcStates).find(npc => npc.name === id || npc.fullName === id))
+    .filter(defined), [npcStates, player.partyMemberIds]);
+  const selectedNpc = selectedId === 'player' ? null : npcStates[selectedId] || Object.values(npcStates).find(npc => npc.name === selectedId || npc.fullName === selectedId) || null;
 
   const rebuildPlayer = (base: PlayerState, loadout: EquipmentLoadout = base.equipmentLoadout, baseAttributes = base.baseAttributes): PlayerState => ({
     ...base,
@@ -397,10 +410,10 @@ export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_
 
           <div className="pt-3 mt-3 border-t border-white/10">
             <div className="text-xs text-fantasy-gold mb-2">可收录同行</div>
-            {rosterNpcs.filter(npc => !player.partyMemberIds.includes(npc.id)).length === 0 && (
+            {rosterNpcs.filter(npc => !player.partyMemberIds.includes(npc.id) && !player.partyMemberIds.includes(npc.name)).length === 0 && (
               <div className="p-3 rounded bg-black/20 border border-white/5 text-xs text-gray-500">暂无可编入同行</div>
             )}
-            {rosterNpcs.filter(npc => !player.partyMemberIds.includes(npc.id)).slice(0, 5).map(npc => (
+            {rosterNpcs.filter(npc => !player.partyMemberIds.includes(npc.id) && !player.partyMemberIds.includes(npc.name)).slice(0, 5).map(npc => (
               <button key={npc.id} onClick={() => addNpcToParty(npc.id)} className="w-full p-2 rounded bg-black/30 border border-white/5 hover:border-fantasy-gold/30 flex items-center justify-between text-left mb-2">
                 <span className="text-xs text-gray-300">{npc.name}</span>
                 <UserPlus className="w-3 h-3 text-fantasy-gold" />
@@ -441,26 +454,54 @@ export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_
           </div>
         </div>
 
-        <div className="p-5 md:p-8 flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 relative z-10 overflow-y-auto">
-          <div className="space-y-6">
+        <div className="relative z-10 border-b border-white/10 px-4 py-3 md:px-6">
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {detailPages.map(page => (
+              <button
+                key={page.id}
+                onClick={() => setDetailPage(page.id)}
+                className={`px-3 py-2 rounded border text-xs font-serif tracking-widest whitespace-nowrap ${detailPage === page.id ? 'border-fantasy-gold bg-fantasy-gold/15 text-fantasy-gold' : 'border-white/10 bg-black/20 text-gray-300 hover:border-fantasy-gold/40'}`}
+              >
+                {page.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="p-5 md:p-8 flex-1 relative z-10 overflow-y-auto">
+          {detailPage === 'summary' && (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div className="pixel-data-tile p-4"><div className="text-xs text-fantasy-gold mb-2">等级</div><div className="font-serif text-2xl text-white">Lv.{selected.level}</div></div>
+              <div className="pixel-data-tile p-4"><div className="text-xs text-fantasy-gold mb-2">生命</div><div className="font-mono text-lg text-white">{selected.stats.hp}/{selected.stats.maxHp}</div></div>
+              <div className="pixel-data-tile p-4"><div className="text-xs text-fantasy-gold mb-2">法力</div><div className="font-mono text-lg text-white">{selected.stats.mp}/{selected.stats.maxMp}</div></div>
+              <div className="pixel-data-tile p-4"><div className="text-xs text-fantasy-gold mb-2">护甲</div><div className="font-mono text-lg text-white">{selected.stats.ac}</div></div>
+              <div className="md:col-span-2 xl:col-span-4 grid gap-3 md:grid-cols-3">
+                <div className="p-3 bg-black/30 border border-white/5 rounded text-sm text-gray-300">职业：{selected.className}</div>
+                <div className="p-3 bg-black/30 border border-white/5 rounded text-sm text-gray-300">种族：{selected.raceName}</div>
+                <div className="p-3 bg-black/30 border border-white/5 rounded text-sm text-gray-300">经验：{selected.experience}/{selected.nextExperience}</div>
+              </div>
+            </div>
+          )}
+
+          {detailPage === 'attributes' && (
             <section className="space-y-4">
               <h3 className="text-sm font-serif text-fantasy-gold flex items-center gap-2 pb-2 border-b border-white/10">
                 <Activity className="w-4 h-4" />
                 五维属性
               </h3>
-              <div className="grid gap-3">
+              <div className="grid gap-3 md:grid-cols-2">
                 {ATTRIBUTE_KEYS.map(key => (
-                  <div key={key} className="p-2 bg-white/5 rounded">
+                  <div key={key} className="p-3 bg-white/5 rounded">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-400">{ATTRIBUTE_LABELS[key]}</span>
+                      <span className="text-sm text-gray-300">{ATTRIBUTE_LABELS[key]}</span>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-white text-lg">{selected.stats[key]}</span>
+                        <span className="font-mono text-white text-xl">{selected.stats[key]}</span>
                         {selected.availablePoints > 0 && (
                           <button onClick={() => allocatePoint(key)} className="btn-rpg w-7 h-7 rounded flex items-center justify-center text-xs">+</button>
                         )}
                       </div>
                     </div>
-                    <div className="text-[11px] text-gray-500 mt-1">{attributeImpact[key]}</div>
+                    <div className="text-xs text-gray-500 mt-2">{attributeImpact[key]}</div>
                   </div>
                 ))}
               </div>
@@ -470,22 +511,24 @@ export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_
                 </div>
               )}
             </section>
+          )}
 
-            {selected.kind === 'player' && (
-              <section className="space-y-4">
-                <h3 className="text-sm font-serif text-fantasy-gold pb-2 border-b border-white/10">光环与伴生天赋</h3>
-                <div className="space-y-2">
+          {detailPage === 'talents' && (
+            <section className="space-y-4">
+              <h3 className="text-sm font-serif text-fantasy-gold pb-2 border-b border-white/10">光环与伴生天赋</h3>
+              {selected.kind === 'player' ? (
+                <div className="grid gap-3 md:grid-cols-2">
                   <div className="p-3 bg-black/30 border border-white/5 rounded">
-                    <div className="text-sm text-gray-200 font-medium">{race.auraName}</div>
+                    <div className="text-sm text-gray-100 font-medium">{race.auraName}</div>
                     <div className="text-xs text-gray-500 mt-1">{race.auraEffect}</div>
                   </div>
                   <div className="p-3 bg-black/30 border border-white/5 rounded">
-                    <div className="text-sm text-gray-200 font-medium">{cls.classAuraName}</div>
+                    <div className="text-sm text-gray-100 font-medium">{cls.classAuraName}</div>
                     <div className="text-xs text-gray-500 mt-1">{cls.classAuraEffect}</div>
                   </div>
                   {talents.map(talent => (
                     <div key={talent.id} className="p-3 bg-black/30 border border-white/5 rounded">
-                      <div className="flex justify-between text-sm text-gray-200 font-medium">
+                      <div className="flex justify-between text-sm text-gray-100 font-medium">
                         <span>{talent.name}</span>
                         <span className="text-fantasy-gold text-xs">{talent.rank}</span>
                       </div>
@@ -493,15 +536,19 @@ export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_
                     </div>
                   ))}
                 </div>
-              </section>
-            )}
+              ) : (
+                <div className="p-4 bg-black/30 border border-white/5 rounded text-sm text-gray-400">NPC 天赋由职业、种族和已收录技能共同体现。</div>
+              )}
+            </section>
+          )}
 
+          {detailPage === 'equipment' && (
             <section className="space-y-4">
               <h3 className="text-sm font-serif text-fantasy-gold flex items-center gap-2 pb-2 border-b border-white/10">
                 <Archive className="w-4 h-4" />
                 装备
               </h3>
-              <div className="space-y-2">
+              <div className="grid gap-3 md:grid-cols-2">
                 {equipmentItems.map(item => {
                   const usable = selected.kind === 'player' ? canEquipEquipment(item, player) : canNpcEquip(item, selectedNpc!);
                   const equipped = equippedIds.includes(item.id);
@@ -509,7 +556,7 @@ export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_
                   const replacedItem = slotItemId && slotItemId !== item.id ? getEquipmentById(slotItemId) : null;
                   return (
                     <div key={item.id} className={`p-3 bg-black/30 border rounded ${usable ? 'border-white/5' : 'border-fantasy-red/30'}`}>
-                      <div className="flex justify-between gap-3 text-sm text-gray-200 font-medium mb-1">
+                      <div className="flex justify-between gap-3 text-sm text-gray-100 font-medium mb-1">
                         <span>{item.name}</span>
                         <span className="text-fantasy-gold text-xs">{item.grade}</span>
                       </div>
@@ -528,64 +575,76 @@ export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_
                 })}
               </div>
             </section>
-          </div>
+          )}
 
-          <div className="space-y-6">
-            <section className="space-y-4">
-              <h3 className="text-sm font-serif text-fantasy-gold pb-2 border-b border-white/10">激活技能 {selected.activeSkillIds.length} / {ACTIVE_SKILL_LIMIT}</h3>
-              <div className="space-y-2">
-                {activeSkills.map(skill => (
-                  <button key={skill.id} onClick={() => toggleSkill(skill.id)} className="w-full text-left p-3 bg-fantasy-gold/10 border border-fantasy-gold/30 rounded hover:bg-fantasy-gold/20">
-                    <div className="flex justify-between text-sm text-white font-medium mb-1">
-                      <span>{skill.name}</span>
-                      <span className="text-fantasy-gold text-xs">{skill.rank} / {skill.mpCost}法力</span>
-                    </div>
-                    <div className="text-xs text-gray-500">{skill.desc}</div>
-                    <div className="text-[11px] text-gray-500 mt-2">需求：{formatRequirements(skill.requirements)}</div>
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            <section className="space-y-4">
-              <h3 className="text-sm font-serif text-fantasy-gold pb-2 border-b border-white/10">技能库</h3>
-              <div className="space-y-2">
-                {librarySkills.length === 0 && (
-                  <div className="p-3 bg-black/30 border border-white/5 rounded text-xs text-gray-500">暂无技能</div>
-                )}
-                {librarySkills.map(skill => {
-                  const equipped = selected.activeSkillIds.includes(skill.id);
-                  const usable = selected.kind === 'player' ? canUseSkill(skill, player) : canNpcUseSkill(skill, selectedNpc!);
-                  return (
-                    <div key={skill.id} className={`p-3 bg-black/30 border rounded ${usable ? 'border-white/5' : 'border-fantasy-red/30'}`}>
-                      <div className="flex justify-between gap-3 text-sm text-gray-200 font-medium">
+          {detailPage === 'skills' && (
+            <div className="grid gap-6 lg:grid-cols-2">
+              <section className="space-y-4">
+                <h3 className="text-sm font-serif text-fantasy-gold pb-2 border-b border-white/10">激活技能 {selected.activeSkillIds.length} / {ACTIVE_SKILL_LIMIT}</h3>
+                <div className="space-y-2">
+                  {activeSkills.map(skill => (
+                    <button key={skill.id} onClick={() => toggleSkill(skill.id)} className="w-full text-left p-3 bg-fantasy-gold/10 border border-fantasy-gold/30 rounded hover:bg-fantasy-gold/20">
+                      <div className="flex justify-between text-sm text-white font-medium mb-1">
                         <span>{skill.name}</span>
                         <span className="text-fantasy-gold text-xs">{skill.rank} / {skill.mpCost}法力</span>
                       </div>
-                      <div className="text-xs text-gray-500 mt-1">{skill.desc}</div>
-                      <div className="text-[11px] text-gray-500 mt-2">
-                        {usable ? '当前可用' : '未达等级/属性/法力/装备需求'} / 需求：{formatRequirements(skill.requirements)}
-                      </div>
-                      <div className="flex gap-2 mt-3">
-                        <button onClick={() => toggleSkill(skill.id)} disabled={!equipped && !usable} className="btn-rpg px-3 py-1.5 rounded text-xs disabled:opacity-30">
-                          {equipped ? '卸下' : '装配'}
-                        </button>
-                        {!equipped && (
-                          <button onClick={() => forgetSkill(skill.id)} className="px-3 py-1.5 rounded text-xs border border-white/10 text-gray-400 hover:text-gray-200 hover:bg-white/5">
-                            遗忘
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
+                      <div className="text-xs text-gray-500">{skill.desc}</div>
+                      <div className="text-[11px] text-gray-500 mt-2">需求：{formatRequirements(skill.requirements)}</div>
+                    </button>
+                  ))}
+                </div>
+              </section>
 
-            {selected.kind === 'player' && (
               <section className="space-y-4">
-                <h3 className="text-sm font-serif text-fantasy-gold pb-2 border-b border-white/10">地区声望</h3>
+                <h3 className="text-sm font-serif text-fantasy-gold pb-2 border-b border-white/10">技能库</h3>
                 <div className="space-y-2">
+                  {librarySkills.length === 0 && (
+                    <div className="p-3 bg-black/30 border border-white/5 rounded text-xs text-gray-500">暂无技能</div>
+                  )}
+                  {librarySkills.map(skill => {
+                    const equipped = selected.activeSkillIds.includes(skill.id);
+                    const usable = selected.kind === 'player' ? canUseSkill(skill, player) : canNpcUseSkill(skill, selectedNpc!);
+                    return (
+                      <div key={skill.id} className={`p-3 bg-black/30 border rounded ${usable ? 'border-white/5' : 'border-fantasy-red/30'}`}>
+                        <div className="flex justify-between gap-3 text-sm text-gray-100 font-medium">
+                          <span>{skill.name}</span>
+                          <span className="text-fantasy-gold text-xs">{skill.rank} / {skill.mpCost}法力</span>
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">{skill.desc}</div>
+                        <div className="text-[11px] text-gray-500 mt-2">
+                          {usable ? '当前可用' : '未达等级/属性/法力/装备需求'} / 需求：{formatRequirements(skill.requirements)}
+                        </div>
+                        <div className="flex gap-2 mt-3">
+                          <button onClick={() => toggleSkill(skill.id)} disabled={!equipped && !usable} className="btn-rpg px-3 py-1.5 rounded text-xs disabled:opacity-30">
+                            {equipped ? '卸下' : '装配'}
+                          </button>
+                          {!equipped && (
+                            <button onClick={() => forgetSkill(skill.id)} className="px-3 py-1.5 rounded text-xs border border-white/10 text-gray-400 hover:text-gray-200 hover:bg-white/5">
+                              遗忘
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            </div>
+          )}
+
+          {detailPage === 'relations' && (
+            <section className="space-y-4">
+              <h3 className="text-sm font-serif text-fantasy-gold pb-2 border-b border-white/10">关系与声望</h3>
+              {selected.kind === 'npc' ? (
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="p-3 bg-black/30 border border-white/5 rounded text-sm text-gray-300">好感：{selected.favorability}</div>
+                  <div className="p-3 bg-black/30 border border-white/5 rounded text-sm text-gray-300">关系：{selected.relation}</div>
+                </div>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {player.reputations.length === 0 && (
+                    <div className="p-3 bg-black/30 border border-white/5 rounded text-xs text-gray-500">暂无地区声望记录</div>
+                  )}
                   {player.reputations.map(rep => (
                     <div key={rep.regionId} className="p-3 bg-black/30 border border-white/5 rounded">
                       <div className="flex justify-between text-sm">
@@ -596,9 +655,9 @@ export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_
                     </div>
                   ))}
                 </div>
-              </section>
-            )}
-          </div>
+              )}
+            </section>
+          )}
         </div>
       </div>
     </div>

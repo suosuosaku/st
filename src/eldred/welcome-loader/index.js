@@ -1,16 +1,17 @@
 (() => {
-  const BUILD_ID = 'eldred-welcome-loader-v3.4.9';
-  const VERSION_REF = 'eldred-integrated-v3.4.9';
+  const BUILD_ID = 'eldred-welcome-loader-v3.5.0';
+  const VERSION_REF = 'eldred-integrated-v3.5.0';
   const GLOBAL_KEY = '__eldredWelcomeLoader';
   const FRAME_SELECTOR = '[data-eldred-welcome-console="true"]';
   const FULL_UI_BASE = detectFullUiBase();
   const FULL_UI_ASSETS = {
-    script: 'assets/index-Df8tJkJE.js',
-    style: 'assets/index-C4h09fOW.css',
+    script: 'assets/index-CElSoV1a.js',
+    style: 'assets/index-CuRMzv8z.css',
   };
   let iframeEl = null;
   let exitButtonEl = null;
   let viewportDestroy = null;
+  let runtimeEventDestroy = null;
   let stopped = false;
   const escapeKeyTargets = [];
 
@@ -98,6 +99,22 @@
     return null;
   }
 
+  function findMvuEvents() {
+    const scopes = uniqueScopes([
+      globalThis,
+      window,
+      (() => { try { return window.parent; } catch (error) { return null; } })(),
+      (() => { try { return window.top; } catch (error) { return null; } })(),
+      (() => { try { return hostWindow(); } catch (error) { return null; } })(),
+    ]);
+    for (const scope of scopes) {
+      try {
+        if (scope?.Mvu?.events) return scope.Mvu.events;
+      } catch (error) {}
+    }
+    return null;
+  }
+
   function installHostBridge() {
     const bridge = {
       build: BUILD_ID,
@@ -115,6 +132,18 @@
         const replaceVariables = findCallable('replaceVariables');
         if (!replaceVariables) return false;
         return replaceVariables(variables, option);
+      },
+      getLastMessageId() {
+        const getLastMessageId = findCallable('getLastMessageId');
+        return getLastMessageId ? getLastMessageId() : undefined;
+      },
+      getCurrentMessageId() {
+        const getCurrentMessageId = findCallable('getCurrentMessageId');
+        return getCurrentMessageId ? getCurrentMessageId() : undefined;
+      },
+      getChatMessages(range, option) {
+        const getChatMessages = findCallable('getChatMessages');
+        return getChatMessages ? getChatMessages(range, option) : [];
       },
       generateRaw(config) {
         const generateRaw = findCallable('generateRaw');
@@ -290,6 +319,61 @@
     update();
   }
 
+  function postRuntimeEvent(name, args) {
+    const target = iframeEl?.contentWindow;
+    try {
+      target?.postMessage({
+        source: 'EldredWelcomeLoader',
+        type: 'runtime-event',
+        name,
+        args: Array.from(args || []).map(value => {
+          if (value && typeof value === 'object') return '[object]';
+          return value;
+        }),
+        at: Date.now(),
+      }, '*');
+    } catch (error) {
+      console.warn('[EldredWelcomeLoader] runtime event post failed', error);
+    }
+  }
+
+  function bindRuntimeEvents() {
+    if (runtimeEventDestroy) runtimeEventDestroy();
+    const eventOnFn = findCallable('eventOn');
+    const tavernEventMap = (() => {
+      try { return hostWindow().tavern_events || window.tavern_events || globalThis.tavern_events; } catch (error) { return null; }
+    })();
+    const mvuEvents = findMvuEvents();
+    const disposers = [];
+    const bind = (eventName, label) => {
+      if (!eventOnFn || !eventName) return;
+      try {
+        const dispose = eventOnFn(eventName, (...args) => postRuntimeEvent(label || eventName, args));
+        if (typeof dispose === 'function') disposers.push(dispose);
+        else if (typeof dispose?.stop === 'function') disposers.push(() => dispose.stop());
+      } catch (error) {
+        console.warn('[EldredWelcomeLoader] runtime event bind failed', label || eventName, error);
+      }
+    };
+
+    bind(mvuEvents?.VARIABLE_UPDATE_ENDED, 'mvu-variable-update-ended');
+    bind(mvuEvents?.BEFORE_MESSAGE_UPDATE, 'mvu-before-message-update');
+    bind(tavernEventMap?.GENERATION_ENDED, 'generation-ended');
+    bind(tavernEventMap?.MESSAGE_RECEIVED, 'message-received');
+    bind(tavernEventMap?.MESSAGE_UPDATED, 'message-updated');
+    bind(tavernEventMap?.MESSAGE_EDITED, 'message-edited');
+    bind(tavernEventMap?.MESSAGE_SWIPED, 'message-swiped');
+    bind(tavernEventMap?.CHARACTER_MESSAGE_RENDERED, 'character-message-rendered');
+    bind(tavernEventMap?.CHAT_CHANGED, 'chat-changed');
+
+    runtimeEventDestroy = () => {
+      disposers.forEach(dispose => {
+        try { dispose(); } catch (error) {}
+      });
+      disposers.length = 0;
+    };
+  }
+
   function mountWelcomeDocument(iframe) {
     if (!iframe || iframe.dataset.eldredWelcomeMounted === 'true') return;
     const doc = iframe.contentDocument;
@@ -434,10 +518,27 @@
 
   function bootstrap() {
     installHostBridge();
+    bindRuntimeEvents();
+    setTimeout(() => {
+      installHostBridge();
+      bindRuntimeEvents();
+      postRuntimeEvent('runtime-bridge-refresh', []);
+    }, 1000);
+    setTimeout(() => {
+      installHostBridge();
+      bindRuntimeEvents();
+      postRuntimeEvent('runtime-bridge-refresh', []);
+    }, 3000);
     registerScriptButton();
     hostWindow().addEventListener('message', handleMessage);
     mountConsole();
-    try { $(window).on('pagehide', unmountConsole); } catch (error) {}
+    try {
+      $(window).on('pagehide', () => {
+        runtimeEventDestroy?.();
+        runtimeEventDestroy = null;
+        unmountConsole();
+      });
+    } catch (error) {}
   }
 
   if (typeof $ === 'function') $(bootstrap);
