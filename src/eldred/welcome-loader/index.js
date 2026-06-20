@@ -1,12 +1,12 @@
 (() => {
-  const BUILD_ID = 'eldred-welcome-loader-v3.5.3';
-  const VERSION_REF = 'eldred-integrated-v3.5.3';
+  const BUILD_ID = 'eldred-welcome-loader-v3.5.4';
+  const VERSION_REF = 'eldred-integrated-v3.5.4';
   const GLOBAL_KEY = '__eldredWelcomeLoader';
   const FRAME_SELECTOR = '[data-eldred-welcome-console="true"]';
   const FULL_UI_BASE = detectFullUiBase();
   const FULL_UI_ASSETS = {
-    script: 'assets/index-YPcKe08V.js',
-    style: 'assets/index-BlNPw-_s.css',
+    script: 'assets/index-CSTGentz.js',
+    style: 'assets/index-DjJPPWc6.css',
   };
   let iframeEl = null;
   let exitButtonEl = null;
@@ -94,9 +94,10 @@
     for (const scope of scopes) {
       try {
         if (typeof scope?.Mvu?.[name] === 'function') return scope.Mvu[name].bind(scope.Mvu);
+        if (typeof scope?.TavernHelper?.Mvu?.[name] === 'function') return scope.TavernHelper.Mvu[name].bind(scope.TavernHelper.Mvu);
       } catch (error) {}
     }
-    return null;
+    return findCallable(name);
   }
 
   function findMvuGetter() {
@@ -114,6 +115,7 @@
     for (const scope of scopes) {
       try {
         if (scope?.Mvu?.events) return scope.Mvu.events;
+        if (scope?.TavernHelper?.Mvu?.events) return scope.TavernHelper.Mvu.events;
       } catch (error) {}
     }
     return null;
@@ -223,12 +225,18 @@
         },
         parseMessage(message, oldData) {
           const parseMessage = findMvuMethod('parseMessage');
-          if (!parseMessage) throw Error('未检测到 MVU parseMessage()。请确认 MVU 变量框架已加载。');
+          if (!parseMessage) {
+            console.warn('[EldredWelcomeLoader] 未检测到 MVU parseMessage()，跳过本次变量解析。');
+            return null;
+          }
           return parseMessage(message, oldData);
         },
         replaceMvuData(data, option) {
           const replaceMvuData = findMvuMethod('replaceMvuData');
-          if (!replaceMvuData) throw Error('未检测到 MVU replaceMvuData()。请确认 MVU 变量框架已加载。');
+          if (!replaceMvuData) {
+            console.warn('[EldredWelcomeLoader] 未检测到 MVU replaceMvuData()，跳过本次变量写回。');
+            return false;
+          }
           return replaceMvuData(data, option);
         },
       },

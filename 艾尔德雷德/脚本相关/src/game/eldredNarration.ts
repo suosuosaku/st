@@ -77,6 +77,7 @@ const getMvuBridge = (): MvuBridge | null => {
   for (const scope of getHostScopes()) {
     try {
       if (scope.Mvu && typeof scope.Mvu === 'object') return scope.Mvu as MvuBridge;
+      if (scope.TavernHelper?.Mvu && typeof scope.TavernHelper.Mvu === 'object') return scope.TavernHelper.Mvu as MvuBridge;
       if (scope.__eldredWelcomeBridge?.Mvu && typeof scope.__eldredWelcomeBridge.Mvu === 'object') {
         return scope.__eldredWelcomeBridge.Mvu as MvuBridge;
       }
@@ -175,15 +176,20 @@ const syncGeneratedMvuVariables = async (rawText: string) => {
     console.warn('[艾尔德雷德] 未检测到完整 MVU 接口，无法解析本次 <UpdateVariable>。');
     return false;
   }
-  const { option, oldData } = resolveMvuWriteContext(mvu);
-  const parsed = await mvu.parseMessage(rawText, oldData || {});
-  if (!parsed || typeof parsed !== 'object') {
-    console.warn('[艾尔德雷德] MVU parseMessage 未返回变量对象。');
+  try {
+    const { option, oldData } = resolveMvuWriteContext(mvu);
+    const parsed = await mvu.parseMessage(rawText, oldData || {});
+    if (!parsed || typeof parsed !== 'object') {
+      console.warn('[艾尔德雷德] MVU parseMessage 未返回变量对象。');
+      return false;
+    }
+    await mvu.replaceMvuData(parsed, option);
+    notifyRuntimeChanged();
+    return true;
+  } catch (error) {
+    console.warn('[艾尔德雷德] MVU 同步失败，保留本次正文。', error);
     return false;
   }
-  await mvu.replaceMvuData(parsed, option);
-  notifyRuntimeChanged();
-  return true;
 };
 
 const mergeSyncedRuntime = (previous: EldredRuntimeSave) => {
@@ -469,6 +475,39 @@ const appendGeneratedEntry = (
   });
 };
 
+const stripNarrationMessagePair = (
+  messages: EldredRuntimeMessage[],
+  latest: EldredNarrationEntry,
+) => {
+  for (let index = messages.length - 2; index >= 0; index -= 1) {
+    const userMessage = messages[index];
+    const assistantMessage = messages[index + 1];
+    if (
+      userMessage?.role === 'user'
+      && assistantMessage?.role === 'assistant'
+      && userMessage.text === latest.userInput
+      && assistantMessage.text === latest.text
+    ) {
+      return [
+        ...messages.slice(0, index),
+        ...messages.slice(index + 2),
+      ];
+    }
+  }
+  return messages;
+};
+
+const runtimeWithoutLatestNarration = (runtime: EldredRuntimeSave, latest: EldredNarrationEntry): EldredRuntimeSave => ({
+  ...runtime,
+  narration: {
+    ...runtime.narration,
+    entries: runtime.narration.entries.filter(entry => entry.id !== latest.id),
+    lastError: undefined,
+  },
+  messages: stripNarrationMessagePair(runtime.messages, latest),
+  updatedAt: nowIso(),
+});
+
 const persistGenerationError = (runtime: EldredRuntimeSave, error: unknown) => {
   const text = error instanceof Error ? error.message : String(error);
   return persistEldredRuntimeCache({
@@ -569,6 +608,37 @@ export const generateEldredNarrationFromEvent = async (
       userInput,
       text: content,
       sourceEventType: input.eventType,
+      characterTags: extractCharacterTags(content),
+    });
+  } catch (error) {
+    return persistGenerationError(runtime, error);
+  }
+};
+
+export const rerollLatestEldredNarration = async (runtime: EldredRuntimeSave) => {
+  const latest = runtime.narration.entries[0];
+  if (!latest) return runtime;
+  const sourceRuntime = runtimeWithoutLatestNarration(runtime, latest);
+  const rerollPrompt = [
+    buildBaseSystemPrompt(sourceRuntime, latest.userInput, latest.kind),
+    '重新生成当前轮正文。保留本轮输入事实，替换上一版正文。需要输出 <content> 与 <UpdateVariable>。',
+  ].join('\n\n');
+  try {
+    const rawText = await generateWithEldredPreset({
+      runtime: sourceRuntime,
+      userInput: latest.userInput,
+      systemPrompt: rerollPrompt,
+      worldbookScanText: buildWorldbookScanText(sourceRuntime, latest.userInput, latest.sourceEventType || latest.kind),
+    });
+    await syncGeneratedMvuVariables(rawText);
+    const syncedRuntime = mergeSyncedRuntime(sourceRuntime);
+    const content = extractEldredContentBlock(rawText);
+    return appendGeneratedEntry(syncedRuntime, {
+      kind: latest.kind,
+      title: latest.title,
+      userInput: latest.userInput,
+      text: content,
+      sourceEventType: latest.sourceEventType,
       characterTags: extractCharacterTags(content),
     });
   } catch (error) {

@@ -350,6 +350,16 @@ const readMvuData = (): AnyRecord | null => {
           }
         }
       }
+      if (api.TavernHelper?.Mvu && typeof api.TavernHelper.Mvu.getMvuData === 'function') {
+        for (const messageId of currentMessageIds()) {
+          try {
+            const statData = extractStatData(api.TavernHelper.Mvu.getMvuData({ type: 'message', message_id: messageId }));
+            if (statData) return statData;
+          } catch {
+            // Try the next message id shape.
+          }
+        }
+      }
       if (api.__eldredWelcomeBridge?.Mvu && typeof api.__eldredWelcomeBridge.Mvu.getMvuData === 'function') {
         for (const messageId of currentMessageIds()) {
           try {

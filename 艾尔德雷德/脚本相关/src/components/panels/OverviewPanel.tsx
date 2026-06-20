@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Clock, Loader2, MapPin, Send, ShieldAlert, ScrollText } from 'lucide-react';
+import { Clock, Loader2, MapPin, RefreshCw, Send, ShieldAlert, ScrollText } from 'lucide-react';
 import { RichNarrative } from '../ImmersiveText';
 import { PlayerState } from '../../types';
 import { EldredRuntimeSave } from '../../game/eldredSave';
@@ -21,12 +21,16 @@ export function OverviewPanel({
   isGenerating,
   runtime,
   onSubmitFreeInput,
+  onRerollLatest,
+  canReroll = false,
 }: {
   player: PlayerState;
   interactionStatus: string;
   isGenerating: boolean;
   runtime?: EldredRuntimeSave;
   onSubmitFreeInput?: (text: string) => Promise<void>;
+  onRerollLatest?: () => Promise<void>;
+  canReroll?: boolean;
 }) {
   const [draft, setDraft] = useState('');
   const narrativeScrollRef = useRef<HTMLDivElement>(null);
@@ -39,7 +43,7 @@ export function OverviewPanel({
   const travelText = world?.travelState || '未移动';
   const presentCharacters = world?.presentCharacters?.length ? world.presentCharacters.join('、') : '未登记';
   const visibleEntries = [...entries].reverse();
-  const latestEntry = entries.at(-1);
+  const latestEntry = entries[0];
   const latestQuest = runtime?.quests?.[0];
   const boardItems = runtime?.world.dynamicBoard?.slice(0, 6) || [];
   const latestRelationship = player.relationships[0];
@@ -136,9 +140,14 @@ export function OverviewPanel({
     await onSubmitFreeInput?.(text);
   };
 
+  const rerollLatest = async () => {
+    if (!canReroll || isGenerating) return;
+    await onRerollLatest?.();
+  };
+
   return (
-    <div className="h-full w-full flex flex-col xl:flex-row gap-4 xl:gap-6 overflow-y-auto xl:overflow-hidden">
-      <div className="flex-1 min-h-[420px] xl:min-h-0 parchment-panel rounded-lg p-5 md:p-8 flex flex-col relative overflow-hidden">
+    <div data-eldred-overview="true" className="h-full w-full flex flex-col xl:flex-row gap-4 xl:gap-6 overflow-y-auto xl:overflow-hidden">
+      <div data-eldred-overview-main="true" className="flex-1 min-h-[420px] xl:min-h-0 parchment-panel rounded-lg p-5 md:p-8 flex flex-col relative overflow-hidden">
         <div className="flex items-center gap-2 border-b border-[#8b4513]/20 pb-4 mb-4">
           <ScrollText className="w-6 h-6 text-[#8b4513]" />
           <h2 className="text-xl font-bold text-[#5c3a21] tracking-widest">正文控制台</h2>
@@ -182,19 +191,30 @@ export function OverviewPanel({
             <div className="flex-1 bg-white/40 border border-[#8b4513]/30 rounded px-3 md:px-4 py-2.5 text-sm text-[#3A2C1D]">
               {interactionStatus}
             </div>
-            <button
-              onClick={submitDraft}
-              disabled={!draft.trim() || isGenerating}
-              className="btn-rpg px-5 py-2.5 rounded text-sm flex items-center justify-center gap-2 disabled:opacity-40"
-            >
-              {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              发送
-            </button>
+            <div className="flex flex-row gap-2 sm:w-auto">
+              <button
+                onClick={rerollLatest}
+                disabled={!canReroll || isGenerating}
+                className="btn-rpg px-4 py-2.5 rounded text-sm flex items-center justify-center gap-2 disabled:opacity-40"
+                title="重新生成当前轮正文"
+              >
+                <RefreshCw className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
+                重掷本轮
+              </button>
+              <button
+                onClick={submitDraft}
+                disabled={!draft.trim() || isGenerating}
+                className="btn-rpg px-5 py-2.5 rounded text-sm flex items-center justify-center gap-2 disabled:opacity-40"
+              >
+                {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                发送
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="w-full xl:w-80 flex flex-col gap-4">
+      <div data-eldred-overview-side="true" className="w-full xl:w-80 flex flex-col gap-4">
         <div className="glass-panel p-5 rounded-lg flex flex-col gap-3">
           <div className="text-fantasy-gold font-serif text-sm border-b border-fantasy-gold/20 pb-2">当前位置</div>
           <div className="flex items-center gap-3">

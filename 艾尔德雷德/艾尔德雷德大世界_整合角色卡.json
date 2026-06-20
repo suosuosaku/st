@@ -14983,7 +14983,7 @@
             "enabled": true,
             "name": "艾尔德雷德脚本",
             "id": "eldred-main-v350",
-            "content": "import 'https://testingcf.jsdelivr.net/gh/suosuosaku/st@eldred-integrated-v3.5.3/dist/eldred/welcome-loader/index.js'",
+            "content": "import 'https://testingcf.jsdelivr.net/gh/suosuosaku/st@eldred-integrated-v3.5.4/dist/eldred/welcome-loader/index.js'",
             "info": "艾尔德雷德开局入口。导入后接管页面，可用脚本按钮重新打开。",
             "button": {
               "enabled": true,
@@ -14995,14 +14995,14 @@
               ]
             },
             "data": {
-              "version": "eldred-integrated-v3.5.3"
+              "version": "eldred-integrated-v3.5.4"
             }
           }
         ],
         "variables": {}
       },
       "eldred_bundle": {
-        "version": "2026-06-21-eldred-integrated-v3.5.3",
+        "version": "2026-06-21-eldred-integrated-v3.5.4",
         "worldbook_entry_count": 296,
         "preset_prompt_count": 140,
         "frontend": {
@@ -17816,7 +17816,7 @@
                   "enabled": true,
                   "name": "智脑",
                   "id": "3b767bf4-a24a-4b08-a39d-28b1fb90c547",
-                  "content": "import 'https://testingcf.jsdelivr.net/gh/suosuosaku/st@eldred-integrated-v3.5.3/dist/%E6%99%BA%E8%84%91/index.js'",
+                  "content": "import 'https://testingcf.jsdelivr.net/gh/suosuosaku/st@eldred-integrated-v3.5.4/dist/%E6%99%BA%E8%84%91/index.js'",
                   "info": "",
                   "button": {
                     "enabled": true,
@@ -17891,7 +17891,7 @@
                         "smallSummaryApiFormat": "openai"
                       }
                     },
-                    "version": "eldred-integrated-v3.5.3"
+                    "version": "eldred-integrated-v3.5.4"
                   }
                 }
               ],

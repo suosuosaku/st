@@ -24,6 +24,7 @@ import {
   generateEldredNarrationFromEvent,
   generateEldredNarrationFromInput,
   generateEldredNarrationFromOpening,
+  rerollLatestEldredNarration,
 } from './game/eldredNarration';
 import {
   dispatchEldredCombatCommand,
@@ -179,6 +180,33 @@ export default function App() {
     }
   };
 
+  const rerollCurrentNarration = async () => {
+    if (!playerState || !runtime.narration.entries.length || isGeneratingNarration) return;
+    setInteractionStatus('本轮重掷中');
+    setIsGeneratingNarration(true);
+    try {
+      const sourceRuntime = {
+        ...loadEldredRuntimeSave(),
+        player: playerState,
+        npcs: runtime.npcs,
+        quests: runtime.quests,
+        cluePhases: runtime.cluePhases,
+        combat: runtime.combat,
+        world: runtime.world,
+        narration: runtime.narration,
+        messages: runtime.messages,
+      };
+      const generatedRuntime = await rerollLatestEldredNarration(sourceRuntime);
+      setRuntime(generatedRuntime);
+      setPlayerState(generatedRuntime.player || playerState);
+      setInteractionStatus(generatedRuntime.narration.lastError ? generatedRuntime.narration.lastError : '本轮已重掷');
+    } catch (error) {
+      setInteractionStatus(error instanceof Error ? error.message : '本轮重掷失败');
+    } finally {
+      setIsGeneratingNarration(false);
+    }
+  };
+
   const updatePlayerPreview = (updater: PlayerState | ((prev: PlayerState) => PlayerState)) => {
     setPlayerState(prev => {
       if (!prev) return prev;
@@ -198,7 +226,7 @@ export default function App() {
   const renderActivePanel = () => {
     if (!playerState) return <EmptyPanel title="等待入局" message="尚未读取到角色变量" />;
     switch (activeTab) {
-      case 'overview': return <OverviewPanel player={playerState} interactionStatus={interactionStatus} isGenerating={isGeneratingNarration} runtime={runtime} onSubmitFreeInput={submitFreeInput} />;
+      case 'overview': return <OverviewPanel player={playerState} interactionStatus={interactionStatus} isGenerating={isGeneratingNarration} runtime={runtime} onSubmitFreeInput={submitFreeInput} onRerollLatest={rerollCurrentNarration} canReroll={runtime.narration.entries.length > 0} />;
       case 'map': return <MapPanel player={playerState} runtime={runtime} />;
       case 'party': return <PartyPanel player={playerState} onUpdatePlayer={updatePlayerPreview} onUpdateNpcs={updateNpcs} npcs={runtime.npcs} onSubmitEvent={submitRuntimeEvent} />;
       case 'npc': return <NpcPanel npcs={runtime.npcs} />;
@@ -228,6 +256,7 @@ export default function App() {
         ) : (
           <motion.div
             key="playing"
+            data-eldred-playing="true"
             className="w-full h-full p-3 pt-16 lg:pl-24 lg:pr-8 lg:py-8 relative flex"
             initial={{ opacity: 0, backdropFilter: 'blur(10px)' }}
             animate={{ opacity: 1, backdropFilter: 'blur(0px)' }}
@@ -240,7 +269,7 @@ export default function App() {
               onToggleExpand={() => setHudExpanded(!hudExpanded)}
             />
 
-            <div className="flex-1 ml-0 lg:ml-4 relative min-w-0">
+            <div data-eldred-main="true" className="flex-1 ml-0 lg:ml-4 relative min-w-0">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={activeTab}
