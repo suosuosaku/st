@@ -495,6 +495,23 @@ const raceAliases: Record<string, CharacterRaceId> = {
   侏儒: 'gnome',
   镜裔: 'mirrorborn',
   潮裔: 'tideborn',
+  妖精: 'fae',
+  妖精混血: 'fae-blood',
+  半妖精: 'fae-blood',
+  兽裔: 'beastkin',
+  兽人: 'orc',
+  地精: 'goblin',
+  龙裔: 'dragonborn',
+  魔裔: 'tiefling',
+  提夫林: 'tiefling',
+  天裔: 'aasimar',
+  神裔: 'aasimar',
+  树裔: 'treeborn',
+  羽裔: 'wingborn',
+  雪裔: 'frostborn',
+  记录灵: 'record-spirit',
+  构装体: 'record-spirit',
+  构装灵: 'record-spirit',
 };
 
 const resolveClassId = (value: unknown): CharacterClassId => {
@@ -1451,11 +1468,12 @@ const cluePhasesFromStatData = (statData: AnyRecord): CluePhase[] => {
     const clues = phaseDef.clues.map((clue, slot) => {
       const override = clueOverrideFromVariable(phaseDef.phase, slot, clue.id, rowClues, matrixClues);
       const status = unlockedClueStatus(override.状态);
+      const unlocked = status !== '未解锁';
       return clueRecordFromCanonical(clue, slot, {
         status,
-        location: textOf(override.发现地点 ?? override.地点, clue.location),
-        carrier: textOf(override.载体, clue.carrier),
-        detail: textOf(override.展开详情 ?? override.指向 ?? override.详情 ?? override.内容, clue.detail),
+        location: unlocked ? textOf(override.发现地点 ?? override.地点, clue.location) : '',
+        carrier: unlocked ? textOf(override.载体, clue.carrier) : '',
+        detail: unlocked ? textOf(override.展开详情 ?? override.指向 ?? override.详情 ?? override.内容, clue.detail) : '',
       });
     });
     const fallbackProgress = `${Math.min(3, clues.filter(clue => clue.status !== '未解锁').length)}/3`;

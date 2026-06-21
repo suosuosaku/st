@@ -44,7 +44,19 @@ export type CharacterRaceId =
   | 'halfling'
   | 'gnome'
   | 'mirrorborn'
-  | 'tideborn';
+  | 'tideborn'
+  | 'fae'
+  | 'fae-blood'
+  | 'beastkin'
+  | 'orc'
+  | 'goblin'
+  | 'dragonborn'
+  | 'tiefling'
+  | 'aasimar'
+  | 'treeborn'
+  | 'wingborn'
+  | 'frostborn'
+  | 'record-spirit';
 
 export type CharacterIdentity = {
   name: string;

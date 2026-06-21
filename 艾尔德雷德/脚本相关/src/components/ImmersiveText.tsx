@@ -19,6 +19,8 @@ const noticeKindMap: Record<string, NoticeKind> = {
   委托接取: 'quest',
   委托生成: 'quest',
   委托完成: 'quest',
+  委托结算: 'quest',
+  奖励结算: 'quest',
   NPC收录: 'npc',
   线索收录: 'clue',
   线索更新: 'clue',

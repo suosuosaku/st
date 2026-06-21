@@ -1332,6 +1332,17 @@ body {
     rgba(0, 0, 0, 0.24);
 }
 
+.eldred-clue-page-row.is-locked {
+  opacity: 0.68;
+  filter: saturate(0.72);
+}
+
+.eldred-clue-page-row.is-complete {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 239, 180, 0.12),
+    0 0 16px rgba(255, 210, 80, 0.08);
+}
+
 .eldred-clue-page-index {
   display: grid;
   place-items: center;
@@ -1389,6 +1400,10 @@ body {
 
 button.eldred-clue-page-token {
   cursor: pointer;
+}
+
+button.eldred-clue-page-token:disabled {
+  cursor: default;
 }
 
 .eldred-clue-page-token.is-found,

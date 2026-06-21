@@ -71,6 +71,7 @@ const getHostFunction = <T extends (...args: any[]) => any>(name: string): T | n
   for (const scope of getHostScopes()) {
     try {
       if (typeof scope[name] === 'function') return scope[name] as T;
+      if (scope.TavernHelper && typeof scope.TavernHelper[name] === 'function') return scope.TavernHelper[name] as T;
       const eldredBridge = scope.__eldredWelcomeBridge;
       if (eldredBridge && typeof eldredBridge[name] === 'function') return eldredBridge[name] as T;
     } catch {
@@ -497,16 +498,50 @@ const syncQuestTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
   const status = tag.title === '委托接取' ? '进行中' : tagValue(tag, ['状态']) || '可接取';
   const quest = parseQuestTag(tag, status);
   const title = cleanText(quest.标题);
-  if (tag.title === '委托接取' || status === '进行中') {
+  const questList = ensureRecordAt(statData, ['主角', '任务列表']);
+  const existingQuest = asRecord(questList[title]);
+  const mergedQuest = { ...existingQuest, ...quest };
+  const normalizedStatus = cleanText(status);
+
+  if (/已结算|结算完成|奖励已结算|已领取|已发放/.test(normalizedStatus)) {
+    delete questList[title];
     removeBoardRecord(statData, '委托', title);
-    const questList = ensureRecordAt(statData, ['主角', '任务列表']);
-    questList[title] = { ...asRecord(questList[title]), ...quest, 状态: '进行中' };
+    return;
+  }
+
+  if (/已完成|完成|待结算/.test(normalizedStatus)) {
+    removeBoardRecord(statData, '委托', title);
+    questList[title] = { ...mergedQuest, 状态: normalizedStatus.includes('待结算') ? '待结算' : '已完成' };
+    return;
+  }
+
+  if (tag.title === '委托接取' || normalizedStatus === '进行中' || Object.keys(existingQuest).length) {
+    removeBoardRecord(statData, '委托', title);
+    questList[title] = {
+      ...mergedQuest,
+      状态: tag.title === '委托接取' || normalizedStatus === '可接取' ? '进行中' : normalizedStatus || '进行中',
+    };
     return;
   }
   updateBoardRecord(statData, '委托', title, quest);
 };
 
 const completeQuestTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
+  const title = tagValue(tag, ['标题', '名称', '委托']) || tagPrimary(tag, 0);
+  if (!title) return;
+  removeBoardRecord(statData, '委托', title);
+  const questList = ensureRecordAt(statData, ['主角', '任务列表']);
+  const existing = asRecord(questList[title]);
+  const quest = parseQuestTag(tag, '已完成');
+  questList[title] = {
+    ...existing,
+    ...quest,
+    状态: tagValue(tag, ['状态']) || '已完成',
+    完成时间: tagValue(tag, ['时间', '完成时间']) || existing.完成时间,
+  };
+};
+
+const settleQuestTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
   const title = tagValue(tag, ['标题', '名称', '委托']) || tagPrimary(tag, 0);
   if (!title) return;
   delete ensureRecordAt(statData, ['主角', '任务列表'])[title];
@@ -734,6 +769,7 @@ const syncNarrativeTagsToStatData = (rawText: string, previousStatData: unknown)
     if (tag.title === '见闻' || tag.title === '见闻更新') updateBoardRecord(nextStatData, '见闻', boardNewsFromTag(tag, '见闻').标题, boardNewsFromTag(tag, '见闻'));
     if (tag.title === '委托接取' || tag.title === '委托生成' || tag.title === '委托更新') syncQuestTag(nextStatData, tag);
     if (tag.title === '委托完成') completeQuestTag(nextStatData, tag);
+    if (tag.title === '委托结算' || tag.title === '奖励结算') settleQuestTag(nextStatData, tag);
     if (tag.title === 'NPC收录') syncNpcTag(nextStatData, tag);
     if (tag.title === '线索收录' || tag.title === '线索更新' || tag.title === '线索进展') syncClueTag(nextStatData, tag);
     if (tag.title === '战斗实况' || tag.title === '战斗回合' || tag.title === '战斗行动' || tag.title === '战斗开始') syncCombatTag(nextStatData, tag);
@@ -744,6 +780,10 @@ const syncNarrativeTagsToStatData = (rawText: string, previousStatData: unknown)
 };
 
 export const syncEldredNarrativeTagsToStatData = syncNarrativeTagsToStatData;
+export const writeEldredStatDataToHost = writeStatDataToHost;
+export const extractEldredJsonPatchOperations = extractJsonPatchOperations;
+export const applyEldredJsonPatchOperations = applyJsonPatchOperations;
+export const getEldredHostFunction = getHostFunction;
 
 const deriveFrontendNoticesFromNarrativeTags = syncNarrativeTagsToStatData;
 
@@ -909,6 +949,8 @@ const ELDRED_NOTICE_TAGS = [
   '委托接取',
   '委托生成',
   '委托完成',
+  '委托结算',
+  '奖励结算',
   'NPC收录',
   '线索收录',
   '线索更新',

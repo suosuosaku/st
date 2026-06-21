@@ -205,7 +205,7 @@ const rawEldredFixedNpcRegistry: Character[] = [
     "fullName": "艾米",
     "type": "NPC登记",
     "race": "妖精混血",
-    "raceId": "human",
+    "raceId": "fae-blood",
     "gender": "女",
     "age": "19岁",
     "affiliation": "酒馆大厅、后厨窗口、二楼客房走廊",
@@ -637,7 +637,7 @@ const rawEldredFixedNpcRegistry: Character[] = [
     "fullName": "布兰妲",
     "type": "NPC登记",
     "race": "兽裔",
-    "raceId": "human",
+    "raceId": "beastkin",
     "gender": "女",
     "age": "34岁",
     "affiliation": "黎明城墙东段哨塔、救援碑、马道转角",
@@ -708,7 +708,7 @@ const rawEldredFixedNpcRegistry: Character[] = [
     "fullName": "托兰娜",
     "type": "NPC登记",
     "race": "兽裔",
-    "raceId": "human",
+    "raceId": "beastkin",
     "gender": "女",
     "age": "31岁",
     "affiliation": "灰雾边境营地、无名墓地外缘、撤回线木桩旁",
@@ -923,7 +923,7 @@ const rawEldredFixedNpcRegistry: Character[] = [
     "fullName": "茜尔七号",
     "type": "NPC登记",
     "race": "记录灵",
-    "raceId": "mirrorborn",
+    "raceId": "record-spirit",
     "gender": "呈少女声线的记录灵",
     "age": "记忆体运转约一百七十年",
     "affiliation": "记录灵小厅、旧日程架、亚雷亚北窗下",
@@ -2003,7 +2003,7 @@ const rawEldredFixedNpcRegistry: Character[] = [
     "fullName": "罗薇",
     "type": "NPC登记",
     "race": "兽裔",
-    "raceId": "human",
+    "raceId": "beastkin",
     "gender": "女",
     "age": "27岁",
     "affiliation": "铁穹驿站马房、北路换蹄棚、驿站饮水槽",
@@ -2298,6 +2298,18 @@ const classEquipmentLoadouts: Record<CharacterClassId, EquipmentLoadout> = {
 };
 
 const raceFlavor = (race: string) => {
+  if (/妖精混血/.test(race)) return '半铃';
+  if (/妖精/.test(race)) return '铃粉';
+  if (/兽裔/.test(race)) return '野路';
+  if (/兽人/.test(race)) return '赤岩';
+  if (/地精/.test(race)) return '碎件';
+  if (/龙裔/.test(race)) return '龙脉';
+  if (/魔裔|提夫林/.test(race)) return '咒痕';
+  if (/天裔|神裔/.test(race)) return '晨曦';
+  if (/树裔/.test(race)) return '根须';
+  if (/羽裔/.test(race)) return '高风';
+  if (/雪裔/.test(race)) return '雪线';
+  if (/记录灵|构装/.test(race)) return '索引';
   if (/精灵|月/.test(race)) return '月根';
   if (/矮人|炉/.test(race)) return '炉印';
   if (/半身/.test(race)) return '小路';

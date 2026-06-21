@@ -1,12 +1,12 @@
 (() => {
-  const BUILD_ID = 'eldred-welcome-loader-v3.5.18';
-  const VERSION_REF = 'eldred-integrated-v3.5.18';
+  const BUILD_ID = 'eldred-welcome-loader-v3.5.19';
+  const VERSION_REF = 'eldred-integrated-v3.5.19';
   const GLOBAL_KEY = '__eldredWelcomeLoader';
   const FRAME_SELECTOR = '[data-eldred-welcome-console="true"]';
   const FULL_UI_BASE = detectFullUiBase();
   const FULL_UI_ASSETS = {
-    script: 'assets/index-BnN3e3f-.js',
-    style: 'assets/index-DEyrJQq4.css',
+    script: 'assets/index-BmLdPHAI.js',
+    style: 'assets/index-PWaMfFpK.css',
   };
   let iframeEl = null;
   let exitButtonEl = null;
@@ -78,6 +78,7 @@
     for (const scope of scopes) {
       try {
         if (typeof scope?.[name] === 'function') return scope[name].bind(scope);
+        if (typeof scope?.TavernHelper?.[name] === 'function') return scope.TavernHelper[name].bind(scope.TavernHelper);
       } catch (error) {}
     }
     return null;
@@ -168,6 +169,11 @@
         const generateRaw = findCallable('generateRaw');
         if (!generateRaw) throw Error('未检测到 Tavern Helper generateRaw()。');
         return generateRaw(config);
+      },
+      getModelList(customApi) {
+        const getModelList = findCallable('getModelList');
+        if (!getModelList) throw Error('未检测到 Tavern Helper getModelList()。');
+        return getModelList(customApi);
       },
       importRawPreset(name, raw) {
         const importRawPreset = findCallable('importRawPreset');

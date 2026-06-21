@@ -209,6 +209,12 @@ export default function App() {
     setInteractionStatus(`已忽略：${item.title}`);
   };
 
+  const handleRuntimeProcessed = (nextRuntime: EldredRuntimeSave, message: string) => {
+    setRuntime(nextRuntime);
+    if (nextRuntime.player) setPlayerState(nextRuntime.player);
+    setInteractionStatus(message);
+  };
+
   const renderActivePanel = () => {
     if (!playerState) return <EmptyPanel title="等待入局" message="尚未读取到角色变量" />;
     switch (activeTab) {
@@ -220,7 +226,7 @@ export default function App() {
       case 'clues': return <CluePanel cluePhases={runtime.cluePhases} />;
       case 'combat': return <CombatPanel player={playerState} partyNpcs={runtime.npcs.filter(npc => playerState.partyMemberIds.includes(npc.id) || playerState.partyMemberIds.includes(npc.name))} enemyUnits={runtime.combat.enemyUnits} initialTurn={runtime.combat.turn} initialLogs={runtime.combat.logs} runtime={runtime} onSubmitEvent={submitRuntimeEvent} />;
       case 'inventory': return <InventoryPanel player={playerState} />;
-      case 'system': return <SystemPanel runtime={runtime} player={playerState} />;
+      case 'system': return <SystemPanel runtime={runtime} player={playerState} onRuntimeProcessed={handleRuntimeProcessed} />;
       default: return <EmptyPanel title="未知区域" />;
     }
   };

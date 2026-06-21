@@ -1,9 +1,16 @@
-import { Activity, Database, MapPin, Radio, Users } from 'lucide-react';
+import { Activity, BrainCircuit, Database, KeyRound, MapPin, Radio, RefreshCw, Save, Sparkles, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { PlayerState } from '../../types';
 import { EldredRuntimeSave } from '../../game/eldredSave';
 import { formatEldredLocation } from '../../game/locationFormat';
+import {
+  EldredAsyncVariableApiSettings,
+  loadEldredAsyncVariableApiSettings,
+  processEldredVariablesWithAsyncApi,
+  refreshEldredAsyncVariableApiModels,
+  saveEldredAsyncVariableApiSettings,
+} from '../../game/asyncVariableApi';
 
 type AnyRecord = Record<string, any>;
 
@@ -99,12 +106,69 @@ const variableRows = (runtime: EldredRuntimeSave): VariableRow[] => {
   });
 };
 
-export function SystemPanel({ runtime, player }: { runtime: EldredRuntimeSave; player: PlayerState }) {
+type SystemPanelProps = {
+  runtime: EldredRuntimeSave;
+  player: PlayerState;
+  onRuntimeProcessed?: (runtime: EldredRuntimeSave, message: string) => void;
+};
+
+export function SystemPanel({ runtime, player, onRuntimeProcessed }: SystemPanelProps) {
   const locationDisplay = formatEldredLocation(runtime.world, player.location);
   const rows = useMemo(() => variableRows(runtime), [runtime]);
   const activeRows = rows.filter(row => row.active).length;
   const combatLogCount = runtime.combat.logs.length;
   const presentCharacters = runtime.world.presentCharacters.length ? runtime.world.presentCharacters.join('、') : '未登记';
+  const [apiSettings, setApiSettings] = useState<EldredAsyncVariableApiSettings>(() => loadEldredAsyncVariableApiSettings());
+  const [modelOptions, setModelOptions] = useState<string[]>([]);
+  const [apiBusy, setApiBusy] = useState(false);
+  const [apiStatus, setApiStatus] = useState(apiSettings.lastStatus || '未运行');
+
+  const patchApiSettings = (patch: Partial<EldredAsyncVariableApiSettings>) => {
+    setApiSettings(prev => ({ ...prev, ...patch }));
+  };
+
+  const saveApiSettings = () => {
+    const saved = saveEldredAsyncVariableApiSettings({ ...apiSettings, lastStatus: apiStatus });
+    setApiSettings(saved);
+    setApiStatus('已保存');
+  };
+
+  const refreshModels = async () => {
+    setApiBusy(true);
+    setApiStatus('读取模型中');
+    try {
+      const models = await refreshEldredAsyncVariableApiModels(apiSettings);
+      setModelOptions(models);
+      setApiStatus(models.length ? `读取到 ${models.length} 个模型` : '未读取到模型列表，可手动填写模型');
+      if (!apiSettings.model && models[0]) patchApiSettings({ model: models[0] });
+    } catch (error) {
+      setApiStatus(error instanceof Error ? error.message : '模型读取失败');
+    } finally {
+      setApiBusy(false);
+    }
+  };
+
+  const runAsyncVariableApi = async () => {
+    setApiBusy(true);
+    setApiStatus('变量整理中');
+    try {
+      const result = await processEldredVariablesWithAsyncApi(runtime, apiSettings);
+      const saved = saveEldredAsyncVariableApiSettings({
+        ...apiSettings,
+        lastRunAt: new Date().toISOString(),
+        lastStatus: result.message,
+      });
+      setApiSettings(saved);
+      setApiStatus(result.message);
+      onRuntimeProcessed?.(result.runtime, result.message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '变量整理失败';
+      saveEldredAsyncVariableApiSettings({ ...apiSettings, lastStatus: message });
+      setApiStatus(message);
+    } finally {
+      setApiBusy(false);
+    }
+  };
 
   return (
     <div className="h-full w-full overflow-y-auto p-2 md:p-0">
@@ -139,6 +203,109 @@ export function SystemPanel({ runtime, player }: { runtime: EldredRuntimeSave; p
               <StatusBlock icon={<Users className="h-4 w-4" />} label="收录角色" value={`${runtime.npcs.length}人`} />
               <StatusBlock icon={<Radio className="h-4 w-4" />} label="在场角色" value={presentCharacters} />
               <StatusBlock icon={<Radio className="h-4 w-4" />} label="新闻见闻" value={`${runtime.world.dynamicBoard.length}条`} />
+            </div>
+          </section>
+
+          <section className="glass-panel rounded-lg border-fantasy-gold/30 p-5 md:p-6">
+            <div className="mb-5 flex flex-col gap-3 border-b border-fantasy-gold/20 pb-4 md:flex-row md:items-end md:justify-between">
+              <div>
+                <h2 className="flex items-center gap-2 font-serif text-xl text-fantasy-gold">
+                  <BrainCircuit className="h-5 w-5" />
+                  异步变量 API
+                </h2>
+                <div className="mt-1 text-xs text-gray-400">独立接口 / 变量整理 / JSONPatch 写回</div>
+              </div>
+              <div className="rounded border border-white/10 bg-black/25 px-3 py-2 text-xs text-gray-300">{apiStatus}</div>
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr_0.8fr]">
+              <label className="grid gap-1 text-xs text-gray-400">
+                <span>接口地址</span>
+                <input
+                  value={apiSettings.apiurl}
+                  onChange={event => patchApiSettings({ apiurl: event.target.value })}
+                  placeholder="https://.../v1"
+                  className="rounded border border-white/10 bg-black/30 px-3 py-2 text-sm text-gray-100 outline-none focus:border-fantasy-gold/60"
+                />
+              </label>
+              <label className="grid gap-1 text-xs text-gray-400">
+                <span>模型</span>
+                <input
+                  value={apiSettings.model}
+                  onChange={event => patchApiSettings({ model: event.target.value })}
+                  list="eldred-async-api-models"
+                  placeholder="model-name"
+                  className="rounded border border-white/10 bg-black/30 px-3 py-2 text-sm text-gray-100 outline-none focus:border-fantasy-gold/60"
+                />
+                <datalist id="eldred-async-api-models">
+                  {modelOptions.map(model => <option key={model} value={model} />)}
+                </datalist>
+              </label>
+              <label className="grid gap-1 text-xs text-gray-400">
+                <span>温度</span>
+                <input
+                  value={apiSettings.temperature}
+                  onChange={event => patchApiSettings({ temperature: event.target.value })}
+                  className="rounded border border-white/10 bg-black/30 px-3 py-2 text-sm text-gray-100 outline-none focus:border-fantasy-gold/60"
+                />
+              </label>
+              <label className="grid gap-1 text-xs text-gray-400">
+                <span>密钥</span>
+                <div className="flex items-center gap-2 rounded border border-white/10 bg-black/30 px-3 py-2">
+                  <KeyRound className="h-4 w-4 text-fantasy-gold/80" />
+                  <input
+                    value={apiSettings.key}
+                    onChange={event => patchApiSettings({ key: event.target.value })}
+                    type="password"
+                    autoComplete="off"
+                    className="min-w-0 flex-1 bg-transparent text-sm text-gray-100 outline-none"
+                  />
+                </div>
+              </label>
+              <label className="grid gap-1 text-xs text-gray-400">
+                <span>来源标识</span>
+                <input
+                  value={apiSettings.source}
+                  onChange={event => patchApiSettings({ source: event.target.value })}
+                  placeholder="openai"
+                  className="rounded border border-white/10 bg-black/30 px-3 py-2 text-sm text-gray-100 outline-none focus:border-fantasy-gold/60"
+                />
+              </label>
+              <label className="flex items-center gap-3 rounded border border-white/10 bg-black/20 px-3 py-3 text-xs text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={apiSettings.enabled}
+                  onChange={event => patchApiSettings({ enabled: event.target.checked })}
+                  className="accent-yellow-500"
+                />
+                启用异步整理
+              </label>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={saveApiSettings}
+                className="btn-rpg flex items-center justify-center gap-2 rounded border-gray-600 bg-black px-4 py-2 text-sm text-gray-300"
+              >
+                <Save className="h-4 w-4" /> 保存配置
+              </button>
+              <button
+                type="button"
+                onClick={refreshModels}
+                disabled={apiBusy || !apiSettings.apiurl.trim()}
+                className="btn-rpg flex items-center justify-center gap-2 rounded border-fantasy-gold/40 bg-fantasy-gold/10 px-4 py-2 text-sm text-fantasy-gold disabled:opacity-40"
+              >
+                <RefreshCw className="h-4 w-4" /> 读取模型
+              </button>
+              <button
+                type="button"
+                onClick={runAsyncVariableApi}
+                disabled={apiBusy || !apiSettings.enabled}
+                className="btn-rpg flex items-center justify-center gap-2 rounded border-fantasy-gold bg-fantasy-gold/20 px-5 py-2 text-sm text-fantasy-gold disabled:opacity-40"
+              >
+                <Sparkles className="h-4 w-4" /> 整理变量
+              </button>
             </div>
           </section>
 
