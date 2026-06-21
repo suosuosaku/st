@@ -47,7 +47,9 @@ export const resolveCharacterImage = (
   if (/^(https?:|data:|blob:|\/)/i.test(raw)) return raw;
   if (raw) {
     const baseName = raw.replace(/\.(png|jpg|jpeg|webp)$/i, '').replace(/头像$|立绘$/g, '') || name;
-    return characterImage(baseName, type);
+    if (fixedNpcImageNames.has(baseName)) return characterImage(baseName, type);
+    if (options.fixed || fixedNpcImageNames.has(name)) return characterImage(baseName, type);
+    return '';
   }
   if (options.fixed || fixedNpcImageNames.has(name)) return characterImage(name, type);
   return '';

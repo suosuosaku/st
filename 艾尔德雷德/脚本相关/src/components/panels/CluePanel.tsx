@@ -32,37 +32,32 @@ export function CluePanel({ cluePhases }: CluePanelProps) {
             <SearchCheck className="h-5 w-5 text-fantasy-gold/80" />
           </div>
 
-          <div className="eldred-clue-page">
-            {cluePhases.map((phase, index) => {
-              const active = phase.clues.length > 0;
-              return (
-                <article className={`eldred-clue-page-row ${active ? 'is-active' : ''}`} key={phase.id}>
-                  <div className="eldred-clue-page-index">{index + 1}</div>
-                  <div className="eldred-clue-page-main">
-                    <div className="eldred-clue-page-head">
-                      <span>{phase.phase}</span>
-                      <strong>{phase.progress}</strong>
-                    </div>
-                    <div className="eldred-clue-page-chain">
-                      {[0, 1, 2].map(slot => {
-                        const clue = phase.clues[slot];
-                        return (
-                          <div className={`eldred-clue-page-token ${clue ? 'is-found' : ''}`} key={`${phase.id}-${slot}`}>
-                            <span>{clue?.display || `线索${slot + 1}`}</span>
-                            {clue?.location && <small>{clue.location}</small>}
-                          </div>
-                        );
-                      })}
-                      <div className="eldred-clue-page-arrow">→</div>
-                      <div className="eldred-clue-page-event">
-                        <span>{phase.eventName}</span>
-                        <small>{phase.status}</small>
+          <div className="eldred-notice eldred-notice-clue">
+            <div className="eldred-notice-frame">
+              <div className="eldred-notice-kicker">线索收集</div>
+              <div className="eldred-clue-board">
+                {cluePhases.map((phase, index) => {
+                  const active = phase.clues.length > 0;
+                  return (
+                    <div className={`eldred-clue-row ${active ? 'is-active' : ''}`} key={phase.id}>
+                      <div className="eldred-clue-phase">{phase.phase || `阶段${index + 1}`}</div>
+                      <div className="eldred-clue-slots">
+                        {[0, 1, 2].map(slot => {
+                          const clue = phase.clues[slot];
+                          return (
+                            <span className="eldred-clue-token" key={`${phase.id}-${slot}`}>
+                              {clue?.display || `线索${slot + 1}`}
+                            </span>
+                          );
+                        })}
                       </div>
+                      <div className="eldred-clue-arrow">→</div>
+                      <div className="eldred-clue-event">{phase.eventName || `阶段${index + 1}事件`}</div>
                     </div>
-                  </div>
-                </article>
-              );
-            })}
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </section>
       </div>

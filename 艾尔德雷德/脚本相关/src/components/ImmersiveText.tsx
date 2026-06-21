@@ -1,5 +1,7 @@
-import { characterImage, eldredNPCs } from '../data';
+import { useState } from 'react';
+import { eldredNPCs, resolveCharacterImage } from '../data';
 import { ImmersiveNotice } from '../types';
+import { calculateDerivedStats } from '../game/rules';
 
 type NoticeKind = 'item' | 'skill' | 'quest' | 'npc' | 'clue' | 'relation' | 'combat' | 'level' | 'event' | 'soft-location';
 
@@ -9,6 +11,11 @@ const noticeKindMap: Record<string, NoticeKind> = {
   技能入库: 'skill',
   装备变更: 'item',
   购买结算: 'item',
+  新闻: 'event',
+  新闻更新: 'event',
+  见闻: 'event',
+  见闻更新: 'event',
+  看板更新: 'event',
   委托更新: 'quest',
   委托接取: 'quest',
   委托生成: 'quest',
@@ -42,22 +49,23 @@ const noticeKindMap: Record<string, NoticeKind> = {
 
 const phaseNames = ['阶段一', '阶段二', '阶段三', '阶段四', '阶段五', '阶段六', '阶段七'];
 
+const knownNpcByName = (name: string) =>
+  eldredNPCs.find(npc => npc.name === name || npc.fullName.includes(name));
+
 const getAvatar = (name: string) => {
-  const known = eldredNPCs.find(npc => npc.name === name || npc.fullName.includes(name));
-  return known?.avatarUrl || characterImage(name, '头像');
+  const known = knownNpcByName(name);
+  return known?.avatarUrl || '';
 };
 
 const getPortrait = (name: string) => {
-  const known = eldredNPCs.find(npc => npc.name === name || npc.fullName.includes(name));
-  return known?.portraitUrl || characterImage(name, '立绘');
+  const known = knownNpcByName(name);
+  return known?.portraitUrl || '';
 };
 
 const imageFromField = (value: string | undefined, name: string, type: '头像' | '立绘') => {
   const raw = String(value || '').trim();
   if (!raw) return type === '头像' ? getAvatar(name) : getPortrait(name);
-  if (/^(https?:|data:|blob:)/i.test(raw)) return raw;
-  const baseName = raw.replace(/\.(png|jpg|jpeg|webp)$/i, '').replace(/头像$|立绘$/g, '') || name;
-  return characterImage(baseName, type);
+  return resolveCharacterImage(name, type, { raw, fixed: Boolean(knownNpcByName(name)) });
 };
 
 const stripLabel = (title: string) => title.replace(/^【|】$/g, '').trim();
@@ -89,11 +97,38 @@ const pickPart = (parts: string[], pattern: RegExp) => parts.find(part => patter
 const fieldOrPart = (fields: Map<string, string>, parts: string[], keys: string[], pattern?: RegExp, fallback = '') => {
   for (const key of keys) {
     const value = fields.get(key);
-    if (value) return value;
+    if (value && !/^(未登记|未记录|待登记|待补充|无)$/.test(value.trim())) return value;
   }
   if (pattern) return pickPart(parts, pattern)?.replace(pattern, '$1').trim() || '';
   return fallback;
 };
+
+const usableText = (value: string | undefined) => {
+  const text = String(value || '').trim();
+  return text && !/^(未登记|未记录|待登记|待补充|无)$/.test(text) ? text : '';
+};
+
+function ImageOrInitial({
+  src,
+  name,
+  imageClassName = '',
+  fallbackClassName = '',
+}: {
+  src?: string;
+  name: string;
+  imageClassName?: string;
+  fallbackClassName?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) {
+    return (
+      <div className={`flex h-full w-full items-center justify-center bg-[#2a1c12] font-serif font-bold text-fantasy-gold ${fallbackClassName}`}>
+        {name.slice(0, 1) || '？'}
+      </div>
+    );
+  }
+  return <img src={src} alt={name} className={imageClassName} onError={() => setFailed(true)} />;
+}
 
 const phaseIndexFrom = (text: string) => {
   const normalized = text.trim();
@@ -161,10 +196,11 @@ function HighlightText({ text }: { text: string }) {
 }
 
 export function DialogueLine({ speaker, text }: { speaker: string; text: string }) {
+  const avatar = getAvatar(speaker);
   return (
     <div className="my-4 flex gap-3 items-start pixel-dialogue">
       <div className="pixel-avatar w-12 h-12 md:w-14 md:h-14 shrink-0 overflow-hidden">
-        <img src={getAvatar(speaker)} alt={speaker} className="w-full h-full object-cover" />
+        <ImageOrInitial src={avatar} name={speaker} imageClassName="w-full h-full object-cover" fallbackClassName="text-lg" />
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-xl md:text-2xl font-serif text-[#7b4218] mb-1 font-bold tracking-wide">【{speaker}】</div>
@@ -185,27 +221,29 @@ export function ImmersiveNoticeCard({ notice }: { notice: ImmersiveNotice }) {
 function NpcArchiveNotice({ body, compact = false }: { body: string; compact?: boolean }) {
   const { parts, fields } = noticeFieldsFrom(body);
   const name = fields.get('姓名') || parts[0]?.replace(/^姓名[:：]/, '').trim() || '未知角色';
+  const known = knownNpcByName(name);
+  const fallbackStats = known?.stats || calculateDerivedStats(1, known?.classId || 'sage', { str: 1, dex: 3, vit: 3, int: 5, spr: 3 });
   const identity = fieldOrPart(fields, parts, ['身份', '职责'], undefined, parts[1] || '身份待登记');
-  const level = fields.get('等级')
-    || fields.get('机制数值')?.match(/(?:Lv\.?|等级)\s*([0-9]+)/i)?.[1]
+  const level = usableText(fields.get('等级'))
+    || usableText(fields.get('机制数值'))?.match(/(?:Lv\.?|等级)\s*([0-9]+)/i)?.[1]
     || pickPart(parts, /(?:Lv\.?|等级)\s*([0-9]+)/i)?.match(/(?:Lv\.?|等级)\s*([0-9]+)/i)?.[1]
-    || '1';
-  const hp = fields.get('生命')
-    || fields.get('HP')
-    || fields.get('机制数值')?.match(/(?:HP|生命)[:：]?\s*([0-9]+\/[0-9]+)/i)?.[1]
+    || String(fallbackStats.level || 1);
+  const hp = usableText(fields.get('生命'))
+    || usableText(fields.get('HP'))
+    || usableText(fields.get('机制数值'))?.match(/(?:HP|生命)[:：]?\s*([0-9]+\/[0-9]+)/i)?.[1]
     || pickPart(parts, /(?:HP|生命)[:：]?\s*([0-9]+\/[0-9]+)/i)?.match(/(?:HP|生命)[:：]?\s*([0-9]+\/[0-9]+)/i)?.[1]
-    || '未登记';
-  const mp = fields.get('法力')
-    || fields.get('MP')
-    || fields.get('机制数值')?.match(/(?:MP|法力)[:：]?\s*([0-9]+\/[0-9]+)/i)?.[1]
+    || `${fallbackStats.hp}/${fallbackStats.maxHp}`;
+  const mp = usableText(fields.get('法力'))
+    || usableText(fields.get('MP'))
+    || usableText(fields.get('机制数值'))?.match(/(?:MP|法力)[:：]?\s*([0-9]+\/[0-9]+)/i)?.[1]
     || pickPart(parts, /(?:MP|法力)[:：]?\s*([0-9]+\/[0-9]+)/i)?.match(/(?:MP|法力)[:：]?\s*([0-9]+\/[0-9]+)/i)?.[1]
-    || '未登记';
-  const ac = fields.get('护甲')
-    || fields.get('AC')
-    || fields.get('机制数值')?.match(/(?:AC|护甲)[:：]?\s*([0-9]+)/i)?.[1]
+    || `${fallbackStats.mp}/${fallbackStats.maxMp}`;
+  const ac = usableText(fields.get('护甲'))
+    || usableText(fields.get('AC'))
+    || usableText(fields.get('机制数值'))?.match(/(?:AC|护甲)[:：]?\s*([0-9]+)/i)?.[1]
     || pickPart(parts, /(?:AC|护甲)[:：]?\s*([0-9]+)/i)?.match(/(?:AC|护甲)[:：]?\s*([0-9]+)/i)?.[1]
-    || '未登记';
-  const attributes = fields.get('属性') || fields.get('五维') || pickPart(parts, /力量|敏捷|体质|智力|精神/) || '';
+    || String(fallbackStats.ac);
+  const attributes = usableText(fields.get('属性')) || usableText(fields.get('五维')) || pickPart(parts, /力量|敏捷|体质|智力|精神/) || '';
   const portrait = imageFromField(fields.get('立绘'), name, '立绘');
   const affiliation = fields.get('所属') || fields.get('所属地区') || fields.get('所属地标') || fields.get('势力') || '';
   const revisit = fields.get('可回访') || fields.get('可回访地点') || fields.get('可回访事项') || parts.find(part => /可回访|回访/.test(part)) || '';
@@ -225,7 +263,7 @@ function NpcArchiveNotice({ body, compact = false }: { body: string; compact?: b
         <div className="eldred-notice-kicker">NPC 收录</div>
         <div className="eldred-npc-archive">
           <div className="eldred-npc-portrait">
-            <img src={portrait} alt={name} />
+            <ImageOrInitial src={portrait} name={name} imageClassName="h-full w-full object-contain" fallbackClassName="text-4xl bg-[#20140f]" />
           </div>
           <div className="eldred-npc-body">
             <div className="eldred-npc-name">{name}</div>
@@ -371,7 +409,7 @@ function NoticePanel({
   const kind = noticeKindMap[noticeTitle] || 'event';
   if (kind === 'soft-location') return <LocationLineNotice title={noticeTitle} body={body} />;
   if (kind === 'npc') return <NpcArchiveNotice body={body} compact={compact} />;
-  if (kind === 'clue') return <ClueArchiveNotice body={body} compact={compact} />;
+  if (kind === 'clue') return <LocationLineNotice title={noticeTitle} body={body} />;
   if (kind === 'combat') return <CombatNotice title={noticeTitle} body={body} compact={compact} />;
   return <StandardNotice title={noticeTitle} body={body} meta={meta} kind={kind} compact={compact} />;
 }

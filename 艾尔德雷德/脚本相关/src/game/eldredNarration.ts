@@ -20,6 +20,7 @@ import {
   runtimeFromStatData,
 } from './eldredSave';
 import { formatEldredLocation } from './locationFormat';
+import { eldredNPCs } from '../data';
 
 type AnyRecord = Record<string, any>;
 type StoryPrompt = { role: 'system' | 'assistant' | 'user'; content: string };
@@ -152,6 +153,50 @@ const resolveMvuWriteContext = (mvu: MvuBridge) => {
   };
 };
 
+const wrapStatDataForMvu = (oldData: unknown, statData: AnyRecord) => {
+  const oldRecord = cloneRecord(oldData);
+  const oldStatData = extractEldredStatData(oldData);
+  if (oldStatData === oldData) return statData;
+  const payload = Object.keys(oldRecord).length ? oldRecord : {};
+  payload.stat_data = statData;
+  if (isRecord(payload.data)) payload.data.stat_data = statData;
+  if (isRecord(payload.variables)) payload.variables.stat_data = statData;
+  if (isRecord(payload.message?.variables)) payload.message.variables.stat_data = statData;
+  return payload;
+};
+
+const writeStatDataToHost = async (
+  statData: AnyRecord,
+  knownContext?: { option: AnyRecord; oldData: unknown },
+) => {
+  const mvu = getMvuBridge();
+  if (mvu?.replaceMvuData) {
+    try {
+      const context = knownContext || resolveMvuWriteContext(mvu);
+      await mvu.replaceMvuData(wrapStatDataForMvu(context.oldData || {}, statData), context.option);
+      notifyRuntimeChanged();
+      return true;
+    } catch (error) {
+      console.warn('[艾尔德雷德] 标签变量写回 MVU 失败，尝试消息变量写回。', error);
+    }
+  }
+
+  const replaceVariables = getHostFunction<(variables: AnyRecord, option: AnyRecord) => unknown>('replaceVariables');
+  if (!replaceVariables) return false;
+  for (const option of currentMessageContexts()) {
+    const oldVariables = readMessageVariables(option);
+    if (!oldVariables) continue;
+    try {
+      replaceVariables(wrapStatDataForMvu(oldVariables, statData), option);
+      notifyRuntimeChanged();
+      return true;
+    } catch {
+      // Try the next message context.
+    }
+  }
+  return false;
+};
+
 const notifyRuntimeChanged = () => {
   try {
     window.dispatchEvent(new CustomEvent('eldred-runtime-event'));
@@ -172,7 +217,7 @@ const notifyRuntimeChanged = () => {
 };
 
 type JsonPatchOperation = {
-  op: 'add' | 'replace' | 'remove';
+  op: 'add' | 'replace' | 'remove' | 'delta' | 'insert';
   path: string;
   value?: unknown;
 };
@@ -203,7 +248,7 @@ const normalizeJsonPatchPayload = (payload: unknown): JsonPatchOperation[] => {
   if (!Array.isArray(operations)) return [];
   return operations.filter((item): item is JsonPatchOperation => {
     if (!isRecord(item)) return false;
-    return ['add', 'replace', 'remove'].includes(String(item.op)) && typeof item.path === 'string' && item.path.length > 0;
+    return ['add', 'replace', 'remove', 'delta', 'insert'].includes(String(item.op)) && typeof item.path === 'string' && item.path.length > 0;
   });
 };
 
@@ -228,12 +273,12 @@ const parseJsonPatchText = (text: string): JsonPatchOperation[] => {
 
 const extractJsonPatchOperations = (rawText: string): JsonPatchOperation[] => {
   const source = String(rawText || '');
-  const blocks = Array.from(source.matchAll(/<JSONPatch\b[^>]*>([\s\S]*?)(?:<\/JSONPatch>|<\/UpdateVariable>|$)/gi))
+  const blocks = Array.from(source.matchAll(/<JSONPatch\b[^>]*>([\s\S]*?)(?:<\/JSONPatch>|<\/UpdateVariable(?:variable)?>|$)/gi))
     .map(match => match[1] || '')
     .filter(Boolean);
   if (blocks.length) return blocks.flatMap(parseJsonPatchText);
 
-  const updateBlocks = Array.from(source.matchAll(/<UpdateVariable\b[^>]*>([\s\S]*?)(?:<\/UpdateVariable>|$)/gi))
+  const updateBlocks = Array.from(source.matchAll(/<UpdateVariable(?:variable)?\b[^>]*>([\s\S]*?)(?:<\/UpdateVariable(?:variable)?>|$)/gi))
     .map(match => match[1] || '')
     .filter(Boolean);
   return updateBlocks.flatMap(parseJsonPatchText);
@@ -270,6 +315,13 @@ const applyJsonPatchOperations = (baseStatData: unknown, operations: JsonPatchOp
       }
       continue;
     }
+    if (operation.op === 'delta') {
+      const current = Number(cursor[leaf]) || 0;
+      const delta = Number(operation.value) || 0;
+      cursor[leaf] = current + delta;
+      applied = true;
+      continue;
+    }
     cursor[leaf] = operation.value;
     applied = true;
   }
@@ -277,8 +329,301 @@ const applyJsonPatchOperations = (baseStatData: unknown, operations: JsonPatchOp
   return applied ? nextStatData : null;
 };
 
+const textValue = (value: unknown, fallback = '') => String(value ?? fallback).trim();
+
+const splitTagPayload = (body: string) =>
+  String(body || '')
+    .split(/[｜|]/)
+    .map(part => part.trim())
+    .filter(Boolean);
+
+const parseSignedNumber = (value: unknown) => {
+  const match = textValue(value).match(/[+-]?\d+/);
+  return match ? Number(match[0]) : 0;
+};
+
+const ensureRecordAt = (root: AnyRecord, path: string[]) => {
+  let cursor = root;
+  for (const segment of path) {
+    if (!isRecord(cursor[segment])) cursor[segment] = {};
+    cursor = cursor[segment] as AnyRecord;
+  }
+  return cursor;
+};
+
+const appendFrontendNotice = (statData: AnyRecord, title: string, body: string) => {
+  const system = ensureRecordAt(statData, ['系统']);
+  const current = system.前端提示;
+  const notices = Array.isArray(current)
+    ? current
+    : current && typeof current === 'object'
+      ? Object.values(current)
+      : [];
+  notices.push({
+    id: `tag-${Date.now()}-${notices.length}`,
+    标题: title,
+    类型: title,
+    内容: body,
+  });
+  system.前端提示 = notices.slice(-16);
+};
+
+const knownNpc = (name: string) =>
+  eldredNPCs.find(npc => npc.name === name || npc.fullName.includes(name));
+
+const npcStatRecord = (name: string, identity: string) => {
+  const known = knownNpc(name);
+  if (known) {
+    return {
+      身份: identity || known.identity,
+      职责: identity || known.identity,
+      职业: known.profession,
+      种族: known.race,
+      性别: known.gender,
+      年龄: known.age,
+      所属: known.affiliation,
+      等级: known.stats.level || 1,
+      HP: `${known.stats.hp}/${known.stats.maxHp}`,
+      MP: `${known.stats.mp}/${known.stats.maxMp}`,
+      AC: known.stats.ac,
+      属性: {
+        力量: known.stats.str,
+        敏捷: known.stats.dex,
+        体质: known.stats.vit,
+        智力: known.stats.int,
+        精神: known.stats.spr,
+      },
+      装备: known.equipmentIds,
+      已知技能: known.knownSkillIds,
+      激活技能: known.activeSkillIds,
+      经验: known.experience,
+      下级经验: known.nextLevelExperience,
+      可分配点数: known.availableAttributePoints,
+      战斗: {
+        等级: known.stats.level || 1,
+        生命: `${known.stats.hp}/${known.stats.maxHp}`,
+        法力: `${known.stats.mp}/${known.stats.maxMp}`,
+        护甲: known.stats.ac,
+        五维: {
+          力量: known.stats.str,
+          敏捷: known.stats.dex,
+          体质: known.stats.vit,
+          智力: known.stats.int,
+          精神: known.stats.spr,
+        },
+        已知技能: known.knownSkillIds,
+        激活技能: known.activeSkillIds,
+      },
+      好感: known.favorability,
+      关系阶段: known.relationshipStage,
+    };
+  }
+  return {
+    身份: identity || '路人',
+    职责: identity || '路人',
+    职业: '学徒',
+    种族: '人类',
+    性别: '未记录',
+    年龄: '未记录',
+    等级: 1,
+    HP: '12/12',
+    MP: '4/4',
+    AC: 10,
+    属性: { 力量: 1, 敏捷: 2, 体质: 2, 智力: 2, 精神: 2 },
+    装备: {},
+    已知技能: {},
+    激活技能: {},
+    经验: 0,
+    下级经验: 100,
+    可分配点数: 0,
+    战斗: {
+      等级: 1,
+      生命: '12/12',
+      法力: '4/4',
+      护甲: 10,
+      五维: { 力量: 1, 敏捷: 2, 体质: 2, 智力: 2, 精神: 2 },
+      已知技能: [],
+      激活技能: [],
+    },
+    好感: 0,
+    关系阶段: '陌生',
+  };
+};
+
+const parseFieldFromParts = (parts: string[], label: string) => {
+  const item = parts.find(part => part.startsWith(`${label}:`) || part.startsWith(`${label}：`));
+  return item ? item.replace(new RegExp(`^${label}[:：]\\s*`), '').trim() : '';
+};
+
+const extractNarrativeTagLines = (rawText: string) =>
+  String(rawText || '')
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .map(line => line.match(/^【([^】]{1,32})】[：:]\s*(.+)$/))
+    .filter((match): match is RegExpMatchArray => Boolean(match && ELDRED_NOTICE_TAGS.includes(match[1])))
+    .map(match => ({ title: match[1], body: match[2].trim() }));
+
+const deriveStatDataFromNarrativeTags = (rawText: string, previousStatData: unknown) => {
+  const tags = extractNarrativeTagLines(rawText);
+  if (!tags.length) return null;
+  const nextStatData = cloneRecord(previousStatData);
+  const world = ensureRecordAt(nextStatData, ['世界']);
+  const main = ensureRecordAt(nextStatData, ['主角']);
+  const relation = ensureRecordAt(nextStatData, ['关系']);
+  const system = ensureRecordAt(nextStatData, ['系统']);
+  let changed = false;
+
+  for (const tag of tags) {
+    const parts = splitTagPayload(tag.body);
+    appendFrontendNotice(nextStatData, tag.title, tag.body);
+    changed = true;
+
+    if (tag.title === '地点解锁' || tag.title === '地图加载' || tag.title === '路径行动') {
+      const [region, subRegion, landmark] = parts;
+      if (region) world.大区域 = region;
+      if (subRegion) world.子区域 = subRegion;
+      if (landmark) world.具体地标 = landmark;
+      if (region || subRegion) world.当前地点 = [region, subRegion].filter(Boolean).join('·');
+      continue;
+    }
+
+    if (tag.title === '获得物品') {
+      const [name, category, amountText] = parts;
+      if (!name) continue;
+      const backpack = ensureRecordAt(main, ['背包']);
+      backpack[name] = {
+        名称: name,
+        分类: category || '物品',
+        数量: Math.max(1, parseSignedNumber(amountText || 1)),
+        状态: '已获得',
+      };
+      continue;
+    }
+
+    if (/^委托/.test(tag.title)) {
+      const [questName, ...rest] = parts;
+      if (!questName) continue;
+      const source = parseFieldFromParts(rest, '来源') || textValue((main.任务列表?.[questName] || {}).来源, '');
+      const recLevel = parseSignedNumber(parseFieldFromParts(rest, '建议等级') || 1) || 1;
+      const risk = parseFieldFromParts(rest, '风险') || textValue((main.任务列表?.[questName] || {}).风险, '低');
+      const reward = parseFieldFromParts(rest, '奖励') || textValue((main.任务列表?.[questName] || {}).奖励, '');
+      const quests = ensureRecordAt(main, ['任务列表']);
+      quests[questName] = {
+        ...(isRecord(quests[questName]) ? quests[questName] : {}),
+        标题: questName,
+        来源: source,
+        建议等级: recLevel,
+        风险: risk,
+        奖励: reward,
+        状态: tag.title === '委托完成' ? '已完成' : '已接取',
+      };
+      const boardQuests = ensureRecordAt(world, ['动态看板', '委托']);
+      boardQuests[questName] = {
+        标题: questName,
+        任务详情: tag.body,
+        来源: source,
+        地点: textValue(world.当前地点),
+        风险: risk,
+        奖励: reward,
+        报酬: reward,
+        建议等级: recLevel,
+        状态: tag.title === '委托完成' ? '已完成' : '可接取',
+      };
+      continue;
+    }
+
+    if (['新闻', '新闻更新', '见闻', '见闻更新', '看板更新'].includes(tag.title)) {
+      const boardType = tag.title.includes('见闻') ? '见闻' : '新闻';
+      const [title, ...rest] = parts;
+      const itemTitle = title || tag.body;
+      const board = ensureRecordAt(world, ['动态看板', boardType]);
+      board[itemTitle] = {
+        标题: itemTitle,
+        详情描述: rest.join('｜') || tag.body,
+        来源: parseFieldFromParts(rest, '来源'),
+        地点: textValue(world.当前地点),
+        状态: parseFieldFromParts(rest, '状态') || '记录中',
+      };
+      continue;
+    }
+
+    if (tag.title === 'NPC收录') {
+      const [name, identity, npcType] = parts;
+      if (!name) continue;
+      const collectionType = /主要/.test(npcType || '') ? '主要NPC' : '其他NPC';
+      const collection = ensureRecordAt(main, ['角色收集', collectionType]);
+      collection[name] = {
+        ...(isRecord(collection[name]) ? collection[name] : {}),
+        ...npcStatRecord(name, identity || ''),
+        类型: npcType || collectionType,
+      };
+      continue;
+    }
+
+    if (tag.title === '好感变化') {
+      const [name, deltaText, stage] = parts;
+      if (!name) continue;
+      const favor = ensureRecordAt(relation, ['好感']);
+      const current = isRecord(favor[name]) ? parseSignedNumber(favor[name].数值) : parseSignedNumber(favor[name]);
+      favor[name] = {
+        数值: current + parseSignedNumber(deltaText),
+        阶段: stage || textValue(isRecord(favor[name]) ? favor[name].阶段 : '', '陌生'),
+        最近变化: tag.body,
+      };
+      continue;
+    }
+
+    if (tag.title === '声望变化') {
+      const [region, deltaText, tier] = parts;
+      if (!region) continue;
+      const reputations = ensureRecordAt(relation, ['地区声望']);
+      const current = isRecord(reputations[region]) ? parseSignedNumber(reputations[region].数值) : parseSignedNumber(reputations[region]);
+      reputations[region] = {
+        数值: current + parseSignedNumber(deltaText),
+        阶段: tier || textValue(isRecord(reputations[region]) ? reputations[region].阶段 : '', '听闻'),
+        最近变化: tag.body,
+      };
+      continue;
+    }
+
+    if (/^线索/.test(tag.title)) {
+      const stageName = parts.find(part => /^阶段[一二三四五六七1-7]/.test(part)) || '风声汇账';
+      const clueName = parts.find(part => part !== stageName) || tag.body;
+      const stageBook = ensureRecordAt(nextStatData, ['主线', '阶段钥匙册', stageName]);
+      const clues = ensureRecordAt(stageBook, ['线索']);
+      clues[clueName] = {
+        显示: clueName,
+        状态: '已发现',
+        发现地点: textValue(world.当前地点),
+        展开详情: tag.body,
+      };
+      stageBook.完成度 = `${Math.min(3, Object.keys(clues).length)}/3`;
+      stageBook.状态 = '记录中';
+      continue;
+    }
+
+    if (tag.title === '战斗实况') {
+      const roundMatch = tag.body.match(/回合\s*(\d+)/);
+      system.战斗缓存 = {
+        ...(isRecord(system.战斗缓存) ? system.战斗缓存 : {}),
+        回合: roundMatch ? Number(roundMatch[1]) : 1,
+        回合变化: [tag.body],
+      };
+    }
+  }
+
+  return changed ? nextStatData : null;
+};
+
+const overlayNarrativeTags = (rawText: string, baseStatData: unknown) =>
+  deriveStatDataFromNarrativeTags(rawText, baseStatData) || (isRecord(baseStatData) ? baseStatData : null);
+
 const syncGeneratedMvuVariables = async (rawText: string, previous: EldredRuntimeSave) => {
-  if (!/<UpdateVariable\b|<JSONPatch\b/i.test(rawText)) return null;
+  if (!/<UpdateVariable(?:variable)?\b|<JSONPatch\b/i.test(rawText)) {
+    const derived = deriveStatDataFromNarrativeTags(rawText, previous.rawStatData || {});
+    if (derived) await writeStatDataToHost(derived);
+    return derived;
+  }
   const mvu = getMvuBridge();
   if (!mvu?.getMvuData || !mvu.parseMessage || !mvu.replaceMvuData) {
     console.warn('[艾尔德雷德] 未检测到完整 MVU 接口，无法解析本次 <UpdateVariable>。');
@@ -290,9 +635,14 @@ const syncGeneratedMvuVariables = async (rawText: string, previous: EldredRuntim
         console.warn('[艾尔德雷德] MVU parseMessage 未返回变量对象。');
       } else {
         await mvu.replaceMvuData(parsed, option);
-        notifyRuntimeChanged();
         const parsedStatData = extractEldredStatData(parsed);
-        if (parsedStatData) return parsedStatData;
+        if (parsedStatData) {
+          const overlaid = overlayNarrativeTags(rawText, parsedStatData);
+          if (overlaid) await writeStatDataToHost(overlaid, { option, oldData: parsed });
+          else notifyRuntimeChanged();
+          return overlaid;
+        }
+        notifyRuntimeChanged();
       }
     } catch (error) {
       console.warn('[艾尔德雷德] MVU 同步失败，改用本地 JSONPatch 合并。', error);
@@ -301,8 +651,14 @@ const syncGeneratedMvuVariables = async (rawText: string, previous: EldredRuntim
 
   const patchedStatData = applyJsonPatchOperations(previous.rawStatData || {}, extractJsonPatchOperations(rawText));
   if (patchedStatData) {
-    notifyRuntimeChanged();
-    return patchedStatData;
+    const overlaid = overlayNarrativeTags(rawText, patchedStatData);
+    if (overlaid) await writeStatDataToHost(overlaid);
+    return overlaid;
+  }
+  const derived = deriveStatDataFromNarrativeTags(rawText, previous.rawStatData || {});
+  if (derived) {
+    await writeStatDataToHost(derived);
+    return derived;
   }
   return null;
 };
@@ -369,21 +725,102 @@ const requestGenerateThroughLoader = (config: AnyRecord) => {
 export const hasEldredGenerationBridge = () =>
   Boolean(getHostFunction('generate')) || Boolean(safeScope(() => window.parent) && window.parent !== window);
 
+const ELDRED_NOTICE_TAGS = [
+  '获得物品',
+  '获得技能',
+  '技能入库',
+  '装备变更',
+  '购买结算',
+  '新闻',
+  '新闻更新',
+  '见闻',
+  '见闻更新',
+  '看板更新',
+  '委托更新',
+  '委托接取',
+  '委托生成',
+  '委托完成',
+  'NPC收录',
+  '线索收录',
+  '线索更新',
+  '线索进展',
+  '地点解锁',
+  '地图加载',
+  '路径行动',
+  '事件推进',
+  '事件进展',
+  '奇遇事件',
+  '翻牌结果',
+  '主线进展',
+  '好感变化',
+  '声望变化',
+  '角色升级',
+  '升级提示',
+  '队伍编成',
+  '行动判定',
+  '战斗开始',
+  '先攻判定',
+  '战斗行动',
+  '战斗回合',
+  '战斗结算',
+  '战斗实况',
+  '技能演出',
+];
+
+const noticeTagPattern = new RegExp(`<(${ELDRED_NOTICE_TAGS.join('|')})[^>]*>([\\s\\S]*?)(?:<\\/\\1>|$)`, 'g');
+
+const normalizeNoticeAngleTags = (text: string) =>
+  text.replace(noticeTagPattern, (_, tag: string, body: string) => `\n【${tag}】：${String(body || '').trim()}\n`);
+
+const stripControlBlocks = (text: string) =>
+  text
+    .replace(/<UpdateVariable(?:variable)?\b[^>]*>[\s\S]*?(?:<\/UpdateVariable(?:variable)?>|$)/gi, '')
+    .replace(/<Analysis\b[^>]*>[\s\S]*?(?:<\/Analysis>|$)/gi, '')
+    .replace(/<JSONPatch\b[^>]*>[\s\S]*?(?:<\/JSONPatch>|<\/UpdateVariable(?:variable)?>|$)/gi, '')
+    .replace(/<thinking\b[^>]*>[\s\S]*?(?:<\/thinking>|$)/gi, '')
+    .replace(/<time\b[^>]*>[\s\S]*?(?:<\/time>|$)/gi, '')
+    .replace(/<recap\b[^>]*>[\s\S]*?(?:<\/recap>|$)/gi, '')
+    .replace(/<safe\b[^>]*>[\s\S]*?(?:<\/safe>|$)/gi, '')
+    .replace(/<\/?(?:UpdateVariable(?:variable)?|Analysis|JSONPatch|content|thinking|time|recap|safe)\b[^>]*>/gi, '');
+
+const isMetacognitionLine = (line: string) =>
+  /^\s*(?:\[|【)?\s*METACOGNITION\s*(?:\]|】)?\s*$/i.test(line)
+  || /^\s*(?:[-*]\s*)?(确认语言|确认视角|剧情回顾|玩家输入|用户输入|测试目标|输出目标|变量计划|变量上下文|标签审查|审查段|轨则终审|安全|生成计划|构思草稿|落笔|禁止项|当前测试目标|回复末尾|这只是测试|检查|是否|列出|包含|输出|更新|不推进|不发放|回复)\b/.test(line)
+  || /^\s*\d+[.、]\s*(正文|包含|回复|变量|检查|输出|测试|不要|这只是测试)/.test(line);
+
+const stripLeakedMetacognition = (text: string) => {
+  const lines = text.split(/\r?\n/);
+  const result: string[] = [];
+  let dropping = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (/^\s*(?:\[|【)?\s*METACOGNITION\s*(?:\]|】)?\s*$/i.test(trimmed)) {
+      dropping = true;
+      continue;
+    }
+    if (dropping) {
+      if (!trimmed || isMetacognitionLine(line) || /^[-*]\s+/.test(trimmed) || /^\d+[.、]\s*/.test(trimmed)) continue;
+      if (!/^【[^】]{1,32}】[：:]/.test(trimmed) && !/^第?[一二三四五六七八九十\d]+[幕章回]/.test(trimmed)) continue;
+      dropping = false;
+    }
+    if (isMetacognitionLine(line)) continue;
+    result.push(line);
+  }
+
+  return result.join('\n');
+};
+
 export const extractEldredContentBlock = (rawText: string) => {
   const source = String(rawText || '');
-  const matches = Array.from(source.matchAll(/<content\b[^>]*>([\s\S]*?)<\/content>/gi))
+  const matches = Array.from(source.matchAll(/<content\b[^>]*>([\s\S]*?)(?:<\/content>|$)/gi))
     .map(match => (match[1] || '').trim())
     .filter(Boolean);
   const content = matches.length ? matches.join('\n\n') : source;
-  return content
-    .replace(/<UpdateVariable\b[^>]*>[\s\S]*?<\/UpdateVariable>/gi, '')
-    .replace(/<Analysis\b[^>]*>[\s\S]*?<\/Analysis>/gi, '')
-    .replace(/<JSONPatch\b[^>]*>[\s\S]*?<\/JSONPatch>/gi, '')
-    .replace(/<thinking\b[^>]*>[\s\S]*?<\/thinking>/gi, '')
-    .replace(/<time\b[^>]*>[\s\S]*?<\/time>/gi, '')
-    .replace(/<recap\b[^>]*>[\s\S]*?<\/recap>/gi, '')
-    .replace(/<\/?(?:UpdateVariable|Analysis|JSONPatch|content|thinking|time|recap)\b[^>]*>/gi, '')
+  return stripLeakedMetacognition(stripControlBlocks(normalizeNoticeAngleTags(content)))
+    .replace(/<\/?[\u4e00-\u9fa5A-Za-z0-9_-]+[^>]*>/g, '')
     .replace(/\s*\[TIME:[^\]]+\]\s*$/i, '')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 };
 
