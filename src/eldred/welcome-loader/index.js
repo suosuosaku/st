@@ -1,12 +1,12 @@
 (() => {
-  const BUILD_ID = 'eldred-welcome-loader-v3.5.13';
-  const VERSION_REF = 'eldred-integrated-v3.5.13';
+  const BUILD_ID = 'eldred-welcome-loader-v3.5.15';
+  const VERSION_REF = 'eldred-integrated-v3.5.15';
   const GLOBAL_KEY = '__eldredWelcomeLoader';
   const FRAME_SELECTOR = '[data-eldred-welcome-console="true"]';
   const FULL_UI_BASE = detectFullUiBase();
   const FULL_UI_ASSETS = {
-    script: 'assets/index-BaOR1dXM.js',
-    style: 'assets/index-B2BHkqUO.css',
+    script: 'assets/index-BM_wjdQ8.js',
+    style: 'assets/index-Cal9MtJo.css',
   };
   let iframeEl = null;
   let exitButtonEl = null;
