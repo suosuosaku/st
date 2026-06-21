@@ -256,6 +256,7 @@ export type Quest = {
   risk: '极高' | '高' | '中' | '低';
   reward: string;
   timeLimit: string;
+  status?: string;
   reputationRegionId?: string;
   reputationReward?: number;
 };

@@ -20,6 +20,7 @@ import {
   runtimeFromStatData,
 } from './eldredSave';
 import { formatEldredLocation } from './locationFormat';
+import { eldredFixedNpcRegistry } from './eldredNpcRegistry';
 
 type AnyRecord = Record<string, any>;
 type StoryPrompt = { role: 'system' | 'assistant' | 'user'; content: string };
@@ -362,21 +363,365 @@ const appendFrontendNotice = (statData: AnyRecord, title: string, body: string) 
   system.前端提示 = notices.slice(-16);
 };
 
-const extractNarrativeTagLines = (rawText: string) =>
+type NarrativeTagLine = {
+  title: string;
+  body: string;
+  fields: string[];
+  named: Record<string, string>;
+};
+
+const cleanText = (value: unknown) => String(value ?? '').trim();
+
+const numberFromText = (value: unknown, fallback = 0) => {
+  const match = cleanText(value).match(/-?\d+/);
+  return match ? Number(match[0]) : fallback;
+};
+
+const extractNarrativeTagLines = (rawText: string): NarrativeTagLine[] =>
   String(rawText || '')
     .split(/\r?\n/)
     .map(line => line.trim())
     .map(line => line.match(/^【([^】]{1,32})】[：:]\s*(.+)$/))
     .filter((match): match is RegExpMatchArray => Boolean(match && ELDRED_NOTICE_TAGS.includes(match[1])))
-    .map(match => ({ title: match[1], body: match[2].trim() }));
+    .map(match => {
+      const fields = match[2]
+        .split(/[｜|]/)
+        .map(field => field.trim())
+        .filter(Boolean);
+      const named: Record<string, string> = {};
+      fields.forEach(field => {
+        const namedMatch = field.match(/^([^：:]{1,12})[：:]\s*(.+)$/);
+        if (namedMatch) named[namedMatch[1].trim()] = namedMatch[2].trim();
+      });
+      return { title: match[1], body: match[2].trim(), fields, named };
+    });
 
-const deriveFrontendNoticesFromNarrativeTags = (rawText: string, previousStatData: unknown) => {
+const tagValue = (tag: NarrativeTagLine, keys: string[]) => {
+  for (const key of keys) {
+    const direct = tag.named[key];
+    if (direct) return direct;
+    const compactKey = key.replace(/\s+/g, '');
+    const field = tag.fields.find(item => item.replace(/\s+/g, '').startsWith(compactKey));
+    if (!field) continue;
+    const stripped = field
+      .replace(new RegExp(`^${key}\\s*[：:]?\\s*`), '')
+      .trim();
+    if (stripped && stripped !== field) return stripped;
+  }
+  return '';
+};
+
+const tagPrimary = (tag: NarrativeTagLine, index: number, fallback = '') =>
+  cleanText(tag.fields[index] ?? fallback);
+
+const normalizeRiskText = (value: unknown) => {
+  const raw = cleanText(value);
+  return ['极高', '高', '中', '低'].find(level => raw.includes(level)) || raw;
+};
+
+const recordInsertNewest = (
+  container: AnyRecord,
+  key: string,
+  value: AnyRecord,
+  limit: number,
+) => {
+  const normalizedKey = cleanText(key) || cleanText(value.标题 ?? value.名称) || `条目${Date.now()}`;
+  const rest = Object.entries(asRecord(container))
+    .filter(([itemKey]) => itemKey !== normalizedKey);
+  return Object.fromEntries([[normalizedKey, value], ...rest].slice(0, limit));
+};
+
+const asRecord = (value: unknown): AnyRecord =>
+  isRecord(value) ? value : {};
+
+const updateBoardRecord = (
+  statData: AnyRecord,
+  type: '新闻' | '见闻' | '委托',
+  key: string,
+  value: AnyRecord,
+) => {
+  const board = ensureRecordAt(statData, ['世界', '动态看板']);
+  board[type] = recordInsertNewest(asRecord(board[type]), key, value, 4);
+};
+
+const removeBoardRecord = (statData: AnyRecord, type: '新闻' | '见闻' | '委托', key: string) => {
+  const board = ensureRecordAt(statData, ['世界', '动态看板']);
+  const group = asRecord(board[type]);
+  delete group[key];
+  board[type] = group;
+};
+
+const boardNewsFromTag = (tag: NarrativeTagLine, type: '新闻' | '见闻') => {
+  const location = tagValue(tag, ['地点', '地区', '来源']) || tagPrimary(tag, 0);
+  const title = tagValue(tag, ['标题', '名称'])
+    || (tag.fields.length >= 3 ? tagPrimary(tag, 1) : tagPrimary(tag, 0, type));
+  const detail = tagValue(tag, ['内容', '详情', '说明'])
+    || (tag.fields.length >= 3 ? tag.fields.slice(2).join('｜') : tagPrimary(tag, 1, tag.body));
+  return {
+    标题: title,
+    内容: detail || tag.body,
+    来源: location,
+    地点: location,
+    状态: '记录中',
+    时间: tagValue(tag, ['时间', '更新']),
+  };
+};
+
+const parseQuestTag = (tag: NarrativeTagLine, status: string) => {
+  const title = tagValue(tag, ['标题', '名称', '委托']) || tagPrimary(tag, 0, '未命名委托');
+  const source = tagValue(tag, ['来源', '发布者', '委托人']) || tagPrimary(tag, 1);
+  const risk = normalizeRiskText(tagValue(tag, ['风险', '危险等级']) || tag.fields.find(field => /^风险/.test(field)));
+  const recLevel = numberFromText(tagValue(tag, ['建议等级', '等级']) || tag.fields.find(field => /建议等级|等级/.test(field)), 1);
+  const reward = tagValue(tag, ['奖励', '报酬']);
+  const timeLimit = tagValue(tag, ['时限', '截止']);
+  const task = tagValue(tag, ['任务详情', '内容', '目标', '说明', '事项'])
+    || tag.fields.filter((field, index) => index > 0 && !/[：:]|建议等级|等级|风险|奖励|报酬|时限|截止/.test(field)).join('｜');
+  return {
+    标题: title,
+    名称: title,
+    来源: source,
+    任务详情: task,
+    建议等级: recLevel,
+    风险: risk || '中',
+    奖励: reward,
+    时限: timeLimit,
+    状态: status,
+  };
+};
+
+const syncQuestTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
+  const status = tag.title === '委托接取' ? '进行中' : tagValue(tag, ['状态']) || '可接取';
+  const quest = parseQuestTag(tag, status);
+  const title = cleanText(quest.标题);
+  updateBoardRecord(statData, '委托', title, quest);
+  if (tag.title === '委托接取' || status === '进行中') {
+    const questList = ensureRecordAt(statData, ['主角', '任务列表']);
+    questList[title] = { ...asRecord(questList[title]), ...quest, 状态: '进行中' };
+  }
+};
+
+const completeQuestTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
+  const title = tagValue(tag, ['标题', '名称', '委托']) || tagPrimary(tag, 0);
+  if (!title) return;
+  delete ensureRecordAt(statData, ['主角', '任务列表'])[title];
+  removeBoardRecord(statData, '委托', title);
+};
+
+const fixedNpcVariableRecord = (name: string) => {
+  const fixed = eldredFixedNpcRegistry.find(npc => npc.name === name || npc.fullName === name);
+  if (!fixed) return {};
+  return {
+    id: fixed.id,
+    全名: fixed.fullName,
+    种族: fixed.race,
+    raceId: fixed.raceId,
+    性别: fixed.gender,
+    年龄: fixed.age,
+    所属: fixed.affiliation,
+    身份: fixed.identity,
+    职业: fixed.profession,
+    classId: fixed.classId,
+    头像: fixed.avatarUrl,
+    立绘: fixed.portraitUrl,
+    等级: fixed.stats.level,
+    生命: `${fixed.stats.hp}/${fixed.stats.maxHp}`,
+    法力: `${fixed.stats.mp}/${fixed.stats.maxMp}`,
+    护甲: fixed.stats.ac,
+    五维: {
+      力量: fixed.stats.str,
+      敏捷: fixed.stats.dex,
+      体质: fixed.stats.vit,
+      智力: fixed.stats.int,
+      精神: fixed.stats.spr,
+    },
+    经验: fixed.experience,
+    下级经验: fixed.nextLevelExperience,
+    可分配点数: fixed.availableAttributePoints,
+    好感: fixed.favorability,
+    关系阶段: fixed.relationshipStage,
+    已知技能: fixed.knownSkillIds,
+    激活技能: fixed.activeSkillIds,
+    特质: fixed.attributes,
+  };
+};
+
+const syncNpcTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
+  const name = tagValue(tag, ['姓名', '名称', '角色']) || tagPrimary(tag, 0);
+  if (!name) return;
+  const kindText = tag.fields.join('｜');
+  const groupName = /主要|主线|固定/.test(kindText) ? '主要NPC' : '其他NPC';
+  const group = ensureRecordAt(statData, ['主角', '角色收集', groupName]);
+  const existing = asRecord(group[name]);
+  const base = { ...fixedNpcVariableRecord(name), ...existing };
+  const attrs = {
+    力量: numberFromText(tagValue(tag, ['力量']), numberFromText(base.五维?.力量, 0)),
+    敏捷: numberFromText(tagValue(tag, ['敏捷']), numberFromText(base.五维?.敏捷, 0)),
+    体质: numberFromText(tagValue(tag, ['体质']), numberFromText(base.五维?.体质, 0)),
+    智力: numberFromText(tagValue(tag, ['智力']), numberFromText(base.五维?.智力, 0)),
+    精神: numberFromText(tagValue(tag, ['精神']), numberFromText(base.五维?.精神, 0)),
+  };
+  group[name] = {
+    ...base,
+    身份: tagValue(tag, ['身份', '职责']) || tagPrimary(tag, 1, base.身份),
+    职业: tagValue(tag, ['职业']) || base.职业,
+    等级: numberFromText(tagValue(tag, ['等级', 'Lv', 'LV']) || tag.fields.find(field => /^等级|^Lv|^LV/.test(field)), numberFromText(base.等级, 1)),
+    生命: tagValue(tag, ['HP', '生命', '生命值']) || base.生命,
+    法力: tagValue(tag, ['MP', '法力', '法力值']) || base.法力,
+    护甲: numberFromText(tagValue(tag, ['AC', '护甲', '护甲等级']), numberFromText(base.护甲, 10)),
+    五维: attrs,
+  };
+};
+
+const cluePhaseCanonicalNames = [
+  '风声汇账',
+  '异象三地对照',
+  '断碑十八号',
+  '外环记录灵',
+  '七旗日期会',
+  '勇者集结',
+  '灾厄之龙觉醒',
+];
+
+const cluePhaseAliases: Record<string, string> = {
+  阶段一: cluePhaseCanonicalNames[0],
+  第一阶段: cluePhaseCanonicalNames[0],
+  阶段二: cluePhaseCanonicalNames[1],
+  第二阶段: cluePhaseCanonicalNames[1],
+  阶段三: cluePhaseCanonicalNames[2],
+  第三阶段: cluePhaseCanonicalNames[2],
+  阶段四: cluePhaseCanonicalNames[3],
+  第四阶段: cluePhaseCanonicalNames[3],
+  阶段五: cluePhaseCanonicalNames[4],
+  第五阶段: cluePhaseCanonicalNames[4],
+  阶段六: cluePhaseCanonicalNames[5],
+  第六阶段: cluePhaseCanonicalNames[5],
+  阶段七: cluePhaseCanonicalNames[6],
+  第七阶段: cluePhaseCanonicalNames[6],
+};
+
+const syncClueTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
+  const phaseText = tagPrimary(tag, 0, tagValue(tag, ['阶段']) || '阶段一');
+  const phase = cluePhaseAliases[phaseText] || phaseText;
+  const slot = tagPrimary(tag, 1, tagValue(tag, ['线索位', '槽位']) || '线索1');
+  const clueName = tagPrimary(tag, 2, tagValue(tag, ['线索', '名称', '标题']) || slot);
+  const detail = tagValue(tag, ['指向', '详情', '内容']) || tagPrimary(tag, 3);
+  const row = ensureRecordAt(statData, ['主线', '阶段钥匙册', phase]);
+  const clues = ensureRecordAt(row, ['线索']);
+  clues[slot] = {
+    名称: clueName,
+    显示: clueName,
+    状态: '已解锁',
+    指向: detail,
+    详情: detail,
+    发现地点: tagValue(tag, ['地点']),
+  };
+  row.状态 = '记录中';
+  row.完成度 = `${Math.min(3, Object.keys(clues).length)}/3`;
+  if (detail && !row.阶段完成显示) row.阶段完成显示 = detail;
+};
+
+const parseCombatUnitField = (field: string) => {
+  const hp = field.match(/(\d+)\s*\/\s*(\d+)\s*HP/i);
+  const mp = field.match(/(\d+)\s*\/\s*(\d+)\s*MP/i);
+  const ac = field.match(/AC\s*(\d+)/i);
+  if (!hp && !mp && !ac) return null;
+  const name = field
+    .replace(/\d+\s*\/\s*\d+\s*HP/ig, '')
+    .replace(/\d+\s*\/\s*\d+\s*MP/ig, '')
+    .replace(/AC\s*\d+/ig, '')
+    .trim();
+  if (!name) return null;
+  return {
+    name,
+    data: {
+      生命: hp ? `${hp[1]}/${hp[2]}` : undefined,
+      法力: mp ? `${mp[1]}/${mp[2]}` : undefined,
+      护甲: ac ? Number(ac[1]) : undefined,
+    },
+  };
+};
+
+const numericChangeValue = (current: unknown, change: unknown) => {
+  const changeText = cleanText(change);
+  const base = numberFromText(current, 0);
+  if (/^[+-]/.test(changeText)) return base + numberFromText(changeText, 0);
+  return numberFromText(changeText, base);
+};
+
+const syncCombatTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
+  const cache = ensureRecordAt(statData, ['系统', '战斗缓存']);
+  const turnField = tag.fields.find(field => /^回合/.test(field));
+  if (turnField) cache.回合 = numberFromText(turnField, numberFromText(cache.回合, 1));
+  const logs = Array.isArray(cache.日志) ? cache.日志 : Object.values(asRecord(cache.日志));
+  cache.日志 = [tag.body, ...logs.map(cleanText).filter(Boolean)].slice(0, 20);
+  const participants = ensureRecordAt(cache, ['参战名单']);
+  const enemies = ensureRecordAt(cache, ['敌方']);
+  tag.fields
+    .map(parseCombatUnitField)
+    .filter((unit): unit is NonNullable<ReturnType<typeof parseCombatUnitField>> => Boolean(unit))
+    .forEach(unit => {
+      if (/\{\{user\}\}|主角|玩家/i.test(unit.name)) {
+        participants[unit.name] = { ...asRecord(participants[unit.name]), ...unit.data, 阵营: '友方', 类型: '角色' };
+      } else {
+        enemies[unit.name] = { ...asRecord(enemies[unit.name]), ...unit.data, 阵营: '敌方', 类型: '敌人' };
+      }
+    });
+};
+
+const syncItemTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
+  const name = tagValue(tag, ['名称', '物品']) || tagPrimary(tag, 0);
+  if (!name) return;
+  const bag = ensureRecordAt(statData, ['主角', '背包']);
+  bag[name] = {
+    名称: name,
+    分类: tagPrimary(tag, 1, '物品'),
+    数量: numberFromText(tagValue(tag, ['数量']) || tag.fields.find(field => /^数量/.test(field)), 1),
+    来源: tagValue(tag, ['来源']),
+  };
+};
+
+const syncFavorOrReputation = (statData: AnyRecord, tag: NarrativeTagLine) => {
+  if (tag.title === '好感变化') {
+    const name = tagPrimary(tag, 0);
+    if (!name) return;
+    const favor = ensureRecordAt(statData, ['关系', '好感']);
+    favor[name] = {
+      数值: numericChangeValue(asRecord(favor[name]).数值, tagPrimary(tag, 1)),
+      阶段: tagPrimary(tag, 2, asRecord(favor[name]).阶段),
+    };
+    return;
+  }
+  const region = tagPrimary(tag, 0);
+  if (!region) return;
+  const reputation = ensureRecordAt(statData, ['关系', '地区声望']);
+  reputation[region] = {
+    数值: numericChangeValue(asRecord(reputation[region]).数值, tagPrimary(tag, 1)),
+    阶段: tagPrimary(tag, 2, asRecord(reputation[region]).阶段),
+  };
+};
+
+const syncNarrativeTagsToStatData = (rawText: string, previousStatData: unknown) => {
   const tags = extractNarrativeTagLines(rawText);
   if (!tags.length) return null;
   const nextStatData = cloneRecord(previousStatData);
-  tags.forEach(tag => appendFrontendNotice(nextStatData, tag.title, tag.body));
+  tags.forEach(tag => {
+    appendFrontendNotice(nextStatData, tag.title, tag.body);
+    if (tag.title === '新闻' || tag.title === '新闻更新') updateBoardRecord(nextStatData, '新闻', boardNewsFromTag(tag, '新闻').标题, boardNewsFromTag(tag, '新闻'));
+    if (tag.title === '见闻' || tag.title === '见闻更新') updateBoardRecord(nextStatData, '见闻', boardNewsFromTag(tag, '见闻').标题, boardNewsFromTag(tag, '见闻'));
+    if (tag.title === '委托接取' || tag.title === '委托生成' || tag.title === '委托更新') syncQuestTag(nextStatData, tag);
+    if (tag.title === '委托完成') completeQuestTag(nextStatData, tag);
+    if (tag.title === 'NPC收录') syncNpcTag(nextStatData, tag);
+    if (tag.title === '线索收录' || tag.title === '线索更新' || tag.title === '线索进展') syncClueTag(nextStatData, tag);
+    if (tag.title === '战斗实况' || tag.title === '战斗回合' || tag.title === '战斗行动' || tag.title === '战斗开始') syncCombatTag(nextStatData, tag);
+    if (tag.title === '获得物品') syncItemTag(nextStatData, tag);
+    if (tag.title === '好感变化' || tag.title === '声望变化') syncFavorOrReputation(nextStatData, tag);
+  });
   return nextStatData;
 };
+
+export const syncEldredNarrativeTagsToStatData = syncNarrativeTagsToStatData;
+
+const deriveFrontendNoticesFromNarrativeTags = syncNarrativeTagsToStatData;
 
 const syncGeneratedMvuVariables = async (rawText: string, previous: EldredRuntimeSave) => {
   if (!/<UpdateVariable(?:variable)?\b|<JSONPatch\b/i.test(rawText)) {

@@ -823,11 +823,15 @@ const dynamicBoardFromStatData = (statData: AnyRecord): DynamicBoardItem[] => {
   items.push(...boardItemsFrom(world.委托 ?? system.委托 ?? system.委托板, '委托'));
 
   const seen = new Set<string>();
+  const typeCounts = new Map<DynamicBoardItemType, number>();
   return items
     .filter(item => {
       const key = `${item.type}:${item.id}:${item.title}:${item.detail}`;
       if (seen.has(key)) return false;
       seen.add(key);
+      const count = typeCounts.get(item.type) || 0;
+      if (count >= 4) return false;
+      typeCounts.set(item.type, count + 1);
       return true;
     })
     .slice(0, 24);
@@ -938,25 +942,29 @@ const characterFromVariable = (name: string, raw: unknown, type: Character['type
     ...mechanicsFromText(mechanicText),
     ...asRecord(source.战斗 ?? source.数值 ?? source.机制数值 ?? source),
   };
-  const classId = resolveClassId(source.职业 ?? battle.职业 ?? source.profession);
-  const raceId = resolveRaceId(source.种族 ?? battle.种族);
+  const directStats = asRecord(source.stats);
+  const classId = resolveClassId(source.classId ?? source.职业 ?? battle.职业 ?? source.profession);
+  const raceId = resolveRaceId(source.raceId ?? source.种族 ?? battle.种族 ?? source.race);
   const cls = getClassById(classId);
-  const baseAttributes = attributesFrom(firstDefined(battle.五维, battle.属性, source.五维, source.属性), cls.presetStats);
+  const baseAttributes = attributesFrom(firstDefined(battle.五维, battle.属性, source.五维, source.属性, directStats), cls.presetStats);
   const equipmentSource = firstDefined(battle.装备栏, battle.装备位, source.装备, source.装备栏, source.装备位);
   const loadout = loadoutFrom(equipmentSource);
   const equipmentIds = [...new Set([...equipmentIdsFrom(equipmentSource), ...equippedIdsFromLoadout(loadout)])];
-  const knownSkillIds = skillIdsFrom(firstDefined(battle.已知技能, battle.技能库, battle.技能, source.已知技能, source.技能库, source.技能));
-  const activeSkillIds = skillIdsFrom(firstDefined(battle.激活技能, battle.已激活技能, source.激活技能, source.当前技能))
+  const knownSkillIds = skillIdsFrom(firstDefined(battle.已知技能, battle.技能库, battle.技能, source.已知技能, source.技能库, source.技能, source.knownSkillIds));
+  const activeSkillIds = skillIdsFrom(firstDefined(battle.激活技能, battle.已激活技能, source.激活技能, source.当前技能, source.activeSkillIds))
     .filter(id => knownSkillIds.length === 0 || knownSkillIds.includes(id))
     .slice(0, 4);
-  const level = Math.max(1, numberOf(battle.等级 ?? source.等级, 1));
+  const directSkills = Array.isArray(source.skills) ? source.skills : [];
+  const level = Math.max(1, numberOf(battle.等级 ?? source.等级 ?? directStats.level ?? source.level, 1));
   const derived = calculateDerivedStats(level, classId, baseAttributes, equippedIdsFromLoadout(loadout), raceId);
   const hp = parseVitals(
     firstDefined(
       battle.生命,
       battle.HP,
+      battle.hp,
       source.生命,
       source.HP,
+      directStats.hp !== undefined || directStats.maxHp !== undefined ? `${directStats.hp ?? derived.hp}/${directStats.maxHp ?? derived.maxHp}` : undefined,
       battle.生命值 !== undefined || battle.生命值上限 !== undefined ? `${battle.生命值 ?? derived.hp}/${battle.生命值上限 ?? derived.maxHp}` : undefined,
       source.生命值 !== undefined || source.生命值上限 !== undefined ? `${source.生命值 ?? derived.hp}/${source.生命值上限 ?? derived.maxHp}` : undefined,
     ),
@@ -967,8 +975,10 @@ const characterFromVariable = (name: string, raw: unknown, type: Character['type
     firstDefined(
       battle.法力,
       battle.MP,
+      battle.mp,
       source.法力,
       source.MP,
+      directStats.mp !== undefined || directStats.maxMp !== undefined ? `${directStats.mp ?? derived.mp}/${directStats.maxMp ?? derived.maxMp}` : undefined,
       battle.法力值 !== undefined || battle.法力值上限 !== undefined ? `${battle.法力值 ?? derived.mp}/${battle.法力值上限 ?? derived.maxMp}` : undefined,
       source.法力值 !== undefined || source.法力值上限 !== undefined ? `${source.法力值 ?? derived.mp}/${source.法力值上限 ?? derived.maxMp}` : undefined,
     ),
@@ -981,14 +991,14 @@ const characterFromVariable = (name: string, raw: unknown, type: Character['type
     name,
     fullName: textOf(source.全名 ?? source.fullName, name),
     type,
-    race: getRaceById(raceId).name,
+    race: textOf(source.race, getRaceById(raceId).name),
     raceId,
-    gender: textOf(source.性别, '未记录'),
-    age: textOf(source.年龄, '未记录'),
+    gender: textOf(source.性别 ?? source.gender, '未记录'),
+    age: textOf(source.年龄 ?? source.age, '未记录'),
     affiliation: textOf(source.所属 ?? source.所属地区 ?? source.所属地标 ?? source.势力 ?? source.affiliation, '未登记'),
-    identity: textOf(source.身份 ?? source.职责, '未登记'),
+    identity: textOf(source.身份 ?? source.职责 ?? source.identity, '未登记'),
     classId,
-    profession: textOf(source.职业 ?? source.职责, getClassById(classId).name),
+    profession: textOf(source.职业 ?? source.职责 ?? source.profession, getClassById(classId).name),
     avatarUrl: resolveCharacterImage(name, '头像', {
       fixed,
       raw: source.头像 ?? source.avatarUrl ?? source.avatar,
@@ -1003,19 +1013,21 @@ const characterFromVariable = (name: string, raw: unknown, type: Character['type
       maxHp: hp.max,
       mp: mp.current,
       maxMp: mp.max,
-      ac: numberOf(firstDefined(battle.护甲, battle.护甲等级, battle.AC, source.护甲, source.AC), derived.ac),
+      ac: numberOf(firstDefined(battle.护甲, battle.护甲等级, battle.AC, battle.ac, source.护甲, source.AC, directStats.ac), derived.ac),
     },
-    experience: numberOf(battle.经验 ?? source.经验, 0),
-    nextLevelExperience: numberOf(battle.下级经验 ?? source.下级经验, experienceForNextLevel(level)),
-    availableAttributePoints: numberOf(battle.可分配点数 ?? source.可分配点数, 0),
-    favorability: numberOf(source.好感 ?? source.好感度, 0),
-    relationshipStage: textOf(source.关系阶段 ?? source.阶段, '陌生'),
+    experience: numberOf(battle.经验 ?? source.经验 ?? source.experience, 0),
+    nextLevelExperience: numberOf(battle.下级经验 ?? source.下级经验 ?? source.nextLevelExperience, experienceForNextLevel(level)),
+    availableAttributePoints: numberOf(battle.可分配点数 ?? source.可分配点数 ?? source.availableAttributePoints, 0),
+    favorability: numberOf(source.好感 ?? source.好感度 ?? source.favorability, 0),
+    relationshipStage: textOf(source.关系阶段 ?? source.阶段 ?? source.relationshipStage, '陌生'),
     equipmentIds,
     equipmentLoadout: loadout,
     activeSkillIds,
     knownSkillIds,
-    attributes: splitTextList(source.特质 ?? source.属性 ?? source.标签),
-    skills: activeSkillIds.map(id => getSkillById(id)).filter((skill): skill is NonNullable<typeof skill> => Boolean(skill)),
+    attributes: splitTextList(source.特质 ?? source.属性 ?? source.标签 ?? source.attributes),
+    skills: directSkills.length
+      ? directSkills
+      : activeSkillIds.map(id => getSkillById(id)).filter((skill): skill is NonNullable<typeof skill> => Boolean(skill)),
   };
 };
 
@@ -1048,6 +1060,7 @@ const questsFromStatData = (statData: AnyRecord): Quest[] =>
       risk: (['极高', '高', '中', '低'].includes(risk) ? risk : '中') as Quest['risk'],
       reward: textOf(source.奖励 ?? source.报酬, ''),
       timeLimit: textOf(source.时限 ?? source.截止, ''),
+      status: textOf(source.状态 ?? source.进展, '进行中'),
       reputationRegionId: textOf(source.声望地区, undefined as unknown as string),
       reputationReward: source.声望奖励 === undefined ? undefined : numberOf(source.声望奖励, 0),
     } satisfies Quest;
@@ -1106,6 +1119,16 @@ const cluePhaseNames = [
   '灾厄之龙觉醒',
 ];
 
+const cluePhaseAliases = [
+  ['阶段一', '第一阶段', 'phase-1'],
+  ['阶段二', '第二阶段', 'phase-2'],
+  ['阶段三', '第三阶段', 'phase-3'],
+  ['阶段四', '第四阶段', 'phase-4'],
+  ['阶段五', '第五阶段', 'phase-5'],
+  ['阶段六', '第六阶段', 'phase-6'],
+  ['阶段七', '第七阶段', 'phase-7'],
+];
+
 const clueRecordFrom = (id: string, raw: unknown): CluePhase['clues'][number] => {
   const source = asRecord(raw);
   return {
@@ -1126,7 +1149,10 @@ const cluePhasesFromStatData = (statData: AnyRecord): CluePhase[] => {
   const matrixClues = Object.entries(matrix).map(([id, value]) => clueRecordFrom(id, value));
 
   return cluePhaseNames.map((phase, index) => {
-    const row = asRecord(book[phase]);
+    const aliasRow = cluePhaseAliases[index]
+      .map(alias => asRecord(book[alias]))
+      .find(rowValue => Object.keys(rowValue).length > 0);
+    const row = asRecord(Object.keys(asRecord(book[phase])).length ? book[phase] : aliasRow);
     const rowClues = Object.entries(asRecord(row.线索)).map(([id, value]) => clueRecordFrom(id, value));
     const clues = rowClues.length
       ? rowClues

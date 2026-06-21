@@ -1040,7 +1040,7 @@ body {
 }
 
 .eldred-clue-page-token.is-found,
-.eldred-clue-page-event {
+.eldred-clue-page-event.is-found {
   color: #fff4c6;
   border-color: rgba(116, 214, 255, 0.42);
 }

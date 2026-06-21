@@ -29,6 +29,34 @@ const boardTypeColor = (type: DynamicBoardItem['type']) => {
   return 'text-cyan-300 border-cyan-300/30 bg-cyan-300/10';
 };
 
+const questFromBoardItem = (item: DynamicBoardItem): Quest => ({
+  id: item.id,
+  title: item.title,
+  source: item.source || item.location || '未登记',
+  task: item.detail || '委托详情未登记',
+  recLevel: item.recLevel || 1,
+  risk: (['极高', '高', '中', '低'].includes(String(item.risk)) ? item.risk : '中') as Quest['risk'],
+  reward: item.reward || '',
+  timeLimit: item.timeLimit || '',
+  status: item.status || '可接取',
+});
+
+const InfoTile = ({ label, value, tone = 'normal' }: { label: string; value?: string | number; tone?: 'normal' | 'gold' | 'red' | 'blue' }) => {
+  const toneClass = tone === 'gold'
+    ? 'text-fantasy-gold'
+    : tone === 'red'
+      ? 'text-orange-300'
+      : tone === 'blue'
+        ? 'text-sky-200'
+        : 'text-gray-100';
+  return (
+    <div className="rounded-lg border border-white/10 bg-black/25 px-4 py-3">
+      <div className="text-[11px] tracking-[0.18em] text-gray-500 mb-1">{label}</div>
+      <div className={`text-sm font-medium leading-relaxed ${toneClass}`}>{value || '未登记'}</div>
+    </div>
+  );
+};
+
 export function QuestPanel({ quests = EMPTY_QUESTS, boardItems = EMPTY_BOARD_ITEMS, onSubmitEvent }: QuestPanelProps) {
   const [selectedQuestId, setSelectedQuestId] = useState('');
   const [selectedBoardId, setSelectedBoardId] = useState('');
@@ -36,6 +64,8 @@ export function QuestPanel({ quests = EMPTY_QUESTS, boardItems = EMPTY_BOARD_ITE
   const boardQuestItems = boardItems.filter(item => item.type === '委托');
   const selectedBoardItem = boardItems.find(item => item.id === selectedBoardId) || null;
   const selectedQuest = selectedBoardItem ? null : quests.find(q => q.id === selectedQuestId) || quests[0] || null;
+  const selectedBoardQuest = selectedBoardItem?.type === '委托' ? questFromBoardItem(selectedBoardItem) : null;
+  const activeQuest = selectedQuest || selectedBoardQuest;
 
   useEffect(() => {
     if (selectedBoardId && !boardItems.some(item => item.id === selectedBoardId)) setSelectedBoardId('');
@@ -54,19 +84,19 @@ export function QuestPanel({ quests = EMPTY_QUESTS, boardItems = EMPTY_BOARD_ITE
   }, [selectedBoardId, selectedQuest, selectedQuestId]);
 
   const acceptQuest = () => {
-    if (!selectedQuest) return;
+    if (!activeQuest) return;
     void onSubmitEvent?.({
       eventType: 'quest_accept',
-      title: `揭下委托单：${selectedQuest.title}`,
-      playerIntent: `接受委托「${selectedQuest.title}」`,
-      target: selectedQuest.title,
-      quest: selectedQuest,
+      title: `揭下委托单：${activeQuest.title}`,
+      playerIntent: `接受委托「${activeQuest.title}」`,
+      target: activeQuest.title,
+      quest: activeQuest,
       extraFacts: [
-        `发布者：${selectedQuest.source || '未登记'}`,
-        `建议等级：${selectedQuest.recLevel}`,
-        `风险：${selectedQuest.risk}`,
-        `报酬：${selectedQuest.reward || '未登记'}`,
-        `时限：${selectedQuest.timeLimit || '未登记'}`,
+        `发布者：${activeQuest.source || '未登记'}`,
+        `建议等级：${activeQuest.recLevel}`,
+        `风险：${activeQuest.risk}`,
+        `报酬：${activeQuest.reward || '未登记'}`,
+        `时限：${activeQuest.timeLimit || '未登记'}`,
       ],
     });
   };
@@ -143,16 +173,16 @@ export function QuestPanel({ quests = EMPTY_QUESTS, boardItems = EMPTY_BOARD_ITE
       </div>
 
       <div className="flex-1 min-h-[520px] xl:min-h-0 glass-panel rounded-xl relative overflow-hidden flex flex-col">
-        {selectedBoardItem ? (
+        {selectedBoardItem && !selectedBoardQuest ? (
           <>
             <div className="px-5 md:px-8 py-6 md:py-10 border-b border-white/5 bg-gradient-to-b from-white/5 to-transparent relative">
               <span className={`inline-flex mb-4 px-3 py-1 text-xs border rounded ${boardTypeColor(selectedBoardItem.type)}`}>{selectedBoardItem.type}</span>
               <h1 className="text-xl md:text-3xl font-serif text-white mb-3 leading-snug">{selectedBoardItem.title}</h1>
-              <div className="flex flex-wrap gap-3 text-xs text-gray-400">
-                {selectedBoardItem.source && <span>来源：{selectedBoardItem.source}</span>}
-                {selectedBoardItem.location && <span>地点：{selectedBoardItem.location}</span>}
-                {selectedBoardItem.status && <span>状态：{selectedBoardItem.status}</span>}
-                {selectedBoardItem.updatedAt && <span>更新：{selectedBoardItem.updatedAt}</span>}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <InfoTile label="来源" value={selectedBoardItem.source || selectedBoardItem.location} tone="blue" />
+                <InfoTile label="地点" value={selectedBoardItem.location} />
+                <InfoTile label="状态" value={selectedBoardItem.status} tone="gold" />
+                <InfoTile label="更新" value={selectedBoardItem.updatedAt} />
               </div>
             </div>
             <div className="flex-1 p-5 md:p-8 overflow-y-auto">
@@ -161,7 +191,7 @@ export function QuestPanel({ quests = EMPTY_QUESTS, boardItems = EMPTY_BOARD_ITE
               </div>
             </div>
           </>
-        ) : !selectedQuest ? (
+        ) : !activeQuest ? (
           <div className="h-full min-h-[420px] flex items-center justify-center p-8">
             <div className="w-full max-w-md rounded-xl border border-fantasy-gold/20 bg-black/20 p-8 text-center">
               <Newspaper className="w-10 h-10 mx-auto text-fantasy-gold/70 mb-4" />
@@ -174,18 +204,15 @@ export function QuestPanel({ quests = EMPTY_QUESTS, boardItems = EMPTY_BOARD_ITE
             <div className="px-5 md:px-8 py-6 md:py-10 border-b border-white/5 bg-gradient-to-b from-white/5 to-transparent relative">
               <span className="absolute top-4 right-6 text-2xl font-serif text-white/5">委托</span>
               <div className="flex items-center gap-3 mb-3">
-                <span className="px-2 py-1 bg-white/10 text-gray-400 text-[10px] uppercase rounded border border-white/10 tracking-widest">{selectedQuest.source || '未登记'}</span>
+                <span className="px-2 py-1 bg-white/10 text-gray-300 text-[10px] uppercase rounded border border-white/10 tracking-widest">{activeQuest.source || '未登记'}</span>
+                <span className={`px-2 py-1 text-[10px] rounded border border-fantasy-gold/30 bg-fantasy-gold/10 ${activeQuest.status === '进行中' ? 'text-fantasy-gold' : 'text-gray-300'}`}>{activeQuest.status || '可接取'}</span>
               </div>
-              <h1 className="text-xl md:text-3xl font-serif text-white mb-2 leading-snug">{selectedQuest.title}</h1>
-              <div className="flex flex-wrap gap-4 md:gap-6 mt-6">
-                <div className="flex flex-col gap-1 text-sm">
-                  <span className="text-gray-500">建议等级</span>
-                  <span className="text-gray-200 font-mono text-lg">{selectedQuest.recLevel}</span>
-                </div>
-                <div className="flex flex-col gap-1 text-sm">
-                  <span className="text-gray-500">截止时限</span>
-                  <span className="text-gray-200 flex items-center gap-1"><Clock className="w-4 h-4 text-gray-500" /> {selectedQuest.timeLimit || '未登记'}</span>
-                </div>
+              <h1 className="text-xl md:text-3xl font-serif text-white mb-5 leading-snug">{activeQuest.title}</h1>
+              <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+                <InfoTile label="建议等级" value={`等级${activeQuest.recLevel}`} tone="blue" />
+                <InfoTile label="危险等级" value={activeQuest.risk} tone={activeQuest.risk === '高' || activeQuest.risk === '极高' ? 'red' : 'gold'} />
+                <InfoTile label="截止时限" value={activeQuest.timeLimit} />
+                <InfoTile label="委托状态" value={activeQuest.status || '可接取'} tone="gold" />
               </div>
             </div>
 
@@ -195,18 +222,23 @@ export function QuestPanel({ quests = EMPTY_QUESTS, boardItems = EMPTY_BOARD_ITE
                   <Scroll className="w-4 h-4" /> 委托陈述
                 </h3>
                 <p className="text-gray-300 leading-relaxed text-sm p-4 bg-black/20 rounded border border-white/5">
-                  {selectedQuest.task || '未登记'}
+                  {activeQuest.task || '未登记'}
                 </p>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <InfoTile label="发布来源" value={activeQuest.source} tone="blue" />
+                <InfoTile label="预期报酬" value={activeQuest.reward} tone="gold" />
               </div>
 
               <div className="p-4 bg-fantasy-gold/5 border border-fantasy-gold/20 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex flex-col gap-1">
                   <span className="text-xs text-gray-400 uppercase tracking-wider">预期报酬</span>
                   <div className="text-fantasy-gold flex items-center gap-2">
-                    <Coins className="w-4 h-4" /> {selectedQuest.reward || '未登记'}
+                    <Coins className="w-4 h-4" /> {activeQuest.reward || '未登记'}
                   </div>
-                  {selectedQuest.reputationReward !== undefined && (
-                    <div className="text-xs text-gray-400 mt-1">地区声望 +{selectedQuest.reputationReward}</div>
+                  {activeQuest.reputationReward !== undefined && (
+                    <div className="text-xs text-gray-400 mt-1">地区声望 +{activeQuest.reputationReward}</div>
                   )}
                 </div>
               </div>
