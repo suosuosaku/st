@@ -618,19 +618,22 @@ export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_
                 <Activity className="w-4 h-4" />
                 五维属性
               </h3>
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="party-attribute-grid">
                 {ATTRIBUTE_KEYS.map(key => (
-                  <div key={key} className="p-3 bg-white/5 rounded">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-300">{ATTRIBUTE_LABELS[key]}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-white text-xl">{selected.stats[key]}</span>
+                  <div key={key} className="party-attribute-card">
+                    <div className="party-attribute-topline">
+                      <span>{ATTRIBUTE_LABELS[key]}</span>
+                      <div className="party-attribute-score">
+                        <strong>{selected.stats[key]}</strong>
                         {selected.availablePoints > 0 && (
-                          <button onClick={() => allocatePoint(key)} className="btn-rpg w-7 h-7 rounded flex items-center justify-center text-xs">+</button>
+                          <button onClick={() => allocatePoint(key)} className="btn-rpg party-attribute-add">+</button>
                         )}
                       </div>
                     </div>
-                    <div className="text-xs text-gray-500 mt-2">{attributeImpact[key]}</div>
+                    <div className="party-attribute-meter">
+                      <div style={{ width: `${Math.min(100, (selected.stats[key] / 20) * 100)}%` }} />
+                    </div>
+                    <div className="party-attribute-impact">{attributeImpact[key]}</div>
                   </div>
                 ))}
               </div>

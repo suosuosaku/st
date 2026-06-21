@@ -16,11 +16,13 @@ import {
   EldredRuntimeSave,
   extractEldredStatData,
   loadEldredRuntimeSave,
+  mergePlayerWithCachedOpening,
   persistEldredRuntimeCache,
   runtimeFromStatData,
 } from './eldredSave';
 import { formatEldredLocation } from './locationFormat';
 import { eldredFixedNpcRegistry } from './eldredNpcRegistry';
+import { eldredCanonicalCluePhases, findCanonicalClueSlot, resolveCanonicalPhaseName } from './mainClues';
 
 type AnyRecord = Record<string, any>;
 type StoryPrompt = { role: 'system' | 'assistant' | 'user'; content: string };
@@ -452,17 +454,19 @@ const removeBoardRecord = (statData: AnyRecord, type: '新闻' | '见闻' | '委
 };
 
 const boardNewsFromTag = (tag: NarrativeTagLine, type: '新闻' | '见闻') => {
-  const location = tagValue(tag, ['地点', '地区', '来源']) || tagPrimary(tag, 0);
+  const location = tagValue(tag, ['地点', '地区']) || tagPrimary(tag, 0);
+  const source = tagValue(tag, ['来源', '发布者']) || location;
   const title = tagValue(tag, ['标题', '名称'])
     || (tag.fields.length >= 3 ? tagPrimary(tag, 1) : tagPrimary(tag, 0, type));
   const detail = tagValue(tag, ['内容', '详情', '说明'])
     || (tag.fields.length >= 3 ? tag.fields.slice(2).join('｜') : tagPrimary(tag, 1, tag.body));
+  const fullDetail = detail.length >= 50 ? detail : [detail, tag.body].filter(Boolean).join('。');
   return {
     标题: title,
-    内容: detail || tag.body,
-    来源: location,
+    内容: fullDetail || tag.body,
+    来源: source,
     地点: location,
-    状态: '记录中',
+    状态: tagValue(tag, ['状态']) || '记录中',
     时间: tagValue(tag, ['时间', '更新']),
   };
 };
@@ -577,52 +581,49 @@ const syncNpcTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
   };
 };
 
-const cluePhaseCanonicalNames = [
-  '风声汇账',
-  '异象三地对照',
-  '断碑十八号',
-  '外环记录灵',
-  '七旗日期会',
-  '勇者集结',
-  '灾厄之龙觉醒',
-];
-
-const cluePhaseAliases: Record<string, string> = {
-  阶段一: cluePhaseCanonicalNames[0],
-  第一阶段: cluePhaseCanonicalNames[0],
-  阶段二: cluePhaseCanonicalNames[1],
-  第二阶段: cluePhaseCanonicalNames[1],
-  阶段三: cluePhaseCanonicalNames[2],
-  第三阶段: cluePhaseCanonicalNames[2],
-  阶段四: cluePhaseCanonicalNames[3],
-  第四阶段: cluePhaseCanonicalNames[3],
-  阶段五: cluePhaseCanonicalNames[4],
-  第五阶段: cluePhaseCanonicalNames[4],
-  阶段六: cluePhaseCanonicalNames[5],
-  第六阶段: cluePhaseCanonicalNames[5],
-  阶段七: cluePhaseCanonicalNames[6],
-  第七阶段: cluePhaseCanonicalNames[6],
-};
-
 const syncClueTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
   const phaseText = tagPrimary(tag, 0, tagValue(tag, ['阶段']) || '阶段一');
-  const phase = cluePhaseAliases[phaseText] || phaseText;
-  const slot = tagPrimary(tag, 1, tagValue(tag, ['线索位', '槽位']) || '线索1');
-  const clueName = tagPrimary(tag, 2, tagValue(tag, ['线索', '名称', '标题']) || slot);
-  const detail = tagValue(tag, ['指向', '详情', '内容']) || tagPrimary(tag, 3);
+  const phase = resolveCanonicalPhaseName(phaseText);
+  const phaseDef = eldredCanonicalCluePhases.find(item => item.phase === phase);
+  if (!phaseDef) return;
+  const explicitSlotText = tagValue(tag, ['线索位', '槽位']);
+  const explicitClueName = tagValue(tag, ['线索', '名称', '标题']);
+  const detail = tagValue(tag, ['指向', '详情', '内容']);
   const row = ensureRecordAt(statData, ['主线', '阶段钥匙册', phase]);
   const clues = ensureRecordAt(row, ['线索']);
-  clues[slot] = {
-    名称: clueName,
-    显示: clueName,
-    状态: '已解锁',
-    指向: detail,
-    详情: detail,
-    发现地点: tagValue(tag, ['地点']),
+
+  const unlockCanonical = (slot: number, overrideDetail = '') => {
+    const clue = phaseDef.clues[slot];
+    if (!clue) return;
+    clues[`线索${slot + 1}`] = {
+      id: clue.id,
+      名称: clue.display,
+      显示: clue.display,
+      状态: '已解锁',
+      指向: overrideDetail || clue.detail,
+      详情: overrideDetail || clue.detail,
+      发现地点: tagValue(tag, ['地点']) || clue.location,
+      载体: clue.carrier,
+    };
   };
+
+  if (explicitSlotText) {
+    const matched = findCanonicalClueSlot(phase, explicitSlotText);
+    if (matched) unlockCanonical(matched.slot, detail || explicitClueName);
+  }
+  if (explicitClueName) {
+    const matched = findCanonicalClueSlot(phase, explicitClueName);
+    if (matched) unlockCanonical(matched.slot, detail);
+  }
+  tag.fields.slice(1).forEach(field => {
+    if (/事件|完成|阶段/.test(field)) return;
+    const matched = findCanonicalClueSlot(phase, field);
+    if (matched) unlockCanonical(matched.slot, detail);
+  });
+
   row.状态 = '记录中';
   row.完成度 = `${Math.min(3, Object.keys(clues).length)}/3`;
-  if (detail && !row.阶段完成显示) row.阶段完成显示 = detail;
+  if (!row.阶段完成显示) row.阶段完成显示 = phaseDef.eventName;
 };
 
 const parseCombatUnitField = (field: string) => {
@@ -796,7 +797,7 @@ const mergeSyncedRuntime = (previous: EldredRuntimeSave, statData?: AnyRecord | 
   if (synced.source !== 'mvu') return previous;
   return {
     ...synced,
-    player: synced.player || previous.player,
+    player: mergePlayerWithCachedOpening(synced.player, previous.player),
     npcs: synced.npcs.length ? synced.npcs : previous.npcs,
     quests: synced.quests.length ? synced.quests : previous.quests,
     cluePhases: synced.cluePhases.some(phase => phase.clues.length) ? synced.cluePhases : previous.cluePhases,
@@ -1051,8 +1052,12 @@ export const buildEldredOpeningFacts = (player: PlayerState) => {
     .map(key => `${ATTRIBUTE_LABELS[key]}${player.stats[key]}`)
     .join(' / ');
   const skillNames = player.activeSkillIds.map(id => getSkillById(id)?.name).filter(Boolean).join('、') || '无';
+  const skillIds = player.activeSkillIds.join('、') || '无';
   const talentNames = player.talentIds.map(id => getTalentById(id)?.name).filter(Boolean).join('、') || '无';
   const equipment = player.equipmentIds.map(id => getEquipmentById(id)?.name).filter(Boolean).join('、') || '无';
+  const equipmentSlots = Object.entries(player.equipmentLoadout)
+    .map(([slot, id]) => `${slot}:${getEquipmentById(id || '')?.name || id}`)
+    .join('、') || '无';
   const location = formatEldredLocation(undefined, player.location);
   return [
     '【艾尔德雷德入局设定】',
@@ -1068,7 +1073,10 @@ export const buildEldredOpeningFacts = (player: PlayerState) => {
     '等级：1',
     `战斗底值：生命${player.stats.maxHp}｜法力${player.stats.maxMp}｜护甲${player.stats.ac}｜熟练+${player.stats.proficiency}`,
     `已选开局技能：${skillNames}`,
+    `已选开局技能ID：${skillIds}`,
     `初始装备：${equipment}`,
+    `初始装备槽位：${equipmentSlots}`,
+    `变量主角路径：主角.身份.姓名=${player.name}｜主角.身份.职业=${cls.name}｜主角.战斗.已知技能=${skillNames}｜主角.战斗.激活技能=${skillNames}`,
   ].join('\n');
 };
 
@@ -1283,7 +1291,8 @@ export const generateEldredNarrationFromOpening = async (runtime: EldredRuntimeS
   const userInput = '进入艾尔德雷德。';
   const systemPrompt = [
     buildBaseSystemPrompt(runtime, openingFacts, 'opening'),
-    '生成第一幕正文。只按入局设定初始化变量；未选择技能、默认剧情、默认队友、默认背包、默认好感、默认声望不得写入。需要基于出生点和第一幕事实生成4条本地新闻/见闻与4条可接委托，并写入变量。需要输出 <content> 与 <UpdateVariable>。',
+    '生成第一幕正文。只按入局设定初始化变量；未选择技能、默认剧情、默认队友、默认背包、默认好感、默认声望不得写入。必须把姓名、性别、年龄、经历、种族、职业、五维、战斗底值、已选开局技能、初始装备写入主角变量。需要基于出生点和第一幕事实生成4条本地新闻/见闻与4条可接委托，并写入变量；每条新闻/见闻的内容字段不少于50个汉字，必须有标题、内容、地点、来源、状态、时间。需要输出 <content> 与 <UpdateVariable>。',
+    '变量写入必须使用主角.身份.姓名、主角.身份.性别、主角.身份.年龄、主角.身份.经历、主角.身份.种族、主角.身份.职业、主角.战斗.已知技能、主角.战斗.激活技能、世界.当前时间、世界.当前地点、世界.在场角色。新闻/见闻必须写入世界.动态看板.新闻或世界.动态看板.见闻；委托必须写入世界.动态看板.委托。',
   ].join('\n\n');
   try {
     const rawStatDataBefore = cloneRecord(runtime.rawStatData || {});

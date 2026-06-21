@@ -244,8 +244,8 @@ export function CombatPanel({
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col xl:flex-row gap-4 z-10 min-h-0">
-        <div className="flex-1 flex flex-col gap-4 overflow-y-auto pr-0 xl:pr-2">
+      <div className="combat-panel-body flex-1 flex flex-col 2xl:flex-row gap-4 z-10 min-h-0">
+        <div className="flex-[1.1] flex flex-col gap-4 overflow-y-auto pr-0 2xl:pr-2">
           <div className="glass-panel-light rounded-xl p-4 border-t-2 border-fantasy-red/50">
             <h3 className="text-xs text-fantasy-red mb-4 tracking-widest flex items-center gap-2"><Sword className="w-3 h-3" /> 敌方目标</h3>
             <div className="space-y-4">
@@ -279,7 +279,7 @@ export function CombatPanel({
           </div>
         </div>
 
-        <div className="w-full xl:w-96 flex flex-col gap-4 min-h-[520px] xl:min-h-0">
+        <div className="combat-command-column w-full 2xl:w-[42rem] flex flex-col gap-4 min-h-[720px] 2xl:min-h-0">
           <div className="glass-panel rounded-xl p-4 shrink-0">
             <h3 className="text-xs text-fantasy-gold mb-3 font-serif border-b border-fantasy-gold/20 pb-2">行动指令</h3>
             <div className="grid grid-cols-3 gap-2 mb-3">
@@ -323,7 +323,7 @@ export function CombatPanel({
             </div>
           </div>
 
-          <div className="glass-panel rounded-xl flex-1 p-4 flex flex-col min-h-0">
+          <div className="glass-panel rounded-xl flex-[2.6] p-4 flex flex-col min-h-[34rem] 2xl:min-h-0">
             <h3 className="text-xs text-fantasy-gold mb-3 font-serif border-b border-fantasy-gold/20 pb-2">指令记录</h3>
             <div className="flex-1 overflow-y-auto space-y-3 pr-2 text-sm">
               {logs.length === 0 && (
