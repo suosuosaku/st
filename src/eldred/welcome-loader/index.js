@@ -1,6 +1,6 @@
 (() => {
-  const BUILD_ID = 'eldred-welcome-loader-v3.5.11';
-  const VERSION_REF = 'eldred-integrated-v3.5.11';
+  const BUILD_ID = 'eldred-welcome-loader-v3.5.12';
+  const VERSION_REF = 'eldred-integrated-v3.5.12';
   const GLOBAL_KEY = '__eldredWelcomeLoader';
   const FRAME_SELECTOR = '[data-eldred-welcome-console="true"]';
   const FULL_UI_BASE = detectFullUiBase();
