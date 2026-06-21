@@ -14,8 +14,10 @@ import {
   EldredNarrationKind,
   EldredRuntimeMessage,
   EldredRuntimeSave,
+  extractEldredStatData,
   loadEldredRuntimeSave,
   persistEldredRuntimeCache,
+  runtimeFromStatData,
 } from './eldredSave';
 import { formatEldredLocation } from './locationFormat';
 
@@ -169,31 +171,144 @@ const notifyRuntimeChanged = () => {
   }
 };
 
-const syncGeneratedMvuVariables = async (rawText: string) => {
-  if (!/<UpdateVariable\b/i.test(rawText)) return false;
-  const mvu = getMvuBridge();
-  if (!mvu?.getMvuData || !mvu.parseMessage || !mvu.replaceMvuData) {
-    console.warn('[艾尔德雷德] 未检测到完整 MVU 接口，无法解析本次 <UpdateVariable>。');
-    return false;
+type JsonPatchOperation = {
+  op: 'add' | 'replace' | 'remove';
+  path: string;
+  value?: unknown;
+};
+
+const isRecord = (value: unknown): value is AnyRecord =>
+  Boolean(value && typeof value === 'object' && !Array.isArray(value));
+
+const cloneRecord = (value: unknown): AnyRecord => {
+  if (!isRecord(value)) return {};
+  try {
+    if (typeof structuredClone === 'function') return structuredClone(value);
+  } catch {
+    // Fall back to JSON cloning below.
   }
   try {
-    const { option, oldData } = resolveMvuWriteContext(mvu);
-    const parsed = await mvu.parseMessage(rawText, oldData || {});
-    if (!parsed || typeof parsed !== 'object') {
-      console.warn('[艾尔德雷德] MVU parseMessage 未返回变量对象。');
-      return false;
-    }
-    await mvu.replaceMvuData(parsed, option);
-    notifyRuntimeChanged();
-    return true;
-  } catch (error) {
-    console.warn('[艾尔德雷德] MVU 同步失败，保留本次正文。', error);
-    return false;
+    return JSON.parse(JSON.stringify(value)) as AnyRecord;
+  } catch {
+    return { ...value };
   }
 };
 
-const mergeSyncedRuntime = (previous: EldredRuntimeSave) => {
-  const synced = loadEldredRuntimeSave();
+const normalizeJsonPatchPayload = (payload: unknown): JsonPatchOperation[] => {
+  const operations = Array.isArray(payload)
+    ? payload
+    : isRecord(payload)
+      ? payload.JSONPatch ?? payload.jsonPatch ?? payload.patch ?? payload.patches ?? payload.operations ?? payload.ops
+      : [];
+  if (!Array.isArray(operations)) return [];
+  return operations.filter((item): item is JsonPatchOperation => {
+    if (!isRecord(item)) return false;
+    return ['add', 'replace', 'remove'].includes(String(item.op)) && typeof item.path === 'string' && item.path.length > 0;
+  });
+};
+
+const parseJsonPatchText = (text: string): JsonPatchOperation[] => {
+  const cleaned = text
+    .replace(/```(?:json)?/gi, '')
+    .replace(/```/g, '')
+    .trim();
+  if (!cleaned) return [];
+  try {
+    return normalizeJsonPatchPayload(JSON.parse(cleaned));
+  } catch {
+    const arrayMatch = cleaned.match(/\[[\s\S]*\]/);
+    if (!arrayMatch) return [];
+    try {
+      return normalizeJsonPatchPayload(JSON.parse(arrayMatch[0]));
+    } catch {
+      return [];
+    }
+  }
+};
+
+const extractJsonPatchOperations = (rawText: string): JsonPatchOperation[] => {
+  const source = String(rawText || '');
+  const blocks = Array.from(source.matchAll(/<JSONPatch\b[^>]*>([\s\S]*?)(?:<\/JSONPatch>|<\/UpdateVariable>|$)/gi))
+    .map(match => match[1] || '')
+    .filter(Boolean);
+  if (blocks.length) return blocks.flatMap(parseJsonPatchText);
+
+  const updateBlocks = Array.from(source.matchAll(/<UpdateVariable\b[^>]*>([\s\S]*?)(?:<\/UpdateVariable>|$)/gi))
+    .map(match => match[1] || '')
+    .filter(Boolean);
+  return updateBlocks.flatMap(parseJsonPatchText);
+};
+
+const pointerSegments = (path: string) => {
+  const rawSegments = path.startsWith('/')
+    ? path.split('/').slice(1)
+    : path.split(/[./]/);
+  return rawSegments
+    .map(segment => segment.replace(/~1/g, '/').replace(/~0/g, '~').trim())
+    .filter(Boolean);
+};
+
+const applyJsonPatchOperations = (baseStatData: unknown, operations: JsonPatchOperation[]) => {
+  if (!operations.length) return null;
+  const nextStatData = cloneRecord(baseStatData);
+  let applied = false;
+
+  for (const operation of operations) {
+    const segments = pointerSegments(operation.path);
+    if (!segments.length) continue;
+    let cursor: AnyRecord = nextStatData;
+    for (const segment of segments.slice(0, -1)) {
+      const nextValue = cursor[segment];
+      if (!isRecord(nextValue)) cursor[segment] = {};
+      cursor = cursor[segment] as AnyRecord;
+    }
+    const leaf = segments[segments.length - 1];
+    if (operation.op === 'remove') {
+      if (Object.prototype.hasOwnProperty.call(cursor, leaf)) {
+        delete cursor[leaf];
+        applied = true;
+      }
+      continue;
+    }
+    cursor[leaf] = operation.value;
+    applied = true;
+  }
+
+  return applied ? nextStatData : null;
+};
+
+const syncGeneratedMvuVariables = async (rawText: string, previous: EldredRuntimeSave) => {
+  if (!/<UpdateVariable\b|<JSONPatch\b/i.test(rawText)) return null;
+  const mvu = getMvuBridge();
+  if (!mvu?.getMvuData || !mvu.parseMessage || !mvu.replaceMvuData) {
+    console.warn('[艾尔德雷德] 未检测到完整 MVU 接口，无法解析本次 <UpdateVariable>。');
+  } else {
+    try {
+      const { option, oldData } = resolveMvuWriteContext(mvu);
+      const parsed = await mvu.parseMessage(rawText, oldData || {});
+      if (!parsed || typeof parsed !== 'object') {
+        console.warn('[艾尔德雷德] MVU parseMessage 未返回变量对象。');
+      } else {
+        await mvu.replaceMvuData(parsed, option);
+        notifyRuntimeChanged();
+        const parsedStatData = extractEldredStatData(parsed);
+        if (parsedStatData) return parsedStatData;
+      }
+    } catch (error) {
+      console.warn('[艾尔德雷德] MVU 同步失败，改用本地 JSONPatch 合并。', error);
+    }
+  }
+
+  const patchedStatData = applyJsonPatchOperations(previous.rawStatData || {}, extractJsonPatchOperations(rawText));
+  if (patchedStatData) {
+    notifyRuntimeChanged();
+    return patchedStatData;
+  }
+  return null;
+};
+
+const mergeSyncedRuntime = (previous: EldredRuntimeSave, statData?: AnyRecord | null) => {
+  const synced = statData ? runtimeFromStatData(statData) : loadEldredRuntimeSave();
   if (synced.source !== 'mvu') return previous;
   return {
     ...synced,
@@ -261,8 +376,13 @@ export const extractEldredContentBlock = (rawText: string) => {
     .filter(Boolean);
   const content = matches.length ? matches.join('\n\n') : source;
   return content
+    .replace(/<UpdateVariable\b[^>]*>[\s\S]*?<\/UpdateVariable>/gi, '')
+    .replace(/<Analysis\b[^>]*>[\s\S]*?<\/Analysis>/gi, '')
+    .replace(/<JSONPatch\b[^>]*>[\s\S]*?<\/JSONPatch>/gi, '')
     .replace(/<thinking\b[^>]*>[\s\S]*?<\/thinking>/gi, '')
     .replace(/<time\b[^>]*>[\s\S]*?<\/time>/gi, '')
+    .replace(/<recap\b[^>]*>[\s\S]*?<\/recap>/gi, '')
+    .replace(/<\/?(?:UpdateVariable|Analysis|JSONPatch|content|thinking|time|recap)\b[^>]*>/gi, '')
     .replace(/\s*\[TIME:[^\]]+\]\s*$/i, '')
     .trim();
 };
@@ -534,8 +654,8 @@ export const generateEldredNarrationFromInput = async (
       systemPrompt: buildBaseSystemPrompt(runtime, trimmedInput, kind),
       worldbookScanText: buildWorldbookScanText(runtime, trimmedInput, kind),
     });
-    await syncGeneratedMvuVariables(rawText);
-    const syncedRuntime = mergeSyncedRuntime(runtime);
+    const statData = await syncGeneratedMvuVariables(rawText, runtime);
+    const syncedRuntime = mergeSyncedRuntime(runtime, statData);
     const content = extractEldredContentBlock(rawText);
     return appendGeneratedEntry(syncedRuntime, {
       kind,
@@ -563,8 +683,8 @@ export const generateEldredNarrationFromOpening = async (runtime: EldredRuntimeS
       systemPrompt,
       worldbookScanText: buildWorldbookScanText(runtime, openingFacts, 'opening_setup'),
     });
-    await syncGeneratedMvuVariables(rawText);
-    const syncedRuntime = mergeSyncedRuntime(runtime);
+    const statData = await syncGeneratedMvuVariables(rawText, runtime);
+    const syncedRuntime = mergeSyncedRuntime(runtime, statData);
     const content = extractEldredContentBlock(rawText);
     return appendGeneratedEntry(syncedRuntime, {
       kind: 'opening',
@@ -599,8 +719,8 @@ export const generateEldredNarrationFromEvent = async (
       systemPrompt,
       worldbookScanText: buildWorldbookScanText(runtime, `${eventPayload}\n${userInput}`, input.eventType),
     });
-    await syncGeneratedMvuVariables(rawText);
-    const syncedRuntime = mergeSyncedRuntime(runtime);
+    const statData = await syncGeneratedMvuVariables(rawText, runtime);
+    const syncedRuntime = mergeSyncedRuntime(runtime, statData);
     const content = extractEldredContentBlock(rawText);
     return appendGeneratedEntry(syncedRuntime, {
       kind,
@@ -630,8 +750,8 @@ export const rerollLatestEldredNarration = async (runtime: EldredRuntimeSave) =>
       systemPrompt: rerollPrompt,
       worldbookScanText: buildWorldbookScanText(sourceRuntime, latest.userInput, latest.sourceEventType || latest.kind),
     });
-    await syncGeneratedMvuVariables(rawText);
-    const syncedRuntime = mergeSyncedRuntime(sourceRuntime);
+    const statData = await syncGeneratedMvuVariables(rawText, sourceRuntime);
+    const syncedRuntime = mergeSyncedRuntime(sourceRuntime, statData);
     const content = extractEldredContentBlock(rawText);
     return appendGeneratedEntry(syncedRuntime, {
       kind: latest.kind,

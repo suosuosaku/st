@@ -337,6 +337,8 @@ const extractStatData = (value: unknown): AnyRecord | null => {
   return Object.keys(statData).length > 0 ? statData : null;
 };
 
+export const extractEldredStatData = extractStatData;
+
 const readMvuData = (): AnyRecord | null => {
   for (const api of hostScopes()) {
     try {

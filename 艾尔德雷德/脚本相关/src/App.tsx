@@ -230,7 +230,7 @@ export default function App() {
       case 'map': return <MapPanel player={playerState} runtime={runtime} />;
       case 'party': return <PartyPanel player={playerState} onUpdatePlayer={updatePlayerPreview} onUpdateNpcs={updateNpcs} npcs={runtime.npcs} onSubmitEvent={submitRuntimeEvent} />;
       case 'npc': return <NpcPanel npcs={runtime.npcs} />;
-      case 'quests': return <QuestPanel quests={runtime.quests} onSubmitEvent={submitRuntimeEvent} />;
+      case 'quests': return <QuestPanel quests={runtime.quests} boardItems={runtime.world.dynamicBoard} onSubmitEvent={submitRuntimeEvent} />;
       case 'clues': return <CluePanel cluePhases={runtime.cluePhases} />;
       case 'combat': return <CombatPanel player={playerState} partyNpcs={runtime.npcs.filter(npc => playerState.partyMemberIds.includes(npc.id) || playerState.partyMemberIds.includes(npc.name))} enemyUnits={runtime.combat.enemyUnits} initialTurn={runtime.combat.turn} initialLogs={runtime.combat.logs} runtime={runtime} onSubmitEvent={submitRuntimeEvent} onSubmitCommand={submitCombatCommand} />;
       case 'inventory': return <InventoryPanel player={playerState} />;
