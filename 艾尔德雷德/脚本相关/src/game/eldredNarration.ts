@@ -36,6 +36,14 @@ const createId = (prefix: string) => {
 
 const quote = (value: unknown) => String(value ?? '').replaceAll('"', "'");
 
+const ELDRED_D20_AUTHORITY_RULE = [
+  'D20权威判定:',
+  '- event_type 为 action_check 时，脚本控制台已经完成二十面骰、属性加值、熟练加值、额外修正、种族/职业/伴生技能/装备来源修正、目标值修正和成功/失败结算。',
+  '- 正文必须承认 authoritativeResult 与 related_facts 中的骰面、公式、修正来源、最终目标值和结果，不得重新掷骰、不得改判成功失败。',
+  '- 若结果成功，只演绎合理收益、发现、推进或优势；若结果失败，只演绎受阻、代价、信息缺口、风险变化或替代入口。',
+  '- 若判定造成变量变化，<UpdateVariable> 必须与脚本权威结果一致。',
+].join('\n');
+
 const safeScope = (scopeFactory: () => unknown): AnyRecord | null => {
   try {
     const scope = scopeFactory();
@@ -701,6 +709,7 @@ const buildHistoryPrompts = (runtime: EldredRuntimeSave): StoryPrompt[] =>
 const buildBaseSystemPrompt = (runtime: EldredRuntimeSave, userInput: string, kind: EldredNarrationKind, party: Character[] = [], enemies: CombatUnit[] = []) => [
   '艾尔德雷德脚本控制台事实输入。',
   '脚本控制台负责权威状态、按钮交互、战斗数值、装备槽位、技能装配和存档；正文负责演绎、场景反应、变量同步和沉浸提示。',
+  ELDRED_D20_AUTHORITY_RULE,
   ELDRED_WORLD_ENGINE_PATCH,
   ELDRED_CHAT_BEAUTIFY_RULES,
   kind === 'combat' ? ELDRED_COMBAT_INTERNAL_CHECKLIST : '',

@@ -10,6 +10,7 @@ export type EldredFrontendEventType =
   | 'equipment_change'
   | 'skill_change'
   | 'attribute_allocate'
+  | 'action_check'
   | 'combat_command'
   | 'free_intent';
 

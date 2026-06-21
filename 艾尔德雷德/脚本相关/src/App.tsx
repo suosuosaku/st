@@ -28,6 +28,7 @@ import {
 } from './game/eldredNarration';
 import {
   dispatchEldredCombatCommand,
+  dispatchEldredD20Check,
   EldredCombatCommand,
   persistRuntimeNpcs,
   persistRuntimePlayer,
@@ -169,6 +170,23 @@ export default function App() {
         combat: runtime.combat,
         world: runtime.world,
       };
+      const checkResult = dispatchEldredD20Check(sourceRuntime, text);
+      if (checkResult?.event) {
+        setRuntime(checkResult.runtime);
+        setPlayerState(checkResult.runtime.player || playerState);
+        const generatedRuntime = await generateEldredNarrationFromEvent(checkResult.runtime, {
+          ...checkResult.event,
+          player: checkResult.runtime.player,
+          party: checkResult.runtime.player
+            ? checkResult.runtime.npcs.filter(npc => checkResult.runtime.player?.partyMemberIds.includes(npc.id) || checkResult.runtime.player?.partyMemberIds.includes(npc.name))
+            : [],
+          enemies: checkResult.runtime.combat.enemyUnits,
+        });
+        setRuntime(generatedRuntime);
+        setPlayerState(generatedRuntime.player || checkResult.runtime.player || playerState);
+        setInteractionStatus(generatedRuntime.narration.lastError ? generatedRuntime.narration.lastError : '判定正文已同步');
+        return;
+      }
       const generatedRuntime = await generateEldredNarrationFromInput(sourceRuntime, text, 'free');
       setRuntime(generatedRuntime);
       setPlayerState(generatedRuntime.player || playerState);

@@ -26,6 +26,7 @@ import {
   persistEldredRuntimeCache,
 } from './eldredSave';
 import { EldredFrontendEventInput } from './eldredEvents';
+import { EldredD20CheckResult, parseD20CheckIntent, resolveD20Check } from './eldredDice';
 
 export type EldredCombatCommandKind = 'attack' | 'guard' | 'escape' | 'skill';
 
@@ -40,6 +41,10 @@ export type EldredActionResult = {
   runtime: EldredRuntimeSave;
   event?: Omit<EldredFrontendEventInput, 'player' | 'party' | 'enemies'>;
   notice: string;
+};
+
+export type EldredD20ActionResult = EldredActionResult & {
+  check?: EldredD20CheckResult;
 };
 
 const nowIso = () => new Date().toISOString();
@@ -66,6 +71,62 @@ export const persistRuntimePlayer = (runtime: EldredRuntimeSave, player: PlayerS
 
 export const persistRuntimeNpcs = (runtime: EldredRuntimeSave, npcs: Character[]): EldredRuntimeSave =>
   commitRuntime({ ...runtime, npcs });
+
+export const dispatchEldredD20Check = (
+  runtime: EldredRuntimeSave,
+  rawText: string,
+): EldredD20ActionResult | null => {
+  if (!runtime.player) return null;
+  const intent = parseD20CheckIntent(rawText, runtime.player);
+  if (!intent) return null;
+
+  const actor = playerToCombatUnit(runtime.player);
+  const check = resolveD20Check(actor, intent);
+  const player = withPlayerNotice(
+    runtime.player,
+    createNotice({
+      type: 'event',
+      title: `行动判定：${check.success ? '成功' : '失败'}`,
+      body: check.summary,
+      meta: `目标值${check.dc} / ${ATTRIBUTE_LABELS[check.attribute]} / ${check.mode === 'advantage' ? '优势' : check.mode === 'disadvantage' ? '劣势' : '普通'}${check.sourceNotes.length ? ` / ${check.sourceNotes.join('、')}` : ''}`,
+    }),
+  );
+  const nextRuntime = commitRuntime({ ...runtime, player });
+  const facts = [
+    `判定类型：D20行动判定`,
+    `行动者：${check.actorName}`,
+    `行动：${check.action}`,
+    check.target ? `目标：${check.target}` : '',
+    `属性：${ATTRIBUTE_LABELS[check.attribute]}`,
+    `骰面：${check.rolls.join('/')}`,
+    `采用骰面：${check.chosenRoll}`,
+    `属性加值：${check.attributeBonus}`,
+    `熟练加值：${check.proficiency}`,
+    `额外修正：${check.bonus}`,
+    `来源修正：${check.contextualBonus}`,
+    check.sourceNotes.length ? `修正来源：${check.sourceNotes.join('、')}` : '',
+    `总值：${check.total}`,
+    check.requestedDc !== check.dc ? `原始目标值：${check.requestedDc}` : '',
+    check.dcAdjustment ? `目标值修正：${check.dcAdjustment >= 0 ? '+' : ''}${check.dcAdjustment}` : '',
+    `目标值：${check.dc}`,
+    `结果：${check.success ? '成功' : '失败'}`,
+    `差值：${check.margin >= 0 ? '+' : ''}${check.margin}`,
+  ].filter(Boolean);
+  return {
+    runtime: nextRuntime,
+    check,
+    event: {
+      eventType: 'action_check',
+      title: `行动判定：${check.action}`,
+      playerIntent: rawText,
+      actor: check.actorId,
+      target: check.target,
+      authoritativeResult: check.summary,
+      extraFacts: facts,
+    },
+    notice: check.summary,
+  };
+};
 
 const npcToCombatUnit = (npc: Character): CombatUnit => ({
   id: npc.id,
