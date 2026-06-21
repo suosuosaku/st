@@ -33,7 +33,7 @@ import {
   originLocations,
   skills,
 } from './rules';
-import { characterImage } from '../data';
+import { fixedNpcImageNames, resolveCharacterImage } from '../data';
 
 type AnyRecord = Record<string, any>;
 
@@ -54,6 +54,8 @@ export type EldredNarrationEntry = {
   createdAt: string;
   sourceEventType?: string;
   characterTags?: string[];
+  rawStatDataBefore?: AnyRecord;
+  rawStatDataAfter?: AnyRecord;
 };
 
 export type EldredRuntimeMessage = {
@@ -684,26 +686,119 @@ const primitiveBoardItemsFrom = (raw: unknown, type: DynamicBoardItemType): Dyna
       location: '',
     }));
 
+const boardRecordKeys = new Set([
+  'id',
+  'ID',
+  '标题',
+  '名称',
+  'title',
+  '内容',
+  '说明',
+  '事项',
+  '目标',
+  '详情',
+  '详情描述',
+  '任务详情',
+  '来源',
+  '发布者',
+  '委托人',
+  'source',
+  '状态',
+  '进展',
+  'status',
+  '地点',
+  '位置',
+  '地标',
+  'location',
+  '时间',
+  '更新',
+  'updatedAt',
+  '报酬',
+  '奖励',
+  '风险',
+  '危险等级',
+  '建议等级',
+  '等级',
+  '时限',
+  '截止',
+  '分类',
+]);
+
+const looksLikeBoardRecord = (value: unknown) => {
+  const source = asRecord(value);
+  return Object.keys(source).some(key => boardRecordKeys.has(key));
+};
+
+const normalizeRisk = (value: unknown): Quest['risk'] | string => {
+  const raw = textOf(value);
+  if (!raw) return '';
+  const matched = ['极高', '高', '中', '低'].find(level => raw.includes(level));
+  return matched || raw;
+};
+
+const boardRecordFrom = (
+  key: string,
+  value: unknown,
+  type: DynamicBoardItemType,
+  index: number,
+): DynamicBoardItem | null => {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'object') {
+    const line = textOf(value);
+    if (!line && !key) return null;
+    return {
+      id: `${type}-${key || index}`,
+      type,
+      title: key && !/^\d+$/.test(key) ? key : line.split(/[｜|:：]/)[0] || type,
+      detail: line,
+      source: '',
+      status: '记录中',
+      location: '',
+    };
+  }
+
+  const source = asRecord(value);
+  const detail = textOf(
+    source.详情描述 ??
+    source.任务详情 ??
+    source.内容 ??
+    source.说明 ??
+    source.事项 ??
+    source.目标 ??
+    source.详情 ??
+    source.body
+  );
+  const title = textOf(source.标题 ?? source.名称 ?? source.title, /^\d+$/.test(key) ? type : key || type);
+  const risk = normalizeRisk(source.风险 ?? source.危险等级);
+  return {
+    id: textOf(source.id ?? source.ID, `${type}-${key || index}`),
+    type,
+    title,
+    detail,
+    source: textOf(source.来源 ?? source.发布者 ?? source.委托人 ?? source.source),
+    status: textOf(source.状态 ?? source.进展 ?? source.status, '记录中'),
+    location: textOf(source.地点 ?? source.位置 ?? source.地标 ?? source.location),
+    risk: risk || undefined,
+    reward: textOf(source.报酬 ?? source.奖励 ?? source.reward) || undefined,
+    recLevel: source.建议等级 !== undefined || source.等级 !== undefined ? numberOf(source.建议等级 ?? source.等级, 1) : undefined,
+    timeLimit: textOf(source.时限 ?? source.截止 ?? source.timeLimit) || undefined,
+    updatedAt: textOf(source.时间 ?? source.更新 ?? source.updatedAt),
+  };
+};
+
 const boardItemsFrom = (raw: unknown, type: DynamicBoardItemType): DynamicBoardItem[] => {
   if (raw === undefined || raw === null) return [];
   if (typeof raw !== 'object') return primitiveBoardItemsFrom(raw, type);
+  if (looksLikeBoardRecord(raw)) {
+    const item = boardRecordFrom('', raw, type, 0);
+    return item ? [item] : [];
+  }
   const entries = Array.isArray(raw)
     ? raw.map((value, index) => [String(index + 1), value] as const)
     : Object.entries(asRecord(raw));
-  return entries.map(([key, value], index) => {
-    const source = asRecord(value);
-    const body = textOf(source.内容 ?? source.说明 ?? source.事项 ?? source.目标 ?? source.详情 ?? value);
-    return {
-      id: textOf(source.id ?? source.ID, `${type}-${key || index}`),
-      type,
-      title: textOf(source.标题 ?? source.名称 ?? source.title, key || type),
-      detail: body,
-      source: textOf(source.来源 ?? source.发布者 ?? source.委托人 ?? source.source),
-      status: textOf(source.状态 ?? source.进展 ?? source.status, '记录中'),
-      location: textOf(source.地点 ?? source.位置 ?? source.地标 ?? source.location),
-      updatedAt: textOf(source.时间 ?? source.更新 ?? source.updatedAt),
-    };
-  }).filter(item => item.title || item.detail);
+  return entries
+    .map(([key, value], index) => boardRecordFrom(key, value, type, index))
+    .filter((item): item is DynamicBoardItem => Boolean(item && (item.title || item.detail)));
 };
 
 const dynamicBoardFromStatData = (statData: AnyRecord): DynamicBoardItem[] => {
@@ -725,7 +820,7 @@ const dynamicBoardFromStatData = (statData: AnyRecord): DynamicBoardItem[] => {
   items.push(...boardItemsFrom(world.市场 ?? system.市场 ?? system.市场看板, '市场'));
   items.push(...boardItemsFrom(world.传讯 ?? system.传讯 ?? system.最新传讯 ?? system.消息板, '传讯'));
   items.push(...boardItemsFrom(world.路径行动 ?? system.路径行动, '路径行动'));
-  items.push(...boardItemsFrom(system.委托板, '委托'));
+  items.push(...boardItemsFrom(world.委托 ?? system.委托 ?? system.委托板, '委托'));
 
   const seen = new Set<string>();
   return items
@@ -800,7 +895,6 @@ const playerFromStatData = (statData: AnyRecord): PlayerState | null => {
     ac: numberOf(firstDefined(battle.护甲, battle.护甲等级, battle.AC), derived.ac),
   };
   const name = textOf(identityRecord.姓名 ?? main.姓名 ?? battle.姓名, '{{user}}');
-
   return {
     identity: {
       name,
@@ -832,7 +926,7 @@ const playerFromStatData = (statData: AnyRecord): PlayerState | null => {
   };
 };
 
-const characterFromVariable = (name: string, raw: unknown, type: Character['type']): Character => {
+const characterFromVariable = (name: string, raw: unknown, type: Character['type'], fixed = false): Character => {
   const source = asRecord(raw);
   const mechanicText = [
     typeof raw === 'string' ? raw : '',
@@ -895,8 +989,14 @@ const characterFromVariable = (name: string, raw: unknown, type: Character['type
     identity: textOf(source.身份 ?? source.职责, '未登记'),
     classId,
     profession: textOf(source.职业 ?? source.职责, getClassById(classId).name),
-    avatarUrl: characterImage(name, '头像'),
-    portraitUrl: characterImage(name, '立绘'),
+    avatarUrl: resolveCharacterImage(name, '头像', {
+      fixed,
+      raw: source.头像 ?? source.avatarUrl ?? source.avatar,
+    }),
+    portraitUrl: resolveCharacterImage(name, '立绘', {
+      fixed,
+      raw: source.立绘 ?? source.portraitUrl ?? source.portrait,
+    }),
     stats: {
       ...derived,
       hp: hp.current,
@@ -927,24 +1027,25 @@ const npcsFromStatData = (statData: AnyRecord): Character[] => {
   const legacy = asRecord(mainRecord.NPC名册);
   const existingNames = new Set([...Object.keys(major), ...Object.keys(other)]);
   return [
-    ...Object.entries(major).map(([name, value]) => characterFromVariable(name, value, 'NPC登记')),
-    ...Object.entries(other).map(([name, value]) => characterFromVariable(name, value, 'NPC登记')),
+    ...Object.entries(major).map(([name, value]) => characterFromVariable(name, value, 'NPC登记', true)),
+    ...Object.entries(other).map(([name, value]) => characterFromVariable(name, value, 'NPC登记', fixedNpcImageNames.has(name))),
     ...Object.entries(legacy)
       .filter(([name]) => name && name !== '无' && !existingNames.has(name))
-      .map(([name, value]) => characterFromVariable(name, value, 'NPC登记')),
+      .map(([name, value]) => characterFromVariable(name, value, 'NPC登记', fixedNpcImageNames.has(name))),
   ];
 };
 
 const questsFromStatData = (statData: AnyRecord): Quest[] =>
   Object.entries(asRecord(asRecord(statData.主角).任务列表)).map(([id, value], index) => {
     const source = asRecord(value);
+    const risk = normalizeRisk(source.风险 ?? source.危险等级);
     return {
       id,
       title: textOf(source.标题 ?? source.名称, id),
-      source: textOf(source.来源 ?? source.发布者, '未登记'),
-      task: textOf(source.目标 ?? source.说明 ?? source.任务, ''),
+      source: textOf(source.来源 ?? source.发布者 ?? source.委托人, '未登记'),
+      task: textOf(source.任务详情 ?? source.事项 ?? source.目标 ?? source.说明 ?? source.任务 ?? source.内容, ''),
       recLevel: numberOf(source.建议等级 ?? source.等级, 1),
-      risk: (['极高', '高', '中', '低'].includes(textOf(source.风险)) ? textOf(source.风险) : '中') as Quest['risk'],
+      risk: (['极高', '高', '中', '低'].includes(risk) ? risk : '中') as Quest['risk'],
       reward: textOf(source.奖励 ?? source.报酬, ''),
       timeLimit: textOf(source.时限 ?? source.截止, ''),
       reputationRegionId: textOf(source.声望地区, undefined as unknown as string),
@@ -1091,6 +1192,8 @@ const normalizeRuntime = (raw: Partial<EldredRuntimeSave>, source: EldredRuntime
           createdAt: textOf(entry.createdAt, new Date().toISOString()),
           sourceEventType: textOf(entry.sourceEventType),
           characterTags: splitTextList(entry.characterTags),
+          rawStatDataBefore: asRecord(entry.rawStatDataBefore),
+          rawStatDataAfter: asRecord(entry.rawStatDataAfter),
         })),
       lastGeneratedAt: textOf(raw.narration?.lastGeneratedAt),
       lastError: textOf(raw.narration?.lastError),

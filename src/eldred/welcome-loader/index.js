@@ -1,12 +1,12 @@
 (() => {
-  const BUILD_ID = 'eldred-welcome-loader-v3.5.5';
-  const VERSION_REF = 'eldred-integrated-v3.5.5';
+  const BUILD_ID = 'eldred-welcome-loader-v3.5.7';
+  const VERSION_REF = 'eldred-integrated-v3.5.7';
   const GLOBAL_KEY = '__eldredWelcomeLoader';
   const FRAME_SELECTOR = '[data-eldred-welcome-console="true"]';
   const FULL_UI_BASE = detectFullUiBase();
   const FULL_UI_ASSETS = {
-    script: 'assets/index-D7JSTh67.js',
-    style: 'assets/index-BR2DBG9M.css',
+    script: 'assets/index-mkqwhTF_.js',
+    style: 'assets/index-D5yPyG1u.css',
   };
   let iframeEl = null;
   let exitButtonEl = null;
@@ -150,6 +150,19 @@
       getChatMessages(range, option) {
         const getChatMessages = findCallable('getChatMessages');
         return getChatMessages ? getChatMessages(range, option) : [];
+      },
+      getThumbnailUrl(type, file) {
+        const getThumbnailUrl = findCallable('getThumbnailUrl');
+        return getThumbnailUrl ? getThumbnailUrl(type, file) : '';
+      },
+      substituteParams(text) {
+        const substituteParams = findCallable('substituteParams');
+        if (substituteParams) return substituteParams(text);
+        try {
+          const tavern = hostWindow().SillyTavern;
+          if (typeof tavern?.substituteParams === 'function') return tavern.substituteParams(text);
+        } catch (error) {}
+        return text;
       },
       generateRaw(config) {
         const generateRaw = findCallable('generateRaw');

@@ -5,6 +5,54 @@ const CHARACTER_IMAGE_BASE = 'https://pub-0b945c39f816498d833c1a7e27007410.r2.de
 export const characterImage = (name: string, type: '头像' | '立绘') =>
   `${CHARACTER_IMAGE_BASE}${encodeURIComponent(`${name}${type}.png`)}`;
 
+export const fixedNpcImageNames = new Set([
+  '贝尔娜',
+  '妮娅',
+  '帕琪',
+  '萨菈',
+  '露西',
+  '绯欧菈',
+  '小原',
+  '玛洛',
+  '艾米',
+  '玛蒂',
+  '蕾文',
+  '贝琳',
+  '布兰妲',
+  '托兰娜',
+  '奥薇',
+  '茜尔七号',
+  '莱恩',
+  '约娜',
+  '托比',
+  '莉亚',
+  '维芙',
+  '露',
+  '葛蕾娜',
+  '诺拉',
+  '伊薇',
+  '巴丝',
+  '埃利安',
+  '梅莉莎',
+  '罗薇',
+  '佩拉',
+]);
+
+export const resolveCharacterImage = (
+  name: string,
+  type: '头像' | '立绘',
+  options: { fixed?: boolean; raw?: unknown } = {},
+) => {
+  const raw = String(options.raw ?? '').trim();
+  if (/^(https?:|data:|blob:|\/)/i.test(raw)) return raw;
+  if (raw) {
+    const baseName = raw.replace(/\.(png|jpg|jpeg|webp)$/i, '').replace(/头像$|立绘$/g, '') || name;
+    return characterImage(baseName, type);
+  }
+  if (options.fixed || fixedNpcImageNames.has(name)) return characterImage(name, type);
+  return '';
+};
+
 const skillRefs = (ids: string[]) =>
   ids.map(id => getSkillById(id)).filter((skill): skill is NonNullable<typeof skill> => Boolean(skill));
 

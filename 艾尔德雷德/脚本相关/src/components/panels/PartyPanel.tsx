@@ -1,8 +1,16 @@
 import { Activity, Archive, Heart, Shield, Sparkles, User, UserPlus, Zap } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { AttributeKey, Character, Equipment, EquipmentLoadout, PlayerState, Skill } from '../../types';
 import { EldredFrontendEventInput } from '../../game/eldredEvents';
 import { formatEldredLocation } from '../../game/locationFormat';
+import {
+  getEldredAvatarRecord,
+  getEldredAvatarScopeKey,
+  readEldredAvatarFileAsDataUrl,
+  removeEldredAvatarRecord,
+  resolveSillyTavernUserAvatar,
+  saveEldredAvatarRecord,
+} from '../../game/avatarStorage';
 import {
   ACTIVE_SKILL_LIMIT,
   ATTRIBUTE_KEYS,
@@ -24,6 +32,7 @@ import {
 const defined = <T,>(value: T | undefined | null): value is T => Boolean(value);
 const EMPTY_NPCS: Character[] = [];
 type PartyDetailPage = 'summary' | 'attributes' | 'talents' | 'skills' | 'equipment' | 'relations';
+type AvatarOwner = { ownerType: 'player' | 'npc'; ownerName: string };
 
 const detailPages: { id: PartyDetailPage; label: string }[] = [
   { id: 'summary', label: '总览' },
@@ -88,12 +97,19 @@ const canNpcEquip = (equipment: Equipment, npc: Character) => {
   });
 };
 
+const avatarOwnerKey = (owner: AvatarOwner) => `${owner.ownerType}:${owner.ownerName}`;
+
 export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_NPCS, onSubmitEvent }: PartyPanelProps) {
   const [selectedId, setSelectedId] = useState('player');
   const [detailPage, setDetailPage] = useState<PartyDetailPage>('summary');
+  const [avatarOverrides, setAvatarOverrides] = useState<Record<string, string>>({});
+  const [portraitOverrides, setPortraitOverrides] = useState<Record<string, string>>({});
+  const [playerDefaultAvatarUrl, setPlayerDefaultAvatarUrl] = useState('');
   const [npcStates, setNpcStates] = useState<Record<string, Character>>(() =>
     Object.fromEntries(npcs.map(npc => [npc.id, npc])),
   );
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
+  const portraitFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setNpcStates(Object.fromEntries(npcs.map(npc => [npc.id, npc])));
@@ -107,6 +123,42 @@ export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_
     .map(id => npcStates[id] || Object.values(npcStates).find(npc => npc.name === id || npc.fullName === id))
     .filter(defined), [npcStates, player.partyMemberIds]);
   const selectedNpc = selectedId === 'player' ? null : npcStates[selectedId] || Object.values(npcStates).find(npc => npc.name === selectedId || npc.fullName === selectedId) || null;
+  const selectedAvatarOwner = useMemo(() => ({
+    ownerType: selectedNpc ? 'npc' as const : 'player' as const,
+    ownerName: selectedNpc?.name || 'player',
+  }), [selectedNpc]);
+  const selectedAvatarKey = avatarOwnerKey(selectedAvatarOwner);
+  const playerAvatarKey = avatarOwnerKey({ ownerType: 'player', ownerName: 'player' });
+
+  useEffect(() => {
+    let ignore = false;
+    const loadAvatar = async () => {
+      try {
+        const scopeKey = getEldredAvatarScopeKey();
+        const [avatarRecord, portraitRecord, tavernAvatar] = await Promise.all([
+          getEldredAvatarRecord(scopeKey, selectedAvatarOwner.ownerType, selectedAvatarOwner.ownerName, 'avatar'),
+          getEldredAvatarRecord(scopeKey, selectedAvatarOwner.ownerType, selectedAvatarOwner.ownerName, 'portrait'),
+          selectedAvatarOwner.ownerType === 'player' ? resolveSillyTavernUserAvatar() : Promise.resolve(''),
+        ]);
+        if (ignore) return;
+        const ownerKey = avatarOwnerKey(selectedAvatarOwner);
+        setAvatarOverrides(prev => ({ ...prev, [ownerKey]: avatarRecord?.value || '' }));
+        setPortraitOverrides(prev => ({ ...prev, [ownerKey]: portraitRecord?.value || '' }));
+        if (selectedAvatarOwner.ownerType === 'player') setPlayerDefaultAvatarUrl(tavernAvatar || '');
+      } catch (error) {
+        console.warn('[艾尔德雷德] 读取本地头像失败', error);
+        if (ignore) return;
+        const ownerKey = avatarOwnerKey(selectedAvatarOwner);
+        setAvatarOverrides(prev => ({ ...prev, [ownerKey]: '' }));
+        setPortraitOverrides(prev => ({ ...prev, [ownerKey]: '' }));
+        if (selectedAvatarOwner.ownerType === 'player') setPlayerDefaultAvatarUrl('');
+      }
+    };
+    void loadAvatar();
+    return () => {
+      ignore = true;
+    };
+  }, [selectedAvatarOwner.ownerName, selectedAvatarOwner.ownerType]);
 
   const rebuildPlayer = (base: PlayerState, loadout: EquipmentLoadout = base.equipmentLoadout, baseAttributes = base.baseAttributes): PlayerState => ({
     ...base,
@@ -277,7 +329,7 @@ export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_
         raceName: race.name,
         className: cls.name,
         location: playerLocationDisplay.fullName,
-        avatar: '',
+        avatar: playerDefaultAvatarUrl,
         level: player.level,
         experience: player.experience,
         nextExperience: player.nextLevelExperience,
@@ -290,6 +342,53 @@ export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_
         favorability: 0,
         relation: '自身',
       };
+
+  const selectedCustomAvatarUrl = avatarOverrides[selectedAvatarKey] || '';
+  const selectedCustomPortraitUrl = portraitOverrides[selectedAvatarKey] || '';
+  const selectedDisplayAvatar = selectedCustomPortraitUrl || selectedCustomAvatarUrl || selected.avatar;
+  const playerListAvatar = avatarOverrides[playerAvatarKey] || playerDefaultAvatarUrl;
+
+  const importSelectedImage = async (kind: 'avatar' | 'portrait', event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      const value = await readEldredAvatarFileAsDataUrl(file);
+      if (!value) return;
+      const scopeKey = getEldredAvatarScopeKey();
+      await saveEldredAvatarRecord({
+        scopeKey,
+        ownerType: selectedAvatarOwner.ownerType,
+        ownerName: selectedAvatarOwner.ownerName,
+        imageKind: kind,
+        sourceType: 'upload',
+        value,
+      });
+      const ownerKey = avatarOwnerKey(selectedAvatarOwner);
+      if (kind === 'avatar') setAvatarOverrides(prev => ({ ...prev, [ownerKey]: value }));
+      else setPortraitOverrides(prev => ({ ...prev, [ownerKey]: value }));
+    } catch (error) {
+      console.warn('[艾尔德雷德] 导入本地头像失败', error);
+    }
+  };
+
+  const resetSelectedImages = async () => {
+    try {
+      await removeEldredAvatarRecord(
+        getEldredAvatarScopeKey(),
+        selectedAvatarOwner.ownerType,
+        selectedAvatarOwner.ownerName,
+      );
+      const ownerKey = avatarOwnerKey(selectedAvatarOwner);
+      setAvatarOverrides(prev => ({ ...prev, [ownerKey]: '' }));
+      setPortraitOverrides(prev => ({ ...prev, [ownerKey]: '' }));
+      if (selectedAvatarOwner.ownerType === 'player') {
+        setPlayerDefaultAvatarUrl(await resolveSillyTavernUserAvatar());
+      }
+    } catch (error) {
+      console.warn('[艾尔德雷德] 恢复默认头像失败', error);
+    }
+  };
 
   const activeSkills = selected.activeSkillIds.map(id => getSkillById(id)).filter(defined);
   const librarySkills = selected.knownSkillIds.map(id => getSkillById(id)).filter(defined);
@@ -381,6 +480,20 @@ export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_
 
   return (
     <div className="h-full w-full flex flex-col xl:flex-row gap-4 xl:gap-6 overflow-y-auto xl:overflow-hidden">
+      <input
+        ref={avatarFileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        className="hidden"
+        onChange={event => void importSelectedImage('avatar', event)}
+      />
+      <input
+        ref={portraitFileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        className="hidden"
+        onChange={event => void importSelectedImage('portrait', event)}
+      />
       <div className="w-full xl:w-72 max-h-[26rem] xl:max-h-none glass-panel rounded-xl flex flex-col overflow-hidden shrink-0">
         <div className="p-4 border-b border-fantasy-gold/20 flex justify-between items-center bg-fantasy-darker/50">
           <h2 className="text-xl font-serif text-fantasy-gold">队伍成员</h2>
@@ -388,8 +501,12 @@ export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_
         </div>
         <div className="p-3 space-y-2 flex-1 overflow-y-auto">
           <button onClick={() => setSelectedId('player')} className={`w-full p-3 rounded border flex gap-4 text-left ${selectedId === 'player' ? 'bg-fantasy-gold/10 border-fantasy-gold' : 'bg-black/20 border-white/5'}`}>
-            <div className="w-12 h-12 bg-fantasy-darker rounded border border-fantasy-gold/50 flex items-center justify-center">
-              <User className="text-fantasy-gold w-6 h-6" />
+            <div className="w-12 h-12 bg-fantasy-darker rounded border border-fantasy-gold/50 flex items-center justify-center overflow-hidden shrink-0">
+              {playerListAvatar ? (
+                <img src={playerListAvatar} alt={player.name} className="w-full h-full object-cover" />
+              ) : (
+                <User className="text-fantasy-gold w-6 h-6" />
+              )}
             </div>
             <div>
               <div className="text-sm text-white font-serif tracking-wide">{player.name}</div>
@@ -397,15 +514,20 @@ export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_
             </div>
           </button>
           {partyNpcs.map(npc => (
-            <button key={npc.id} onClick={() => setSelectedId(npc.id)} className={`w-full p-3 rounded border flex gap-4 text-left ${selectedId === npc.id ? 'bg-fantasy-gold/10 border-fantasy-gold' : 'bg-black/20 border-white/5'}`}>
-              <div className="w-12 h-12 bg-fantasy-darker rounded border border-fantasy-gold/50 overflow-hidden shrink-0">
-                {npc.avatarUrl && <img src={npc.avatarUrl} alt={npc.name} className="w-full h-full object-cover" />}
-              </div>
-              <div className="min-w-0">
-                <div className="text-sm text-white font-serif tracking-wide truncate">{npc.name}</div>
-                <div className="text-xs text-gray-400 truncate">等级{npc.stats.level} / {npc.profession}</div>
-              </div>
-            </button>
+            (() => {
+              const npcListAvatar = avatarOverrides[avatarOwnerKey({ ownerType: 'npc', ownerName: npc.name })] || npc.avatarUrl;
+              return (
+                <button key={npc.id} onClick={() => setSelectedId(npc.id)} className={`w-full p-3 rounded border flex gap-4 text-left ${selectedId === npc.id ? 'bg-fantasy-gold/10 border-fantasy-gold' : 'bg-black/20 border-white/5'}`}>
+                  <div className="w-12 h-12 bg-fantasy-darker rounded border border-fantasy-gold/50 overflow-hidden shrink-0">
+                    {npcListAvatar && <img src={npcListAvatar} alt={npc.name} className="w-full h-full object-cover" />}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm text-white font-serif tracking-wide truncate">{npc.name}</div>
+                    <div className="text-xs text-gray-400 truncate">等级{npc.stats.level} / {npc.profession}</div>
+                  </div>
+                </button>
+              );
+            })()
           ))}
 
           <div className="pt-3 mt-3 border-t border-white/10">
@@ -430,7 +552,7 @@ export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_
 
         <div className="p-5 md:p-8 border-b border-white/10 relative z-10 flex flex-col sm:flex-row gap-5 md:gap-8">
           <div className="w-24 h-24 md:w-32 md:h-32 bg-fantasy-darker border-2 border-fantasy-gold rounded flex items-center justify-center text-fantasy-gold shadow-lg shadow-black overflow-hidden shrink-0">
-            {selected.avatar ? <img src={selected.avatar} alt={selected.fullName} className="w-full h-full object-contain" /> : <span className="text-xs md:text-sm font-serif opacity-50">玩家</span>}
+            {selectedDisplayAvatar ? <img src={selectedDisplayAvatar} alt={selected.fullName} className="w-full h-full object-contain" /> : <span className="text-xs md:text-sm font-serif opacity-50">玩家</span>}
           </div>
           <div className="flex flex-col justify-center min-w-0">
             <div className="flex flex-wrap items-center gap-3 mb-2">
@@ -443,6 +565,13 @@ export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_
               <div className="flex items-center gap-2"><Zap className="w-4 h-4 text-blue-400" /><span className="text-sm font-mono text-gray-300">{selected.stats.mp} / {selected.stats.maxMp}</span></div>
               <div className="flex items-center gap-2"><Shield className="w-4 h-4 text-fantasy-gold" /><span className="text-sm font-mono text-gray-300">护甲 {selected.stats.ac}</span></div>
               <div className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-fantasy-gold" /><span className="text-sm font-mono text-gray-300">{selected.experience}/{selected.nextExperience}</span></div>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              <button onClick={() => avatarFileInputRef.current?.click()} className="px-2 py-1 rounded border border-fantasy-gold/40 text-fantasy-gold hover:bg-fantasy-gold/10">导入头像</button>
+              <button onClick={() => portraitFileInputRef.current?.click()} className="px-2 py-1 rounded border border-fantasy-gold/40 text-fantasy-gold hover:bg-fantasy-gold/10">导入立绘</button>
+              {(selectedCustomAvatarUrl || selectedCustomPortraitUrl) && (
+                <button onClick={() => void resetSelectedImages()} className="px-2 py-1 rounded border border-white/20 text-gray-300 hover:border-fantasy-gold/40">恢复默认</button>
+              )}
             </div>
             {selected.kind === 'npc' && (
               <div className="mt-3 flex gap-2 text-xs">

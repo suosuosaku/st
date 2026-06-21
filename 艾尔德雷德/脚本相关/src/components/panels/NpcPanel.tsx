@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Heart, Info, MapPin, Shield, User } from 'lucide-react';
 import { Character } from '../../types';
 import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS, getClassById, getEquipmentById } from '../../game/rules';
+import { getEldredAvatarRecord, getEldredAvatarScopeKey } from '../../game/avatarStorage';
 
 type NpcPanelProps = {
   npcs?: Character[];
@@ -16,9 +17,14 @@ const npcDetailPages: { id: NpcDetailPage; label: string }[] = [
   { id: 'equipment', label: '装备' },
 ];
 
+const npcAvatarKey = (name: string) => `npc:${name}`;
+
 export function NpcPanel({ npcs = [] }: NpcPanelProps) {
   const [selectedNpcId, setSelectedNpcId] = useState('');
   const [detailPage, setDetailPage] = useState<NpcDetailPage>('stats');
+  const [avatarOverrides, setAvatarOverrides] = useState<Record<string, string>>({});
+  const [portraitOverrides, setPortraitOverrides] = useState<Record<string, string>>({});
+  const npcNamesKey = useMemo(() => npcs.map(npc => npc.name).join('|'), [npcs]);
   const selectedNpc = useMemo(
     () => npcs.find(npc => npc.id === selectedNpcId) || npcs[0] || null,
     [npcs, selectedNpcId],
@@ -33,8 +39,35 @@ export function NpcPanel({ npcs = [] }: NpcPanelProps) {
     }
   }, [selectedNpc, selectedNpcId]);
 
+  useEffect(() => {
+    let ignore = false;
+    const loadNpcImages = async () => {
+      try {
+        const scopeKey = getEldredAvatarScopeKey();
+        const records = await Promise.all(npcs.map(async npc => {
+          const [avatarRecord, portraitRecord] = await Promise.all([
+            getEldredAvatarRecord(scopeKey, 'npc', npc.name, 'avatar'),
+            getEldredAvatarRecord(scopeKey, 'npc', npc.name, 'portrait'),
+          ]);
+          return [npc.name, avatarRecord?.value || '', portraitRecord?.value || ''] as const;
+        }));
+        if (ignore) return;
+        setAvatarOverrides(Object.fromEntries(records.map(([name, avatar]) => [npcAvatarKey(name), avatar])));
+        setPortraitOverrides(Object.fromEntries(records.map(([name, , portrait]) => [npcAvatarKey(name), portrait])));
+      } catch (error) {
+        console.warn('[艾尔德雷德] 读取NPC本地头像失败', error);
+      }
+    };
+    void loadNpcImages();
+    return () => {
+      ignore = true;
+    };
+  }, [npcNamesKey]);
+
   const selectedClass = selectedNpc ? getClassById(selectedNpc.classId) : null;
   const equipment = selectedNpc ? selectedNpc.equipmentIds.map(id => getEquipmentById(id)).filter(Boolean) : [];
+  const selectedAvatarKey = selectedNpc ? npcAvatarKey(selectedNpc.name) : '';
+  const selectedPortraitUrl = selectedNpc ? portraitOverrides[selectedAvatarKey] || selectedNpc.portraitUrl : '';
 
   return (
     <div className="h-full w-full flex flex-col xl:flex-row gap-4 xl:gap-6 overflow-y-auto xl:overflow-hidden">
@@ -48,23 +81,28 @@ export function NpcPanel({ npcs = [] }: NpcPanelProps) {
             <div className="p-4 rounded border border-white/5 bg-black/20 text-sm text-gray-500">暂无已收录角色</div>
           )}
           {npcs.map(npc => (
-            <button
-              key={npc.id}
-              onClick={() => setSelectedNpcId(npc.id)}
-              className={`w-full text-left p-3 rounded flex gap-4 cursor-pointer transition-colors border ${selectedNpc?.id === npc.id ? 'bg-fantasy-gold/10 border-fantasy-gold shadow-[0_0_10px_rgba(212,175,55,0.1)]' : 'bg-black/20 border-transparent hover:border-fantasy-gold/30'}`}
-            >
-              <div className="w-12 h-12 bg-fantasy-darker shrink-0 rounded border border-fantasy-gold/50 flex items-center justify-center overflow-hidden">
-                {npc.avatarUrl ? (
-                  <img src={npc.avatarUrl} alt={npc.name} className="w-full h-full object-cover rounded" />
-                ) : (
-                  <User className="text-fantasy-gold w-6 h-6 opacity-80" />
-                )}
-              </div>
-              <div className="overflow-hidden">
-                <div className="text-base text-gray-100 font-serif tracking-wide truncate">{npc.name}</div>
-                <div className="text-[11px] text-gray-500 truncate">{npc.profession}</div>
-              </div>
-            </button>
+            (() => {
+              const avatarUrl = avatarOverrides[npcAvatarKey(npc.name)] || npc.avatarUrl;
+              return (
+                <button
+                  key={npc.id}
+                  onClick={() => setSelectedNpcId(npc.id)}
+                  className={`w-full text-left p-3 rounded flex gap-4 cursor-pointer transition-colors border ${selectedNpc?.id === npc.id ? 'bg-fantasy-gold/10 border-fantasy-gold shadow-[0_0_10px_rgba(212,175,55,0.1)]' : 'bg-black/20 border-transparent hover:border-fantasy-gold/30'}`}
+                >
+                  <div className="w-12 h-12 bg-fantasy-darker shrink-0 rounded border border-fantasy-gold/50 flex items-center justify-center overflow-hidden">
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt={npc.name} className="w-full h-full object-cover rounded" />
+                    ) : (
+                      <User className="text-fantasy-gold w-6 h-6 opacity-80" />
+                    )}
+                  </div>
+                  <div className="overflow-hidden">
+                    <div className="text-base text-gray-100 font-serif tracking-wide truncate">{npc.name}</div>
+                    <div className="text-[11px] text-gray-500 truncate">{npc.profession}</div>
+                  </div>
+                </button>
+              );
+            })()
           ))}
         </div>
       </div>
@@ -82,8 +120,8 @@ export function NpcPanel({ npcs = [] }: NpcPanelProps) {
           <>
             <div className="p-5 md:p-8 border-b border-white/10 relative z-10 flex flex-col sm:flex-row gap-5 md:gap-8 bg-gradient-to-b from-white/5 to-transparent">
               <div className="w-28 h-28 md:w-32 md:h-32 bg-fantasy-darker border-2 border-fantasy-gold rounded flex items-center justify-center text-fantasy-gold shadow-lg shadow-black overflow-hidden shrink-0">
-                {selectedNpc.portraitUrl ? (
-                  <img src={selectedNpc.portraitUrl} alt={selectedNpc.fullName} className="w-full h-full object-contain" />
+                {selectedPortraitUrl ? (
+                  <img src={selectedPortraitUrl} alt={selectedNpc.fullName} className="w-full h-full object-contain" />
                 ) : (
                   <span className="text-sm font-serif opacity-50">人物档案</span>
                 )}

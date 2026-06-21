@@ -270,6 +270,10 @@ export type DynamicBoardItem = {
   source: string;
   status: string;
   location: string;
+  risk?: Quest['risk'] | string;
+  reward?: string;
+  recLevel?: number;
+  timeLimit?: string;
   updatedAt?: string;
 };
 
