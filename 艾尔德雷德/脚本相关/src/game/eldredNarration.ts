@@ -515,15 +515,22 @@ const syncQuestTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
     return;
   }
 
-  if (tag.title === '委托接取' || normalizedStatus === '进行中' || Object.keys(existingQuest).length) {
+  if (tag.title === '委托生成') {
+    delete questList[title];
+    updateBoardRecord(statData, '委托', title, { ...quest, 状态: '可接取' });
+    return;
+  }
+
+  const hasExistingQuest = Object.keys(existingQuest).length > 0;
+  if (tag.title === '委托接取' || hasExistingQuest) {
     removeBoardRecord(statData, '委托', title);
     questList[title] = {
       ...mergedQuest,
-      状态: tag.title === '委托接取' || normalizedStatus === '可接取' ? '进行中' : normalizedStatus || '进行中',
+      状态: tag.title === '委托接取' ? '进行中' : normalizedStatus || cleanText(existingQuest.状态) || '进行中',
     };
     return;
   }
-  updateBoardRecord(statData, '委托', title, quest);
+  updateBoardRecord(statData, '委托', title, { ...quest, 状态: '可接取' });
 };
 
 const completeQuestTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
@@ -786,6 +793,45 @@ export const applyEldredJsonPatchOperations = applyJsonPatchOperations;
 export const getEldredHostFunction = getHostFunction;
 
 const deriveFrontendNoticesFromNarrativeTags = syncNarrativeTagsToStatData;
+
+const openingQuestBoardRecordFrom = (key: string, value: unknown): AnyRecord | null => {
+  const source = asRecord(value);
+  const title = cleanText(source.标题 ?? source.名称 ?? source.委托 ?? key);
+  if (!title) return null;
+  return {
+    标题: title,
+    名称: title,
+    来源: cleanText(source.来源 ?? source.发布者 ?? source.委托人),
+    任务详情: cleanText(source.任务详情 ?? source.内容 ?? source.目标 ?? source.说明 ?? source.详情),
+    建议等级: source.建议等级 ?? source.等级 ?? 1,
+    风险: normalizeRiskText(source.风险 ?? source.危险等级) || '中',
+    奖励: cleanText(source.奖励 ?? source.报酬),
+    时限: cleanText(source.时限 ?? source.截止),
+    地点: cleanText(source.地点 ?? source.位置 ?? source.地标),
+    状态: '可接取',
+    时间: cleanText(source.时间 ?? source.更新),
+  };
+};
+
+const moveOpeningQuestListToBoard = (statData?: AnyRecord | null) => {
+  if (!statData || !Object.keys(statData).length) return null;
+  const nextStatData = cloneRecord(statData);
+  const questList = asRecord(asRecord(nextStatData.主角).任务列表);
+  const entries = Object.entries(questList);
+  if (!entries.length) return null;
+  const board = ensureRecordAt(nextStatData, ['世界', '动态看板']);
+  let changed = false;
+  entries.forEach(([key, value]) => {
+    const quest = openingQuestBoardRecordFrom(key, value);
+    if (!quest) return;
+    const title = cleanText(quest.标题);
+    board.委托 = recordInsertNewest(asRecord(board.委托), title, quest, 4);
+    delete questList[key];
+    changed = true;
+  });
+  if (!changed) return null;
+  return nextStatData;
+};
 
 const syncGeneratedMvuVariables = async (rawText: string, previous: EldredRuntimeSave) => {
   if (!/<UpdateVariable(?:variable)?\b|<JSONPatch\b/i.test(rawText)) {
@@ -1334,7 +1380,7 @@ export const generateEldredNarrationFromOpening = async (runtime: EldredRuntimeS
   const systemPrompt = [
     buildBaseSystemPrompt(runtime, openingFacts, 'opening'),
     '生成第一幕正文。只按入局设定初始化变量；未选择技能、默认剧情、默认队友、默认背包、默认好感、默认声望不得写入。必须把姓名、性别、年龄、经历、种族、职业、五维、战斗底值、已选开局技能、初始装备写入主角变量。需要基于出生点和第一幕事实生成4条本地新闻/见闻与4条可接委托，并写入变量；每条新闻/见闻的内容字段不少于50个汉字，必须有标题、内容、地点、来源、状态、时间。需要输出 <content> 与 <UpdateVariable>。',
-    '变量写入必须使用主角.身份.姓名、主角.身份.性别、主角.身份.年龄、主角.身份.经历、主角.身份.种族、主角.身份.职业、主角.战斗.已知技能、主角.战斗.激活技能、世界.当前时间、世界.当前地点、世界.在场角色。新闻/见闻必须写入世界.动态看板.新闻或世界.动态看板.见闻；委托必须写入世界.动态看板.委托。',
+    '变量写入必须使用主角.身份.姓名、主角.身份.性别、主角.身份.年龄、主角.身份.经历、主角.身份.种族、主角.身份.职业、主角.战斗.已知技能、主角.战斗.激活技能、世界.当前时间、世界.当前地点、世界.在场角色。新闻/见闻必须写入世界.动态看板.新闻或世界.动态看板.见闻；第一幕生成的委托必须写入世界.动态看板.委托且状态=可接取，不得写入主角.任务列表，不得标记进行中。',
   ].join('\n\n');
   try {
     const rawStatDataBefore = cloneRecord(runtime.rawStatData || {});
@@ -1345,7 +1391,9 @@ export const generateEldredNarrationFromOpening = async (runtime: EldredRuntimeS
       worldbookScanText: buildWorldbookScanText(runtime, openingFacts, 'opening_setup'),
     });
     const statData = await syncGeneratedMvuVariables(rawText, runtime);
-    const syncedRuntime = mergeSyncedRuntime(runtime, statData);
+    const openingStatData = moveOpeningQuestListToBoard(statData) || statData;
+    if (openingStatData && openingStatData !== statData) await writeStatDataToHost(openingStatData);
+    const syncedRuntime = mergeSyncedRuntime(runtime, openingStatData);
     const content = extractEldredContentBlock(rawText);
     return appendGeneratedEntry(syncedRuntime, {
       kind: 'opening',
@@ -1355,7 +1403,7 @@ export const generateEldredNarrationFromOpening = async (runtime: EldredRuntimeS
       sourceEventType: 'opening_setup',
       characterTags: extractCharacterTags(content),
       rawStatDataBefore,
-      rawStatDataAfter: cloneRecord(statData || syncedRuntime.rawStatData || rawStatDataBefore),
+      rawStatDataAfter: cloneRecord(openingStatData || syncedRuntime.rawStatData || rawStatDataBefore),
     });
   } catch (error) {
     return persistGenerationError(runtime, error);

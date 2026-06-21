@@ -39,7 +39,7 @@ const questFromBoardItem = (item: DynamicBoardItem): Quest => ({
   risk: (['极高', '高', '中', '低'].includes(String(item.risk)) ? item.risk : '中') as Quest['risk'],
   reward: item.reward || '',
   timeLimit: item.timeLimit || '',
-  status: item.status || '可接取',
+  status: '可接取',
 });
 
 const normalizeQuestTitle = (value: string) =>

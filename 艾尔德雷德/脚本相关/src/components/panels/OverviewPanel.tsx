@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Clock, Loader2, MapPin, RefreshCw, Send, ShieldAlert, ScrollText } from 'lucide-react';
 import { RichNarrative } from '../ImmersiveText';
@@ -6,6 +7,9 @@ import { EldredRuntimeSave } from '../../game/eldredSave';
 import { formatEldredLocation } from '../../game/locationFormat';
 
 let overviewNarrativeScrollTop = 0;
+const NARRATIVE_FONT_SCALE_KEY = 'eldred:narrative-font-scale';
+
+const clampNarrativeFontScale = (value: number) => Math.min(1.3, Math.max(0.85, value));
 
 type OverviewRecord = {
   id: string;
@@ -33,6 +37,11 @@ export function OverviewPanel({
   canReroll?: boolean;
 }) {
   const [draft, setDraft] = useState('');
+  const [narrativeFontScale, setNarrativeFontScale] = useState(() => {
+    if (typeof window === 'undefined') return 1;
+    const saved = Number(window.localStorage.getItem(NARRATIVE_FONT_SCALE_KEY));
+    return Number.isFinite(saved) ? clampNarrativeFontScale(saved) : 1;
+  });
   const narrativeScrollRef = useRef<HTMLDivElement>(null);
   const entries = runtime?.narration.entries || [];
   const world = runtime?.world;
@@ -49,6 +58,14 @@ export function OverviewPanel({
   const latestRelationship = player.relationships[0];
   const latestReputation = player.reputations[0];
   const latestCombatLog = runtime?.combat.logs.at(-1);
+  const narrativeFontPercent = Math.round(narrativeFontScale * 100);
+  const narrativeFontStyle = {
+    '--eldred-narrative-font-size': `${(1.02 * narrativeFontScale).toFixed(3)}rem`,
+    '--eldred-dialogue-font-size': `${(0.98 * narrativeFontScale).toFixed(3)}rem`,
+    '--eldred-dialogue-name-size': `${(1.04 * narrativeFontScale).toFixed(3)}rem`,
+    '--eldred-tag-font-size': `${(0.95 * narrativeFontScale).toFixed(3)}rem`,
+    '--eldred-notice-font-size': `${(1 * narrativeFontScale).toFixed(3)}rem`,
+  } as CSSProperties;
   const sideRecords = useMemo<OverviewRecord[]>(() => {
     const records: OverviewRecord[] = [];
     if (latestEntry) {
@@ -133,6 +150,10 @@ export function OverviewPanel({
     return () => window.cancelAnimationFrame(frame);
   }, []);
 
+  useEffect(() => {
+    window.localStorage.setItem(NARRATIVE_FONT_SCALE_KEY, String(narrativeFontScale));
+  }, [narrativeFontScale]);
+
   const submitDraft = async () => {
     const text = draft.trim();
     if (!text || isGenerating) return;
@@ -148,9 +169,25 @@ export function OverviewPanel({
   return (
     <div data-eldred-overview="true" className="h-full w-full flex flex-col xl:flex-row gap-4 xl:gap-6 overflow-y-auto xl:overflow-hidden">
       <div data-eldred-overview-main="true" className="flex-1 min-h-[420px] xl:min-h-0 parchment-panel rounded-lg p-5 md:p-8 flex flex-col relative overflow-hidden">
-        <div className="flex items-center gap-2 border-b border-[#8b4513]/20 pb-4 mb-4">
-          <ScrollText className="w-6 h-6 text-[#8b4513]" />
-          <h2 className="text-xl font-bold text-[#5c3a21] tracking-widest">正文控制台</h2>
+        <div className="flex flex-wrap items-center gap-3 border-b border-[#8b4513]/20 pb-4 mb-4">
+          <div className="flex items-center gap-2">
+            <ScrollText className="w-6 h-6 text-[#8b4513]" />
+            <h2 className="text-xl font-bold text-[#5c3a21] tracking-widest">正文控制台</h2>
+          </div>
+          <label className="ml-auto flex items-center gap-2 rounded border border-[#8b4513]/25 bg-white/30 px-2.5 py-1.5 text-xs font-bold text-[#6b3d1f]">
+            <span>字号</span>
+            <input
+              aria-label="正文字号"
+              type="range"
+              min="0.85"
+              max="1.3"
+              step="0.05"
+              value={narrativeFontScale}
+              onChange={event => setNarrativeFontScale(clampNarrativeFontScale(Number(event.target.value)))}
+              className="w-28 md:w-40 accent-[#8b4513]"
+            />
+            <span className="w-10 text-right font-mono text-[11px]">{narrativeFontPercent}%</span>
+          </label>
         </div>
 
         <div
@@ -158,6 +195,7 @@ export function OverviewPanel({
           onScroll={event => {
             overviewNarrativeScrollTop = event.currentTarget.scrollTop;
           }}
+          style={narrativeFontStyle}
           className="eldred-narrative-scroll flex-1 overflow-y-auto pr-1 md:pr-3 space-y-5 md:space-y-7 text-[#3A2C1D] relative z-10"
         >
           {visibleEntries.length === 0 && (
