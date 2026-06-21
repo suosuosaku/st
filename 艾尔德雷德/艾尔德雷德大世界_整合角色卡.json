@@ -14982,8 +14982,8 @@
             "type": "script",
             "enabled": true,
             "name": "艾尔德雷德脚本",
-            "id": "eldred-main-v3517",
-            "content": "import 'https://testingcf.jsdelivr.net/gh/suosuosaku/st@eldred-integrated-v3.5.17/dist/eldred/welcome-loader/index.js'",
+            "id": "eldred-main-v3518",
+            "content": "import 'https://testingcf.jsdelivr.net/gh/suosuosaku/st@eldred-integrated-v3.5.18/dist/eldred/welcome-loader/index.js'",
             "info": "艾尔德雷德开局入口。导入后接管页面，可用脚本按钮重新打开。",
             "button": {
               "enabled": true,
@@ -14995,21 +14995,21 @@
               ]
             },
             "data": {
-              "version": "eldred-integrated-v3.5.17"
+              "version": "eldred-integrated-v3.5.18"
             }
           }
         ],
         "variables": {}
       },
       "eldred_bundle": {
-        "version": "eldred-integrated-v3.5.17",
+        "version": "eldred-integrated-v3.5.18",
         "worldbook_entry_count": 296,
         "preset_prompt_count": 140,
         "frontend": {
           "openable_html": "D:\\sillytavern\\tavern_helper_template-main\\艾尔德雷德\\脚本相关\\dist\\index.html",
           "source_dir": "D:\\sillytavern\\tavern_helper_template-main\\艾尔德雷德\\脚本相关",
           "build_command": "pnpm run build",
-          "version": "eldred-integrated-v3.5.17"
+          "version": "eldred-integrated-v3.5.18"
         },
         "sources": {
           "worldbook": "D:\\sillytavern\\tavern_helper_template-main\\艾尔德雷德\\专用预设与世界书\\艾尔德雷德世界书.json",

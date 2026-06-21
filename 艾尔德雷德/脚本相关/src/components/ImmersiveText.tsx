@@ -284,22 +284,154 @@ function NpcArchiveNotice({ body, compact = false }: { body: string; compact?: b
   );
 }
 
+const splitCombatUnits = (value: string) =>
+  String(value || '')
+    .split(/[；;]/)
+    .map(unit => unit.trim())
+    .filter(Boolean);
+
+const combatPartLooksLikeUnit = (value: string) =>
+  /(?:\d+\s*\/\s*\d+\s*(?:HP|MP|生命|法力|血量)?|(?:HP|MP|AC|生命|法力|护甲|血量)\s*[:：]?\s*\d+)/i.test(value);
+
+type CombatUnitDisplay = {
+  name: string;
+  level: string;
+  hp: string;
+  hpPercent: number;
+  mp: string;
+  mpPercent: number;
+  ac: string;
+  status: string;
+  detail: string;
+  raw: string;
+};
+
+const extractCombatPair = (raw: string, pattern: RegExp) => {
+  const match = raw.match(pattern);
+  if (!match) return { value: '', next: raw };
+  return {
+    value: `${match[1]}/${match[2]}`,
+    next: raw.replace(match[0], ' '),
+  };
+};
+
+const parseCombatUnit = (rawUnit: string): CombatUnitDisplay => {
+  let rest = rawUnit.trim();
+  const levelMatch = rest.match(/(?:Lv\.?|等级)\s*([0-9]+)/i);
+  const acMatch = rest.match(/(?:AC|护甲)\s*[:：]?\s*([0-9]+)/i);
+  const statusMatch = rest.match(/(?:状态|态势)\s*[:：]\s*([^，,；;｜|]+)/);
+  const hpExtract = extractCombatPair(rest, /(?:HP|生命|血量)?\s*[:：]?\s*([0-9]+)\s*\/\s*([0-9]+)\s*(?:HP|生命|血量|血)?/i);
+  rest = hpExtract.next;
+  const mpExtract = extractCombatPair(rest, /(?:MP|法力)?\s*[:：]?\s*([0-9]+)\s*\/\s*([0-9]+)\s*(?:MP|法力)?/i);
+  rest = mpExtract.next;
+  [levelMatch?.[0], acMatch?.[0], statusMatch?.[0]]
+    .filter(Boolean)
+    .forEach(token => {
+      rest = rest.replace(String(token), ' ');
+    });
+  const name = rest
+    .replace(/[()（）【】]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^(友方|敌方|主角方|敌人)[:：]/, '')
+    || rawUnit.replace(/\s*(?:HP|MP|AC|生命|法力|护甲).*/, '').trim()
+    || '未知单位';
+  const hpNumbers = hpExtract.value.split('/').map(value => Number(value));
+  const mpNumbers = mpExtract.value.split('/').map(value => Number(value));
+  const percent = (numbers: number[]) => {
+    const [current, max] = numbers;
+    if (!Number.isFinite(current) || !Number.isFinite(max) || max <= 0) return 0;
+    return Math.max(0, Math.min(100, (current / max) * 100));
+  };
+  const detail = rest
+    .replace(name, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return {
+    name,
+    level: levelMatch?.[1] || '',
+    hp: hpExtract.value,
+    hpPercent: percent(hpNumbers),
+    mp: mpExtract.value,
+    mpPercent: percent(mpNumbers),
+    ac: acMatch?.[1] || '',
+    status: statusMatch?.[1] || '',
+    detail,
+    raw: rawUnit,
+  };
+};
+
+function CombatUnitStrip({ title, value, enemy = false }: { title: string; value: string; enemy?: boolean }) {
+  const units = splitCombatUnits(value);
+  if (!units.length) return null;
+  return (
+    <div className={`eldred-combat-unit-strip ${enemy ? 'is-enemy' : 'is-ally'}`}>
+      <div className="eldred-combat-unit-title">{title}</div>
+      <div className="eldred-combat-unit-list">
+        {units.map((unit, index) => {
+          const parsed = parseCombatUnit(unit);
+          return (
+            <div className="eldred-combat-unit-card" key={`${title}-${index}`}>
+              <div className="eldred-combat-unit-card-head">
+                <strong><HighlightText text={parsed.name} /></strong>
+                <span>{parsed.level ? `Lv.${parsed.level}` : enemy ? '敌方' : '友方'}</span>
+              </div>
+              <div className="eldred-combat-bars">
+                {parsed.hp && (
+                  <div className="eldred-combat-bar-row">
+                    <span>HP</span>
+                    <div className="eldred-combat-bar"><i style={{ width: `${parsed.hpPercent}%` }} /></div>
+                    <strong>{parsed.hp}</strong>
+                  </div>
+                )}
+                {parsed.mp && (
+                  <div className="eldred-combat-bar-row is-mp">
+                    <span>MP</span>
+                    <div className="eldred-combat-bar"><i style={{ width: `${parsed.mpPercent}%` }} /></div>
+                    <strong>{parsed.mp}</strong>
+                  </div>
+                )}
+              </div>
+              <div className="eldred-combat-unit-tags">
+                {parsed.ac && <span>护甲 {parsed.ac}</span>}
+                {parsed.status && <span>{parsed.status}</span>}
+                {!parsed.hp && !parsed.mp && !parsed.ac && <span><HighlightText text={parsed.raw} /></span>}
+                {parsed.detail && <span><HighlightText text={parsed.detail} /></span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function CombatNotice({ title, body, compact = false }: { title: string; body: string; compact?: boolean }) {
   const noticeTitle = stripLabel(title);
   const { parts, fields } = noticeFieldsFrom(body);
+  const unitParts = parts.filter(part => !splitField(part) && combatPartLooksLikeUnit(part));
+  const inferredAllies = unitParts[0] || '';
+  const inferredEnemies = unitParts.slice(1).join('；');
   const round = fields.get('回合') || fields.get('触发') || parts[0] || noticeTitle;
   const actor = fields.get('行动者') || fields.get('执行者') || fields.get('单位') || fields.get('触发') || '';
-  const action = fields.get('招式') || fields.get('技能名') || fields.get('行动') || fields.get('阶段') || parts[1] || '';
+  const rawAction = fields.get('招式') || fields.get('技能名') || fields.get('行动') || fields.get('阶段') || parts[1] || '';
+  const action = combatPartLooksLikeUnit(rawAction) ? '' : rawAction;
   const result = fields.get('结果') || fields.get('命中') || fields.get('判定') || '';
   const damage = fields.get('伤害') || fields.get('威力') || fields.get('消耗') || '';
   const status = fields.get('状态') || fields.get('状态变化') || fields.get('下一压力') || fields.get('环境') || '';
+  const allies = fields.get('主角方') || fields.get('友方') || fields.get('我方') || inferredAllies;
+  const enemies = fields.get('敌方') || fields.get('敌人') || inferredEnemies;
   const detailParts = [
+    fields.get('地点') ? `地点：${fields.get('地点')}` : '',
+    fields.get('胜负目标') ? `胜负目标：${fields.get('胜负目标')}` : '',
+    fields.get('先攻顺序') ? `先攻顺序：${fields.get('先攻顺序')}` : '',
     actor ? `行动者：${actor}` : '',
     action ? `行动：${action}` : '',
     result ? `判定：${result}` : '',
     damage ? `数值：${damage}` : '',
     status ? `状态：${status}` : '',
-    ...parts.slice(2),
+    fields.get('环境') ? `环境：${fields.get('环境')}` : '',
+    fields.get('下一压力') ? `下一压力：${fields.get('下一压力')}` : '',
   ].filter(Boolean);
 
   return (
@@ -315,6 +447,12 @@ function CombatNotice({ title, body, compact = false }: { title: string; body: s
             <div className="eldred-combat-cell" key={`${noticeTitle}-${index}`}><HighlightText text={part} /></div>
           ))}
         </div>
+        {(allies || enemies) && (
+          <div className="eldred-combat-roster">
+            <CombatUnitStrip title="主角方" value={allies} />
+            <CombatUnitStrip title="敌方" value={enemies} enemy />
+          </div>
+        )}
       </div>
     </div>
   );

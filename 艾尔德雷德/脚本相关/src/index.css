@@ -1195,13 +1195,112 @@ body {
 
 .eldred-combat-unit-card {
   border: 1px solid rgba(255, 231, 151, 0.22);
-  background: rgba(0, 0, 0, 0.28);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(0, 0, 0, 0.32)),
+    rgba(0, 0, 0, 0.28);
   color: #fff0c4;
-  padding: 0.52rem 0.62rem;
+  padding: 0.62rem;
   font-size: 0.88rem;
   font-weight: 750;
   line-height: 1.58;
   overflow-wrap: anywhere;
+}
+
+.eldred-combat-unit-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.48rem;
+}
+
+.eldred-combat-unit-card-head strong {
+  min-width: 0;
+  color: #fff7c9;
+  font-family: "Noto Serif SC", serif;
+  font-size: 1rem;
+  font-weight: 950;
+  line-height: 1.25;
+}
+
+.eldred-combat-unit-card-head span {
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 226, 125, 0.32);
+  background: rgba(255, 226, 125, 0.1);
+  color: #ffe27d;
+  padding: 0.12rem 0.42rem;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.eldred-combat-bars {
+  display: grid;
+  gap: 0.32rem;
+}
+
+.eldred-combat-bar-row {
+  display: grid;
+  grid-template-columns: 2.1rem minmax(5rem, 1fr) minmax(3.8rem, auto);
+  align-items: center;
+  gap: 0.42rem;
+  color: #ffd6c4;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.eldred-combat-bar-row > span {
+  color: #ff8a72;
+}
+
+.eldred-combat-bar-row strong {
+  color: #fff4cf;
+  text-align: right;
+  font-family: "Roboto Mono", monospace;
+  font-size: 0.76rem;
+}
+
+.eldred-combat-bar {
+  height: 0.56rem;
+  border: 1px solid rgba(255, 151, 120, 0.34);
+  background: rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.eldred-combat-bar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #c43d38, #ff8a5f, #ffe27d);
+  box-shadow: 0 0 8px rgba(255, 106, 75, 0.45);
+}
+
+.eldred-combat-bar-row.is-mp > span {
+  color: #9bd3ff;
+}
+
+.eldred-combat-bar-row.is-mp .eldred-combat-bar {
+  border-color: rgba(96, 165, 250, 0.36);
+}
+
+.eldred-combat-bar-row.is-mp .eldred-combat-bar i {
+  background: linear-gradient(90deg, #2563eb, #60a5fa, #dbeafe);
+  box-shadow: 0 0 8px rgba(96, 165, 250, 0.45);
+}
+
+.eldred-combat-unit-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+
+.eldred-combat-unit-tags span {
+  border: 1px solid rgba(255, 226, 125, 0.22);
+  background: rgba(0, 0, 0, 0.24);
+  color: #ffe8b7;
+  padding: 0.18rem 0.42rem;
+  font-size: 0.74rem;
+  font-weight: 850;
+  line-height: 1.35;
 }
 
 .eldred-clue-page-layout {
@@ -1876,6 +1975,17 @@ button.eldred-clue-page-token {
 
   .eldred-combat-unit-card {
     font-size: 0.8rem;
+  }
+
+  .eldred-combat-unit-card-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.32rem;
+  }
+
+  .eldred-combat-bar-row {
+    grid-template-columns: 1.8rem minmax(4.5rem, 1fr) minmax(3.4rem, auto);
+    gap: 0.32rem;
   }
 
   .eldred-clue-page-layout {
