@@ -17,6 +17,19 @@ type CombatLog = {
 
 type CombatCommandKind = 'attack' | 'guard' | 'escape' | 'skill';
 
+type PendingCombatCommand = {
+  id: string;
+  actorId: string;
+  actorName: string;
+  kind: CombatCommandKind;
+  label: string;
+  targetId?: string;
+  targetName?: string;
+  skillId?: string;
+  skillName?: string;
+  facts: string[];
+};
+
 const commandLabel: Record<CombatCommandKind, string> = {
   attack: '普通攻击',
   guard: '防御',
@@ -114,18 +127,32 @@ export function CombatPanel({
   const [selectedAllyTargetId, setSelectedAllyTargetId] = useState('player');
   const [selectedSkillId, setSelectedSkillId] = useState(player.activeSkillIds[0] || '');
   const [turn, setTurn] = useState(initialTurn);
+  const [pendingCommands, setPendingCommands] = useState<Record<string, PendingCombatCommand[]>>({});
   const [logs, setLogs] = useState<CombatLog[]>(() =>
     initialLogs.map((result, index) => ({ id: `mvu-${index}`, actor: '[变量]', action: '回合记录', result })),
   );
 
   useEffect(() => {
     setUnits(initialUnits);
-    setSelectedActorId(initialUnits.find(unit => !unit.isEnemy)?.id || 'player');
-    setSelectedTargetId(initialUnits.find(unit => unit.isEnemy)?.id || '');
-    setSelectedAllyTargetId(initialUnits.find(unit => !unit.isEnemy)?.id || 'player');
+    setSelectedActorId(current => {
+      const currentStillValid = initialUnits.some(unit => !unit.isEnemy && unit.id === current);
+      return currentStillValid ? current : initialUnits.find(unit => !unit.isEnemy)?.id || 'player';
+    });
+    setSelectedTargetId(current => {
+      const currentStillValid = initialUnits.some(unit => unit.isEnemy && unit.id === current);
+      return currentStillValid ? current : initialUnits.find(unit => unit.isEnemy)?.id || '';
+    });
+    setSelectedAllyTargetId(current => {
+      const currentStillValid = initialUnits.some(unit => !unit.isEnemy && unit.id === current);
+      return currentStillValid ? current : initialUnits.find(unit => !unit.isEnemy)?.id || 'player';
+    });
+  }, [initialUnits]);
+
+  useEffect(() => {
     setTurn(initialTurn);
+    setPendingCommands({});
     setLogs(initialLogs.map((result, index) => ({ id: `mvu-${index}`, actor: '[变量]', action: '回合记录', result })));
-  }, [initialLogs, initialTurn, initialUnits]);
+  }, [initialLogs, initialTurn]);
 
   const players = units.filter(unit => !unit.isEnemy);
   const enemies = units.filter(unit => unit.isEnemy);
@@ -136,6 +163,8 @@ export function CombatPanel({
     ? units.find(unit => unit.id === selectedAllyTargetId) || selectedActor
     : units.find(unit => unit.id === selectedTargetId) || enemies[0];
   const locationDisplay = formatEldredLocation(runtime?.world, player.location);
+  const queuedCommandList = players.flatMap(unit => pendingCommands[unit.id] || []);
+  const allPlayersReady = players.length > 0 && players.every(unit => (pendingCommands[unit.id]?.length || 0) > 0);
 
   const actorSkills = useMemo(
     () => selectedActor?.skillIds
@@ -157,7 +186,14 @@ export function CombatPanel({
   const resetCombat = () => {
     setUnits(initialUnits);
     setTurn(initialTurn);
+    setPendingCommands({});
     setLogs(initialLogs.map((result, index) => ({ id: `mvu-${index}`, actor: '[变量]', action: '回合记录', result })));
+  };
+
+  const skillExtraActionSlots = (skill?: Skill) => {
+    if (!skill) return 1;
+    const text = `${skill.name} ${skill.desc} ${skill.target}`;
+    return /额外行动|追加行动|再次行动|再行动|行动次数\s*[+＋]\s*1|获得\s*1\s*次行动/.test(text) ? 2 : 1;
   };
 
   const commandFacts = (kind: CombatCommandKind) => {
@@ -176,7 +212,7 @@ export function CombatPanel({
     return facts;
   };
 
-  const submitCommand = async (kind: CombatCommandKind) => {
+  const queueCommand = (kind: CombatCommandKind) => {
     if (!selectedActor) return;
     if ((kind === 'attack' || (kind === 'skill' && !selectedSkillTargetsAlly)) && !selectedTarget) {
       addLog({ actor: '[战斗台]', action: '缺少目标', result: '当前没有可提交的敌方单位。', color: 'text-fantasy-red' });
@@ -195,26 +231,84 @@ export function CombatPanel({
       return;
     }
 
+    const skillActionSlots = kind === 'skill' ? skillExtraActionSlots(selectedSkill) : 1;
+    const command: PendingCombatCommand = {
+      id: `${selectedActor.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      actorId: selectedActor.id,
+      actorName: selectedActor.name,
+      kind,
+      label: kind === 'skill' && selectedSkill ? `使用「${selectedSkill.name}」` : commandLabel[kind],
+      targetId: selectedTarget?.id,
+      targetName: selectedTarget?.name,
+      skillId: kind === 'skill' ? selectedSkill?.id : undefined,
+      skillName: kind === 'skill' ? selectedSkill?.name : undefined,
+      facts: commandFacts(kind),
+    };
+
+    setPendingCommands(prev => {
+      const current = prev[selectedActor.id] || [];
+      const currentSlots = Math.max(
+        selectedActor.maxAp || 1,
+        current.reduce((max, item) => Math.max(max, skillExtraActionSlots(item.skillId ? getSkillById(item.skillId) : undefined)), 1),
+        skillActionSlots,
+      );
+      const nextForActor = current.length >= currentSlots
+        ? [...current.slice(0, Math.max(0, currentSlots - 1)), command]
+        : [...current, command];
+      return { ...prev, [selectedActor.id]: nextForActor };
+    });
+
+    addLog({
+      actor: `[${selectedActor.name}]`,
+      action: '暂存指令',
+      result: `${command.label}。目标：${selectedTarget?.name || '待定'}。`,
+      color: kind === 'skill' ? 'text-fantasy-gold' : undefined,
+    });
+  };
+
+  const submitRound = async () => {
+    if (!allPlayersReady) {
+      const missing = players
+        .filter(unit => !(pendingCommands[unit.id]?.length))
+        .map(unit => unit.name)
+        .join('、') || '友方';
+      addLog({ actor: '[战斗台]', action: '缺少指令', result: `${missing} 尚未暂存本回合行动。`, color: 'text-fantasy-red' });
+      return;
+    }
+
+    const commands = players.flatMap(unit => pendingCommands[unit.id] || []);
+    const commandSummary = commands
+      .map((command, index) => `${index + 1}. ${command.actorName}${command.label}${command.targetName ? `→${command.targetName}` : ''}`)
+      .join('；');
     let status = '已提交正文结算';
     if (onSubmitEvent) {
       await onSubmitEvent({
         eventType: 'combat_command',
-        title: `回合${turn}：${selectedActor.name}${commandLabel[kind]}`,
-        playerIntent: kind === 'skill' && selectedSkill ? `${selectedActor.name} 使用「${selectedSkill.name}」` : `${selectedActor.name} 执行${commandLabel[kind]}`,
-        actor: selectedActor.id,
-        target: selectedTarget?.id || selectedTarget?.name,
-        skillId: kind === 'skill' ? selectedSkill?.id : undefined,
-        extraFacts: commandFacts(kind),
+        title: `回合${turn}：全队行动`,
+        playerIntent: commandSummary,
+        actor: 'party',
+        target: enemies.map(unit => unit.name).join('、') || undefined,
+        extraFacts: [
+          `回合：${turn}`,
+          `全队指令：${commandSummary}`,
+          `主角方：${players.map(unitSummary).join('；') || '无'}`,
+          `敌方：${enemies.map(unitSummary).join('；') || '无'}`,
+          ...commands.flatMap((command, index) => [
+            `指令${index + 1}：${command.actorName}｜${command.label}｜目标${command.targetName || '待定'}`,
+            ...command.facts,
+          ]),
+        ],
       });
     } else {
       status = '未连接正文生成器';
     }
     addLog({
-      actor: `[${selectedActor.name}]`,
-      action: commandLabel[kind],
-      result: `${status}。目标：${selectedTarget?.name || '待定'}。`,
-      color: kind === 'skill' ? 'text-fantasy-gold' : undefined,
+      actor: '[战斗台]',
+      action: `回合${turn}提交`,
+      result: `${status}。${commandSummary}`,
+      color: 'text-fantasy-gold',
     });
+    setPendingCommands({});
     setTurn(prev => prev + 1);
   };
 
@@ -283,9 +377,9 @@ export function CombatPanel({
           <div className="glass-panel rounded-xl p-4 shrink-0">
             <h3 className="text-xs text-fantasy-gold mb-3 font-serif border-b border-fantasy-gold/20 pb-2">行动指令</h3>
             <div className="grid grid-cols-3 gap-2 mb-3">
-              <button onClick={() => submitCommand('attack')} disabled={enemies.length === 0} className="btn-rpg px-3 py-2 rounded text-xs disabled:opacity-30">普通攻击</button>
-              <button onClick={() => submitCommand('guard')} className="btn-rpg px-3 py-2 rounded text-xs">防御</button>
-              <button onClick={() => submitCommand('escape')} className="btn-rpg px-3 py-2 rounded text-xs">撤离</button>
+              <button onClick={() => queueCommand('attack')} disabled={enemies.length === 0} className="btn-rpg px-3 py-2 rounded text-xs disabled:opacity-30">暂存攻击</button>
+              <button onClick={() => queueCommand('guard')} className="btn-rpg px-3 py-2 rounded text-xs">暂存防御</button>
+              <button onClick={() => queueCommand('escape')} className="btn-rpg px-3 py-2 rounded text-xs">暂存撤离</button>
             </div>
             <div className="grid gap-2">
               {actorSkills.length === 0 && (
@@ -325,6 +419,25 @@ export function CombatPanel({
 
           <div className="glass-panel rounded-xl flex-[2.6] p-4 flex flex-col min-h-[34rem] 2xl:min-h-0">
             <h3 className="text-xs text-fantasy-gold mb-3 font-serif border-b border-fantasy-gold/20 pb-2">指令记录</h3>
+            <div className="mb-3 rounded border border-fantasy-gold/20 bg-black/25 p-3">
+              <div className="mb-2 flex items-center justify-between gap-3 text-xs">
+                <span className="text-fantasy-gold">本回合暂存</span>
+                <span className={allPlayersReady ? 'text-green-300' : 'text-gray-500'}>
+                  {players.filter(unit => pendingCommands[unit.id]?.length).length}/{players.length}
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {queuedCommandList.length === 0 && (
+                  <div className="text-xs text-gray-500">尚未暂存行动</div>
+                )}
+                {queuedCommandList.map(command => (
+                  <div key={command.id} className="flex items-center justify-between gap-3 rounded bg-white/5 px-2 py-1.5 text-xs">
+                    <span className="text-gray-200">{command.actorName}</span>
+                    <span className="text-fantasy-gold truncate">{command.label}{command.targetName ? ` → ${command.targetName}` : ''}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
             <div className="flex-1 overflow-y-auto space-y-3 pr-2 text-sm">
               {logs.length === 0 && (
                 <div className="p-3 rounded bg-black/20 border border-white/5 text-xs text-gray-500">暂无指令记录</div>
@@ -335,8 +448,11 @@ export function CombatPanel({
 
           <div className="glass-panel rounded-xl p-4 shrink-0 bg-gradient-to-t from-fantasy-gold/5 to-transparent">
             <div className="text-xs text-gray-400 mb-2">当前技能</div>
-            <button onClick={() => submitCommand('skill')} disabled={!selectedSkill || (!selectedSkillTargetsAlly && enemies.length === 0)} className="btn-rpg w-full px-4 py-3 rounded bg-fantasy-gold/20 border-fantasy-gold text-fantasy-gold hover:text-white flex items-center justify-center gap-2 group disabled:opacity-30">
-              <Play className="w-4 h-4" /> 提交 {selectedSkill?.name || '技能'}
+            <button onClick={() => queueCommand('skill')} disabled={!selectedSkill || (!selectedSkillTargetsAlly && enemies.length === 0)} className="btn-rpg w-full px-4 py-3 rounded bg-fantasy-gold/20 border-fantasy-gold text-fantasy-gold hover:text-white flex items-center justify-center gap-2 group disabled:opacity-30">
+              <Play className="w-4 h-4" /> 暂存 {selectedSkill?.name || '技能'}
+            </button>
+            <button onClick={() => void submitRound()} disabled={!allPlayersReady} className="btn-rpg mt-3 w-full px-4 py-3 rounded bg-fantasy-red/15 border-fantasy-red/50 text-orange-200 hover:text-white flex items-center justify-center gap-2 group disabled:opacity-30">
+              提交本回合
             </button>
           </div>
         </div>

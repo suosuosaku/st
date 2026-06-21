@@ -97,6 +97,8 @@ const canNpcEquip = (equipment: Equipment, npc: Character) => {
   });
 };
 
+const canNpcJoinParty = (npc: Character) => npc.favorability > 80;
+
 const avatarOwnerKey = (owner: AvatarOwner) => `${owner.ownerType}:${owner.ownerName}`;
 
 export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_NPCS, onSubmitEvent }: PartyPanelProps) {
@@ -121,7 +123,14 @@ export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_
   const rosterNpcs = useMemo(() => Object.values(npcStates), [npcStates]);
   const partyNpcs = useMemo(() => player.partyMemberIds
     .map(id => npcStates[id] || Object.values(npcStates).find(npc => npc.name === id || npc.fullName === id))
-    .filter(defined), [npcStates, player.partyMemberIds]);
+    .filter(defined)
+    .filter(canNpcJoinParty), [npcStates, player.partyMemberIds]);
+  const partyNpcKeys = useMemo(() => new Set(
+    partyNpcs.flatMap(npc => [npc.id, npc.name, npc.fullName]).filter(Boolean),
+  ), [partyNpcs]);
+  const availableRosterNpcs = useMemo(() =>
+    rosterNpcs.filter(npc => !partyNpcKeys.has(npc.id) && !partyNpcKeys.has(npc.name) && !partyNpcKeys.has(npc.fullName)),
+  [partyNpcKeys, rosterNpcs]);
   const selectedNpc = selectedId === 'player' ? null : npcStates[selectedId] || Object.values(npcStates).find(npc => npc.name === selectedId || npc.fullName === selectedId) || null;
   const selectedAvatarOwner = useMemo(() => ({
     ownerType: selectedNpc ? 'npc' as const : 'player' as const,
@@ -197,6 +206,7 @@ export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_
 
   const addNpcToParty = (npcId: string) => {
     const npc = npcStates[npcId];
+    if (!npc || !canNpcJoinParty(npc)) return;
     onUpdatePlayer(prev => {
       if (prev.partyMemberIds.includes(npcId) || prev.partyMemberIds.length >= 3) return prev;
       return { ...prev, partyMemberIds: [...prev.partyMemberIds, npcId] };
@@ -532,15 +542,26 @@ export function PartyPanel({ player, onUpdatePlayer, onUpdateNpcs, npcs = EMPTY_
 
           <div className="pt-3 mt-3 border-t border-white/10">
             <div className="text-xs text-fantasy-gold mb-2">可收录同行</div>
-            {rosterNpcs.filter(npc => !player.partyMemberIds.includes(npc.id) && !player.partyMemberIds.includes(npc.name)).length === 0 && (
+            {availableRosterNpcs.length === 0 && (
               <div className="p-3 rounded bg-black/20 border border-white/5 text-xs text-gray-500">暂无可编入同行</div>
             )}
-            {rosterNpcs.filter(npc => !player.partyMemberIds.includes(npc.id) && !player.partyMemberIds.includes(npc.name)).slice(0, 5).map(npc => (
-              <button key={npc.id} onClick={() => addNpcToParty(npc.id)} className="w-full p-2 rounded bg-black/30 border border-white/5 hover:border-fantasy-gold/30 flex items-center justify-between text-left mb-2">
-                <span className="text-xs text-gray-300">{npc.name}</span>
-                <UserPlus className="w-3 h-3 text-fantasy-gold" />
-              </button>
-            ))}
+            {availableRosterNpcs.slice(0, 5).map(npc => {
+              const joinable = canNpcJoinParty(npc);
+              return (
+                <button
+                  key={npc.id}
+                  onClick={() => addNpcToParty(npc.id)}
+                  disabled={!joinable}
+                  className={`w-full p-2 rounded bg-black/30 border border-white/5 flex items-center justify-between text-left mb-2 ${joinable ? 'hover:border-fantasy-gold/30' : 'opacity-55 cursor-not-allowed'}`}
+                >
+                  <span className="text-xs text-gray-300">{npc.name}</span>
+                  <span className="flex items-center gap-2 text-[10px] text-gray-500">
+                    {joinable ? '可同行' : '好感80以上可同行'}
+                    <UserPlus className={`w-3 h-3 ${joinable ? 'text-fantasy-gold' : 'text-gray-600'}`} />
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

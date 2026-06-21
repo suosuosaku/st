@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { ChevronRight, Dice5, Minus, Plus, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Dice5, Minus, Plus, Sparkles } from 'lucide-react';
 import { AttributeKey, CharacterClassId, CharacterIdentity, CharacterRaceId, PlayerState } from '../types';
 import {
   ATTRIBUTE_KEYS,
@@ -125,6 +125,10 @@ export function CreationFlow({ onComplete }: { onComplete: (state: PlayerState) 
     }, 500);
   };
 
+  const handlePrevious = () => {
+    setCurrentStep(prev => Math.max(0, prev - 1));
+  };
+
   if (isGenerating) {
     return (
       <div className="flex flex-col items-center justify-center h-full w-full bg-fantasy-darker relative z-10">
@@ -217,7 +221,8 @@ export function CreationFlow({ onComplete }: { onComplete: (state: PlayerState) 
         )}
 
         {setupStep === 1 && (
-          <div className="grid md:grid-cols-2 gap-3 md:gap-4 mb-6 md:mb-8">
+          <div className="max-h-[min(52vh,34rem)] overflow-y-auto pr-1 sm:pr-2 mb-6 md:mb-8">
+          <div className="grid md:grid-cols-2 gap-3 md:gap-4">
             {characterRaces.map(race => {
               const active = raceId === race.id;
               return (
@@ -236,10 +241,12 @@ export function CreationFlow({ onComplete }: { onComplete: (state: PlayerState) 
               );
             })}
           </div>
+          </div>
         )}
 
         {setupStep === 2 && (
-          <div className="grid md:grid-cols-2 gap-3 md:gap-4 mb-6 md:mb-8">
+          <div className="max-h-[min(52vh,34rem)] overflow-y-auto pr-1 sm:pr-2 mb-6 md:mb-8">
+          <div className="grid md:grid-cols-2 gap-3 md:gap-4">
             {randomizableOrigins.map(origin => {
               const active = originId === origin.id;
               return (
@@ -255,10 +262,12 @@ export function CreationFlow({ onComplete }: { onComplete: (state: PlayerState) 
               <div className="text-xs text-gray-500 leading-5 mt-1">由登记册随机落章。</div>
             </button>
           </div>
+          </div>
         )}
 
         {setupStep === 3 && (
-          <div className="grid md:grid-cols-2 gap-3 md:gap-4 mb-6 md:mb-8">
+          <div className="max-h-[min(52vh,34rem)] overflow-y-auto pr-1 sm:pr-2 mb-6 md:mb-8">
+          <div className="grid md:grid-cols-2 gap-3 md:gap-4">
             {characterClasses.map(cls => {
               const active = classId === cls.id;
               return (
@@ -275,6 +284,7 @@ export function CreationFlow({ onComplete }: { onComplete: (state: PlayerState) 
                 </button>
               );
             })}
+          </div>
           </div>
         )}
 
@@ -309,7 +319,8 @@ export function CreationFlow({ onComplete }: { onComplete: (state: PlayerState) 
         )}
 
         {setupStep === 5 && (
-          <div className="grid md:grid-cols-2 gap-3 md:gap-4 mb-6 md:mb-8">
+          <div className="max-h-[min(52vh,34rem)] overflow-y-auto pr-1 sm:pr-2 mb-6 md:mb-8">
+          <div className="grid md:grid-cols-2 gap-3 md:gap-4">
             {classSkills.map(skill => {
               const active = selectedSkillIds.includes(skill.id);
               return (
@@ -327,21 +338,33 @@ export function CreationFlow({ onComplete }: { onComplete: (state: PlayerState) 
               初始装备：{selectedClass.startingEquipmentIds.map(id => getEquipmentById(id)?.name).filter(Boolean).join('、')}
             </div>
           </div>
+          </div>
         )}
 
         <div className="flex justify-between items-center gap-3">
           <div className="text-fantasy-gold/50 text-xs md:text-sm font-mono">
             阶段 {currentStep + 1} / {totalSteps}
           </div>
-          <button
-            id="btn-create-next"
-            onClick={handleNext}
-            disabled={!canContinue}
-            className="btn-rpg px-5 md:px-8 py-2.5 md:py-3 rounded text-xs md:text-sm tracking-widest flex items-center gap-2 group border border-fantasy-gold text-fantasy-gold hover:bg-fantasy-gold/20 hover:text-white transition-all disabled:opacity-30"
-          >
-            {currentStep === totalSteps - 1 ? '进入' : '继续'}
-            <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handlePrevious}
+              disabled={currentStep === 0}
+              className="btn-rpg px-4 md:px-5 py-2.5 md:py-3 rounded text-xs md:text-sm tracking-widest flex items-center gap-2 border border-gray-600 text-gray-300 hover:border-fantasy-gold/50 hover:text-fantasy-gold transition-all disabled:opacity-30"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              返回
+            </button>
+            <button
+              id="btn-create-next"
+              onClick={handleNext}
+              disabled={!canContinue}
+              className="btn-rpg px-5 md:px-8 py-2.5 md:py-3 rounded text-xs md:text-sm tracking-widest flex items-center gap-2 group border border-fantasy-gold text-fantasy-gold hover:bg-fantasy-gold/20 hover:text-white transition-all disabled:opacity-30"
+            >
+              {currentStep === totalSteps - 1 ? '进入' : '继续'}
+              <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </button>
+          </div>
         </div>
       </motion.div>
     </div>

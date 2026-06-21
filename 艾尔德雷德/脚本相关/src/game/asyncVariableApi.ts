@@ -29,6 +29,17 @@ export type EldredAsyncVariableApiResult = {
 
 const SETTINGS_KEY = 'eldred_async_variable_api_v1';
 
+export const ELDRED_ASYNC_API_SOURCES = [
+  { id: 'openai', label: 'OpenAI 兼容' },
+  { id: 'claude', label: 'Claude' },
+  { id: 'gemini', label: 'Gemini' },
+  { id: 'deepseek', label: 'DeepSeek' },
+  { id: 'openrouter', label: 'OpenRouter' },
+  { id: 'kobold', label: 'Kobold' },
+  { id: 'textgenerationwebui', label: 'TextGen WebUI' },
+  { id: 'custom', label: '自定义兼容' },
+] as const;
+
 export const createDefaultAsyncVariableApiSettings = (): EldredAsyncVariableApiSettings => ({
   enabled: false,
   apiurl: '',

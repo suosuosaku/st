@@ -881,6 +881,43 @@ const boardItemsFrom = (raw: unknown, type: DynamicBoardItemType): DynamicBoardI
     .filter((item): item is DynamicBoardItem => Boolean(item && (item.title || item.detail)));
 };
 
+const normalizeBoardIdentityText = (value: unknown) =>
+  textOf(value)
+    .replace(/[【】「」《》“”"'`]/g, '')
+    .replace(/\s+/g, '')
+    .toLowerCase();
+
+const boardItemCompletenessScore = (item: DynamicBoardItem) =>
+  [
+    item.detail,
+    item.source,
+    item.location,
+    item.status,
+    item.risk,
+    item.reward,
+    item.recLevel,
+    item.timeLimit,
+    item.updatedAt,
+  ].filter(value => textOf(value)).length;
+
+const mergeBoardItem = (left: DynamicBoardItem, right: DynamicBoardItem): DynamicBoardItem => {
+  const preferRight = boardItemCompletenessScore(right) > boardItemCompletenessScore(left);
+  const primary = preferRight ? right : left;
+  const secondary = preferRight ? left : right;
+  return {
+    ...primary,
+    detail: primary.detail || secondary.detail,
+    source: primary.source || secondary.source,
+    status: primary.status || secondary.status,
+    location: primary.location || secondary.location,
+    risk: primary.risk || secondary.risk,
+    reward: primary.reward || secondary.reward,
+    recLevel: primary.recLevel || secondary.recLevel,
+    timeLimit: primary.timeLimit || secondary.timeLimit,
+    updatedAt: primary.updatedAt || secondary.updatedAt,
+  };
+};
+
 const dynamicBoardFromStatData = (statData: AnyRecord): DynamicBoardItem[] => {
   const world = asRecord(statData.世界);
   const system = asRecord(statData.系统);
@@ -902,15 +939,21 @@ const dynamicBoardFromStatData = (statData: AnyRecord): DynamicBoardItem[] => {
   items.push(...boardItemsFrom(world.路径行动 ?? system.路径行动, '路径行动'));
   items.push(...boardItemsFrom(world.委托 ?? system.委托 ?? system.委托板, '委托'));
 
-  const seen = new Set<string>();
+  const merged = new Map<string, DynamicBoardItem>();
+  items.forEach(item => {
+    const normalizedTitle = normalizeBoardIdentityText(item.title || item.id);
+    const normalizedSource = normalizeBoardIdentityText(item.source);
+    const normalizedLocation = normalizeBoardIdentityText(item.location);
+    const key = item.type === '委托'
+      ? `${item.type}:${normalizedTitle || normalizeBoardIdentityText(item.id)}`
+      : `${item.type}:${normalizedTitle || normalizeBoardIdentityText(item.id)}:${normalizedSource}:${normalizedLocation}`;
+    const existing = merged.get(key);
+    merged.set(key, existing ? mergeBoardItem(existing, item) : item);
+  });
+
   const typeCounts = new Map<DynamicBoardItemType, number>();
-  return items
+  return Array.from(merged.values())
     .filter(item => {
-      const normalizedTitle = item.title.replace(/\s+/g, '');
-      const normalizedSource = item.source.replace(/\s+/g, '');
-      const key = `${item.type}:${normalizedTitle || item.id}:${normalizedSource}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
       const count = typeCounts.get(item.type) || 0;
       if (count >= 4) return false;
       typeCounts.set(item.type, count + 1);
@@ -1305,13 +1348,32 @@ const npcsFromStatData = (statData: AnyRecord): Character[] => {
   const other = asRecord(collection.其他NPC);
   const legacy = asRecord(mainRecord.NPC名册);
   const existingNames = new Set([...Object.keys(major), ...Object.keys(other)]);
+  const relationships = relationshipRecordsFrom(asRecord(statData.关系).好感);
+  const relationshipByName = new Map<string, RelationshipRecord>();
+  relationships.forEach(record => {
+    [record.characterId, record.name].filter(Boolean).forEach(key => {
+      relationshipByName.set(normalizeCombatName(key), record);
+    });
+  });
+  const mergeRelationship = (npc: Character) => {
+    const record = [
+      npc.id,
+      npc.name,
+      npc.fullName,
+    ].map(normalizeCombatName).map(key => relationshipByName.get(key)).find(Boolean);
+    return record ? {
+      ...npc,
+      favorability: record.favorability,
+      relationshipStage: record.stage || npc.relationshipStage,
+    } : npc;
+  };
   return [
     ...Object.entries(major).map(([name, value]) => characterFromVariable(name, value, 'NPC登记', true)),
     ...Object.entries(other).map(([name, value]) => characterFromVariable(name, value, 'NPC登记', fixedNpcImageNames.has(name))),
     ...Object.entries(legacy)
       .filter(([name]) => name && name !== '无' && !existingNames.has(name))
       .map(([name, value]) => characterFromVariable(name, value, 'NPC登记', fixedNpcImageNames.has(name))),
-  ];
+  ].map(mergeRelationship);
 };
 
 const questsFromStatData = (statData: AnyRecord): Quest[] =>

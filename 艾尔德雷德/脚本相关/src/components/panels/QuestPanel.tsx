@@ -42,6 +42,12 @@ const questFromBoardItem = (item: DynamicBoardItem): Quest => ({
   status: item.status || '可接取',
 });
 
+const normalizeQuestTitle = (value: string) =>
+  String(value || '')
+    .replace(/[【】「」《》“”"'`]/g, '')
+    .replace(/\s+/g, '')
+    .toLowerCase();
+
 const InfoTile = ({ label, value, tone = 'normal' }: { label: string; value?: string | number; tone?: 'normal' | 'gold' | 'red' | 'blue' }) => {
   const toneClass = tone === 'gold'
     ? 'text-fantasy-gold'
@@ -62,7 +68,10 @@ export function QuestPanel({ quests = EMPTY_QUESTS, boardItems = EMPTY_BOARD_ITE
   const [selectedQuestId, setSelectedQuestId] = useState('');
   const [selectedBoardId, setSelectedBoardId] = useState('');
   const newsItems = boardItems.filter(item => NEWS_TYPES.has(item.type));
-  const boardQuestItems = boardItems.filter(item => item.type === '委托');
+  const questTitleSet = new Set(quests.map(quest => normalizeQuestTitle(quest.title || quest.id)).filter(Boolean));
+  const boardQuestItems = boardItems.filter(item =>
+    item.type === '委托' && !questTitleSet.has(normalizeQuestTitle(item.title || item.id)),
+  );
   const selectedBoardItem = boardItems.find(item => item.id === selectedBoardId) || null;
   const selectedQuest = selectedBoardItem ? null : quests.find(q => q.id === selectedQuestId) || quests[0] || null;
   const selectedBoardQuest = selectedBoardItem?.type === '委托' ? questFromBoardItem(selectedBoardItem) : null;

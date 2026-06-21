@@ -5,6 +5,7 @@ import { PlayerState } from '../../types';
 import { EldredRuntimeSave } from '../../game/eldredSave';
 import { formatEldredLocation } from '../../game/locationFormat';
 import {
+  ELDRED_ASYNC_API_SOURCES,
   EldredAsyncVariableApiSettings,
   loadEldredAsyncVariableApiSettings,
   processEldredVariablesWithAsyncApi,
@@ -150,11 +151,17 @@ export function SystemPanel({ runtime, player, onRuntimeProcessed }: SystemPanel
 
   const runAsyncVariableApi = async () => {
     setApiBusy(true);
-    setApiStatus('变量整理中');
+    setApiStatus('变量API写回检查中');
     try {
-      const result = await processEldredVariablesWithAsyncApi(runtime, apiSettings);
-      const saved = saveEldredAsyncVariableApiSettings({
+      const settingsToUse = saveEldredAsyncVariableApiSettings({
         ...apiSettings,
+        enabled: true,
+        lastStatus: '变量API已启用',
+      });
+      setApiSettings(settingsToUse);
+      const result = await processEldredVariablesWithAsyncApi(runtime, settingsToUse);
+      const saved = saveEldredAsyncVariableApiSettings({
+        ...settingsToUse,
         lastRunAt: new Date().toISOString(),
         lastStatus: result.message,
       });
@@ -213,7 +220,7 @@ export function SystemPanel({ runtime, player, onRuntimeProcessed }: SystemPanel
                   <BrainCircuit className="h-5 w-5" />
                   异步变量 API
                 </h2>
-                <div className="mt-1 text-xs text-gray-400">独立接口 / 变量整理 / JSONPatch 写回</div>
+                <div className="mt-1 text-xs text-gray-400">独立接口 / 变量接管 / JSONPatch 写回</div>
               </div>
               <div className="rounded border border-white/10 bg-black/25 px-3 py-2 text-xs text-gray-300">{apiStatus}</div>
             </div>
@@ -264,12 +271,15 @@ export function SystemPanel({ runtime, player, onRuntimeProcessed }: SystemPanel
               </label>
               <label className="grid gap-1 text-xs text-gray-400">
                 <span>来源标识</span>
-                <input
+                <select
                   value={apiSettings.source}
                   onChange={event => patchApiSettings({ source: event.target.value })}
-                  placeholder="openai"
                   className="rounded border border-white/10 bg-black/30 px-3 py-2 text-sm text-gray-100 outline-none focus:border-fantasy-gold/60"
-                />
+                >
+                  {ELDRED_ASYNC_API_SOURCES.map(source => (
+                    <option key={source.id} value={source.id}>{source.label}</option>
+                  ))}
+                </select>
               </label>
               <label className="flex items-center gap-3 rounded border border-white/10 bg-black/20 px-3 py-3 text-xs text-gray-300">
                 <input
@@ -278,7 +288,7 @@ export function SystemPanel({ runtime, player, onRuntimeProcessed }: SystemPanel
                   onChange={event => patchApiSettings({ enabled: event.target.checked })}
                   className="accent-yellow-500"
                 />
-                启用异步整理
+                变量API接管
               </label>
             </div>
 
@@ -301,10 +311,10 @@ export function SystemPanel({ runtime, player, onRuntimeProcessed }: SystemPanel
               <button
                 type="button"
                 onClick={runAsyncVariableApi}
-                disabled={apiBusy || !apiSettings.enabled}
+                disabled={apiBusy}
                 className="btn-rpg flex items-center justify-center gap-2 rounded border-fantasy-gold bg-fantasy-gold/20 px-5 py-2 text-sm text-fantasy-gold disabled:opacity-40"
               >
-                <Sparkles className="h-4 w-4" /> 整理变量
+                <Sparkles className="h-4 w-4" /> 设为变量API
               </button>
             </div>
           </section>

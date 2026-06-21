@@ -32,6 +32,11 @@ import {
   persistRuntimePlayer,
 } from './game/eldredActions';
 import { dismissEldredBoardItem } from './game/eldredNarration';
+import {
+  loadEldredAsyncVariableApiSettings,
+  processEldredVariablesWithAsyncApi,
+  saveEldredAsyncVariableApiSettings,
+} from './game/asyncVariableApi';
 
 export default function App() {
   const [initialRuntime] = useState<EldredRuntimeSave>(() => loadEldredRuntimeSave());
@@ -49,6 +54,29 @@ export default function App() {
     if (nextRuntime.player) {
       setPlayerState(nextRuntime.player);
       setGameState('playing');
+    }
+  }, []);
+
+  const applyVariableApiAfterNarration = useCallback(async (generatedRuntime: EldredRuntimeSave) => {
+    const settings = loadEldredAsyncVariableApiSettings();
+    if (!settings.enabled) return { runtime: generatedRuntime, message: '' };
+    if (!settings.apiurl.trim() || !settings.model.trim()) {
+      return { runtime: generatedRuntime, message: '变量API已启用但缺少接口地址或模型' };
+    }
+    setInteractionStatus('变量API写回中');
+    try {
+      const result = await processEldredVariablesWithAsyncApi(generatedRuntime, settings);
+      saveEldredAsyncVariableApiSettings({
+        ...settings,
+        lastRunAt: new Date().toISOString(),
+        lastStatus: result.message,
+      });
+      return { runtime: result.runtime, message: result.message };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '变量API写回失败';
+      console.warn('[艾尔德雷德] 变量API写回失败', error);
+      saveEldredAsyncVariableApiSettings({ ...settings, lastStatus: message });
+      return { runtime: generatedRuntime, message };
     }
   }, []);
 
@@ -80,10 +108,12 @@ export default function App() {
     setRuntime(nextRuntime);
     setInteractionStatus('第一幕生成中');
     setIsGeneratingNarration(true);
-    void generateEldredNarrationFromOpening(nextRuntime, state).then(generatedRuntime => {
-      setRuntime(generatedRuntime);
-      setPlayerState(generatedRuntime.player || state);
-      setInteractionStatus(generatedRuntime.narration.lastError ? generatedRuntime.narration.lastError : '第一幕已生成');
+    void generateEldredNarrationFromOpening(nextRuntime, state).then(async generatedRuntime => {
+      const processed = await applyVariableApiAfterNarration(generatedRuntime);
+      setRuntime(processed.runtime);
+      setPlayerState(processed.runtime.player || state);
+      const status = processed.runtime.narration.lastError ? processed.runtime.narration.lastError : '第一幕已生成';
+      setInteractionStatus(processed.message ? `${status} / ${processed.message}` : status);
     }).catch(error => {
       console.warn('[艾尔德雷德] 第一幕生成失败', error);
       setInteractionStatus(error instanceof Error ? error.message : '第一幕生成失败');
@@ -109,9 +139,11 @@ export default function App() {
         party: runtime.npcs.filter(npc => playerState?.partyMemberIds.includes(npc.id) || playerState?.partyMemberIds.includes(npc.name)),
         enemies: runtime.combat.enemyUnits,
       });
-      setRuntime(generatedRuntime);
-      setPlayerState(generatedRuntime.player || playerState);
-      setInteractionStatus(generatedRuntime.narration.lastError ? generatedRuntime.narration.lastError : '正文已生成');
+      const processed = await applyVariableApiAfterNarration(generatedRuntime);
+      setRuntime(processed.runtime);
+      setPlayerState(processed.runtime.player || playerState);
+      const status = processed.runtime.narration.lastError ? processed.runtime.narration.lastError : '正文已生成';
+      setInteractionStatus(processed.message ? `${status} / ${processed.message}` : status);
     } catch (error) {
       setInteractionStatus(error instanceof Error ? error.message : '正文生成失败');
     } finally {
@@ -144,15 +176,19 @@ export default function App() {
             : [],
           enemies: checkResult.runtime.combat.enemyUnits,
         });
-        setRuntime(generatedRuntime);
-        setPlayerState(generatedRuntime.player || checkResult.runtime.player || playerState);
-        setInteractionStatus(generatedRuntime.narration.lastError ? generatedRuntime.narration.lastError : '判定正文已同步');
+        const processed = await applyVariableApiAfterNarration(generatedRuntime);
+        setRuntime(processed.runtime);
+        setPlayerState(processed.runtime.player || checkResult.runtime.player || playerState);
+        const status = processed.runtime.narration.lastError ? processed.runtime.narration.lastError : '判定正文已同步';
+        setInteractionStatus(processed.message ? `${status} / ${processed.message}` : status);
         return;
       }
       const generatedRuntime = await generateEldredNarrationFromInput(sourceRuntime, text, 'free');
-      setRuntime(generatedRuntime);
-      setPlayerState(generatedRuntime.player || playerState);
-      setInteractionStatus(generatedRuntime.narration.lastError ? generatedRuntime.narration.lastError : '正文已生成');
+      const processed = await applyVariableApiAfterNarration(generatedRuntime);
+      setRuntime(processed.runtime);
+      setPlayerState(processed.runtime.player || playerState);
+      const status = processed.runtime.narration.lastError ? processed.runtime.narration.lastError : '正文已生成';
+      setInteractionStatus(processed.message ? `${status} / ${processed.message}` : status);
     } catch (error) {
       setInteractionStatus(error instanceof Error ? error.message : '正文生成失败');
     } finally {
@@ -177,9 +213,11 @@ export default function App() {
         messages: runtime.messages,
       };
       const generatedRuntime = await rerollLatestEldredNarration(sourceRuntime);
-      setRuntime(generatedRuntime);
-      setPlayerState(generatedRuntime.player || playerState);
-      setInteractionStatus(generatedRuntime.narration.lastError ? generatedRuntime.narration.lastError : '本轮已重掷');
+      const processed = await applyVariableApiAfterNarration(generatedRuntime);
+      setRuntime(processed.runtime);
+      setPlayerState(processed.runtime.player || playerState);
+      const status = processed.runtime.narration.lastError ? processed.runtime.narration.lastError : '本轮已重掷';
+      setInteractionStatus(processed.message ? `${status} / ${processed.message}` : status);
     } catch (error) {
       setInteractionStatus(error instanceof Error ? error.message : '本轮重掷失败');
     } finally {
