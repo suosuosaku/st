@@ -78,6 +78,12 @@ const unitSummary = (unit: CombatUnit) => {
 const skillTargetIsAlly = (skill?: Skill) =>
   Boolean(skill && ['support', 'heal', 'reaction'].includes(skill.actionType));
 
+const normalizeUnitName = (name: string) =>
+  String(name || '')
+    .replace(/[（）()].*?[）)]/g, '')
+    .replace(/\s+/g, '')
+    .toLowerCase();
+
 export function CombatPanel({
   player,
   partyNpcs = EMPTY_NPCS,
@@ -89,7 +95,17 @@ export function CombatPanel({
 }: CombatPanelProps) {
   const initialUnits = useMemo(() => {
     const party = partyNpcs.map(npcToCombatUnit);
-    return [playerToCombatUnit(player), ...party, ...enemyUnits.filter(unit => unit.isEnemy)];
+    const allyNames = new Set([
+      normalizeUnitName(player.name),
+      normalizeUnitName(player.identity.name),
+      '{{user}}',
+      '主角',
+      '玩家',
+      ...party.map(unit => normalizeUnitName(unit.name)),
+      ...partyNpcs.map(npc => normalizeUnitName(npc.name)),
+    ].filter(Boolean));
+    const enemies = enemyUnits.filter(unit => unit.isEnemy && !allyNames.has(normalizeUnitName(unit.name)));
+    return [playerToCombatUnit(player), ...party, ...enemies];
   }, [enemyUnits, partyNpcs, player]);
 
   const [units, setUnits] = useState<CombatUnit[]>(initialUnits);

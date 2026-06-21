@@ -1126,13 +1126,43 @@ const combatUnitFrom = (name: string, raw: unknown, isEnemy: boolean): CombatUni
   };
 };
 
+const normalizeCombatName = (name: unknown) =>
+  textOf(name)
+    .replace(/[（）()].*?[）)]/g, '')
+    .replace(/\s+/g, '')
+    .toLowerCase();
+
+const allyCombatAliasesFrom = (statData: AnyRecord) => {
+  const main = asRecord(statData.主角);
+  const identity = asRecord(main.身份 ?? main.角色 ?? main.基本信息);
+  const battle = asRecord(main.战斗);
+  return new Set([
+    '{{user}}',
+    '<user>',
+    '主角',
+    '玩家',
+    identity.姓名,
+    main.姓名,
+    battle.姓名,
+    ...Object.keys(asRecord(main.当前队伍)),
+  ].map(normalizeCombatName).filter(Boolean));
+};
+
+const isAllyCombatName = (name: string, aliases: Set<string>) => {
+  const normalized = normalizeCombatName(name);
+  return Boolean(normalized && (aliases.has(normalized) || /\{\{user\}\}|<user>|主角|玩家/i.test(name)));
+};
+
 const combatFromStatData = (statData: AnyRecord): EldredRuntimeSave['combat'] => {
   const cache = asRecord(asRecord(statData.系统).战斗缓存);
   const participants = asRecord(cache.参战名单);
+  const allyAliases = allyCombatAliasesFrom(statData);
   const enemyUnits = Object.entries(participants)
-    .filter(([, value]) => /敌|魔物|怪物|enemy/i.test(textOf(asRecord(value).阵营 ?? asRecord(value).类型)))
+    .filter(([name, value]) => !isAllyCombatName(name, allyAliases) && /敌|魔物|怪物|enemy/i.test(textOf(asRecord(value).阵营 ?? asRecord(value).类型)))
     .map(([name, value]) => combatUnitFrom(name, value, true));
-  const directEnemies = Object.entries(asRecord(cache.敌方)).map(([name, value]) => combatUnitFrom(name, value, true));
+  const directEnemies = Object.entries(asRecord(cache.敌方))
+    .filter(([name]) => !isAllyCombatName(name, allyAliases))
+    .map(([name, value]) => combatUnitFrom(name, value, true));
   return {
     turn: Math.max(1, numberOf(cache.回合, 1)),
     enemyUnits: [...enemyUnits, ...directEnemies],

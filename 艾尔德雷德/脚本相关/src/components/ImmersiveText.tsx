@@ -197,13 +197,13 @@ function HighlightText({ text }: { text: string }) {
 export function DialogueLine({ speaker, text }: { speaker: string; text: string }) {
   const avatar = getAvatar(speaker);
   return (
-    <div className="my-4 flex gap-3 items-start pixel-dialogue">
-      <div className="pixel-avatar w-12 h-12 md:w-14 md:h-14 shrink-0 overflow-hidden">
+    <div className="eldred-dialogue-line pixel-dialogue">
+      <div className="pixel-avatar eldred-dialogue-avatar shrink-0 overflow-hidden">
         <ImageOrInitial src={avatar} name={speaker} imageClassName="w-full h-full object-cover" fallbackClassName="text-lg" />
       </div>
-      <div className="min-w-0 flex-1">
-        <div className="text-xl md:text-2xl font-serif text-[#7b4218] mb-1 font-bold tracking-wide">【{speaker}】</div>
-        <div className="pixel-speech relative px-4 py-3 text-sm md:text-base leading-7">
+      <div className="eldred-dialogue-main">
+        <div className="eldred-dialogue-name">【{speaker}】</div>
+        <div className="pixel-speech eldred-dialogue-bubble">
           {text}
         </div>
       </div>
@@ -454,8 +454,8 @@ export function RichNarrative({ text }: { text: string }) {
         }
 
         return (
-          <p key={index}>
-            {index === 0 && <span className="text-2xl md:text-3xl font-bold float-left mr-2 text-[#8b4513]">{line.slice(0, 1)}</span>}
+          <p key={index} className="eldred-narrative-paragraph">
+            {index === 0 && <span className="eldred-drop-cap">{line.slice(0, 1)}</span>}
             {index === 0 ? line.slice(1) : line}
           </p>
         );

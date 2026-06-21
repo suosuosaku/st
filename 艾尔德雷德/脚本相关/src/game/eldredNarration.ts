@@ -661,12 +661,30 @@ const syncCombatTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
   cache.日志 = [tag.body, ...logs.map(cleanText).filter(Boolean)].slice(0, 20);
   const participants = ensureRecordAt(cache, ['参战名单']);
   const enemies = ensureRecordAt(cache, ['敌方']);
+  const main = asRecord(statData.主角);
+  const identity = asRecord(main.身份 ?? main.角色 ?? main.基本信息);
+  const playerAliases = [
+    '{{user}}',
+    '<user>',
+    '主角',
+    '玩家',
+    cleanText(identity.姓名),
+    cleanText(main.姓名),
+    cleanText(asRecord(main.战斗).姓名),
+  ].filter(Boolean);
+  const partyAliases = Object.keys(asRecord(main.当前队伍)).map(cleanText).filter(Boolean);
+  const allyAliases = new Set([...playerAliases, ...partyAliases].map(name => name.replace(/[（）()].*?[）)]/g, '').replace(/\s+/g, '').toLowerCase()));
+  const isAllyName = (name: string) => {
+    const normalized = cleanText(name).replace(/[（）()].*?[）)]/g, '').replace(/\s+/g, '').toLowerCase();
+    return Boolean(normalized && (allyAliases.has(normalized) || /\{\{user\}\}|<user>|主角|玩家/i.test(name)));
+  };
   tag.fields
     .map(parseCombatUnitField)
     .filter((unit): unit is NonNullable<ReturnType<typeof parseCombatUnitField>> => Boolean(unit))
     .forEach(unit => {
-      if (/\{\{user\}\}|主角|玩家/i.test(unit.name)) {
+      if (isAllyName(unit.name)) {
         participants[unit.name] = { ...asRecord(participants[unit.name]), ...unit.data, 阵营: '友方', 类型: '角色' };
+        delete enemies[unit.name];
       } else {
         enemies[unit.name] = { ...asRecord(enemies[unit.name]), ...unit.data, 阵营: '敌方', 类型: '敌人' };
       }

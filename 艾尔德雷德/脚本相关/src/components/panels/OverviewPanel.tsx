@@ -158,7 +158,7 @@ export function OverviewPanel({
           onScroll={event => {
             overviewNarrativeScrollTop = event.currentTarget.scrollTop;
           }}
-          className="flex-1 overflow-y-auto pr-2 md:pr-4 space-y-5 md:space-y-6 text-[#3A2C1D] leading-relaxed relative z-10 text-sm sm:text-base"
+          className="eldred-narrative-scroll flex-1 overflow-y-auto pr-1 md:pr-3 space-y-5 md:space-y-7 text-[#3A2C1D] relative z-10"
         >
           {visibleEntries.length === 0 && (
             <div className="rounded border border-[#8b4513]/25 bg-[#f8edd4]/55 px-4 py-5 text-sm text-[#6b4b2e]">
@@ -166,12 +166,14 @@ export function OverviewPanel({
             </div>
           )}
           {visibleEntries.map(entry => (
-            <article key={entry.id} className="rounded border border-[#8b4513]/20 bg-[#f8edd4]/45 px-4 py-4 shadow-inner">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-[#8b4513]/15 pb-2">
-                <div className="text-sm font-bold tracking-widest text-[#8b4513]">{entry.title}</div>
-                <div className="text-[11px] text-[#8b4513]/65">{new Date(entry.createdAt).toLocaleString()}</div>
+            <article key={entry.id} className="eldred-story-card">
+              <div className="eldred-story-head">
+                <div className="eldred-story-title">{entry.title}</div>
+                <div className="eldred-story-time">{new Date(entry.createdAt).toLocaleString()}</div>
               </div>
-              <RichNarrative text={entry.text || '正文未返回。'} />
+              <div className="eldred-story-body">
+                <RichNarrative text={entry.text || '正文未返回。'} />
+              </div>
             </article>
           ))}
         </div>
