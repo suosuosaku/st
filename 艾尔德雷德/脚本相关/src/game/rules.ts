@@ -28,6 +28,52 @@ export const ATTRIBUTE_KEYS: AttributeKey[] = ['str', 'dex', 'vit', 'int', 'spr'
 export const OPENING_ATTRIBUTE_POINTS = 15;
 export const ACTIVE_SKILL_LIMIT = 4;
 
+export const EXPERIENCE_TOTAL_BY_LEVEL: Record<number, number> = {
+  1: 0,
+  2: 120,
+  3: 300,
+  4: 560,
+  5: 920,
+  6: 1400,
+  7: 2020,
+  8: 2800,
+  9: 3760,
+  10: 4920,
+  11: 6320,
+  12: 8000,
+  13: 10000,
+  14: 12360,
+  15: 15120,
+  16: 18320,
+  17: 22020,
+  18: 26280,
+  19: 31160,
+  20: 36720,
+};
+
+export const EXPERIENCE_TO_NEXT_BY_LEVEL: Record<number, number> = {
+  1: 120,
+  2: 180,
+  3: 260,
+  4: 360,
+  5: 480,
+  6: 620,
+  7: 780,
+  8: 960,
+  9: 1160,
+  10: 1400,
+  11: 1680,
+  12: 2000,
+  13: 2360,
+  14: 2760,
+  15: 3200,
+  16: 3700,
+  17: 4260,
+  18: 4880,
+  19: 5560,
+  20: 0,
+};
+
 export const SKILL_RANK_RULES: Record<SkillRank, { label: string; levelMin: number; levelMax: number; damage: string; 法力: string; 目标值: string }> = {
   S1: { label: '基础战斗技巧', levelMin: 1, levelMax: 3, damage: '1d4~1d8', 法力: '0~3', 目标值: '11~13' },
   S2: { label: '稳定冒险技巧', levelMin: 4, levelMax: 6, damage: '1d6~1d10', 法力: '3~5', 目标值: '13~15' },
@@ -337,6 +383,30 @@ export const equipmentPool: Equipment[] = [
   { id: 'casebook', name: '空白病历本', grade: '生活级', slot: 'tool', tags: ['文书', '医护'], sourcePool: '晨曦病房', durability: 4, traits: ['伤病记录可用'], repairRule: '补页。' },
   { id: 'chalk-contract-ring', name: '粉环契约器', grade: '冒险级', slot: 'ring', tags: ['召唤', '契约'], sourcePool: '召唤试验场', requirements: { spr: 3 }, durability: 6, traits: ['召唤技能可用'], repairRule: '契约桌校准。' },
   { id: 'summon-string', name: '防跑召唤绳', grade: '生活级', slot: 'tool', tags: ['召唤', '绳索'], sourcePool: '清理棚', durability: 5, traits: ['低阶使魔控制目标值-1'], repairRule: '换绳结。' },
+  { id: 'npc-oath-saber', name: '誓约制式剑', grade: '精制级', slot: 'weapon', tags: ['长剑', '近战', '圣骑士'], sourcePool: '固定NPC制式装备', requirements: { str: 5 }, durability: 10, hitBonus: 2, damageBonus: 2, traits: ['近战命中+2', '近战伤害+2'], repairRule: '骑士团武备匠维护。' },
+  { id: 'npc-oath-shield', name: '誓约纹章盾', grade: '精制级', slot: 'shield', tags: ['盾牌', '守护'], sourcePool: '固定NPC制式装备', requirements: { vit: 5 }, durability: 10, acBonus: 2, traits: ['护甲+2', '守护动作目标值-1'], repairRule: '护具匠维护盾面纹章。' },
+  { id: 'npc-mail-coat', name: '巡防锁环外甲', grade: '精制级', slot: 'upper', tags: ['轻甲', '巡防'], sourcePool: '固定NPC制式装备', requirements: { vit: 5 }, durability: 10, acBonus: 2, traits: ['护甲+2'], repairRule: '铁匠与裁缝联合修补。' },
+  { id: 'npc-archive-staff', name: '档案导魔杖', grade: '精制级', slot: 'weapon', tags: ['法杖', '导魔', '文书'], sourcePool: '固定NPC制式装备', requirements: { int: 6 }, durability: 8, hitBonus: 2, damageBonus: 1, traits: ['法术命中+2', '法术伤害+1'], repairRule: '学院工坊校准导魔纹。' },
+  { id: 'npc-ward-robe', name: '防咒长袍', grade: '精制级', slot: 'upper', tags: ['布甲', '防咒'], sourcePool: '固定NPC制式装备', requirements: { int: 5 }, durability: 8, acBonus: 1, traits: ['护甲+1', '智力检定+1'], repairRule: '重新描线并补缝。' },
+  { id: 'npc-ledger-satchel', name: '封签文书挎包', grade: '冒险级', slot: 'tool', tags: ['文书', '封签'], sourcePool: '固定NPC制式装备', durability: 7, traits: ['文书复核目标值-1'], repairRule: '换锁扣和封签。' },
+  { id: 'npc-field-bow', name: '巡路短弓', grade: '精制级', slot: 'weapon', tags: ['弓', '远程', '巡路'], sourcePool: '固定NPC制式装备', requirements: { dex: 5 }, durability: 9, hitBonus: 2, damageBonus: 1, traits: ['远程命中+2', '远程伤害+1'], repairRule: '弓匠换弦。' },
+  { id: 'npc-route-boots', name: '防滑巡路靴', grade: '冒险级', slot: 'boots', tags: ['旅行', '机动'], sourcePool: '固定NPC制式装备', requirements: { dex: 3 }, durability: 8, traits: ['移动与追踪目标值-1'], repairRule: '鞋匠换底。' },
+  { id: 'npc-route-knife', name: '折标短刀', grade: '冒险级', slot: 'tool', tags: ['短刀', '工具'], sourcePool: '固定NPC制式装备', requirements: { dex: 3 }, durability: 7, traits: ['陷阱处理目标值-1'], repairRule: '铁匠磨刃。' },
+  { id: 'npc-guard-saber', name: '压阵弯刀', grade: '精制级', slot: 'weapon', tags: ['弯刀', '近战', '压制'], sourcePool: '固定NPC制式装备', requirements: { str: 5 }, durability: 10, hitBonus: 2, damageBonus: 2, traits: ['近战命中+2', '压制伤害+2'], repairRule: '铁匠修刃。' },
+  { id: 'npc-guard-mail', name: '厚革护胸', grade: '精制级', slot: 'upper', tags: ['轻甲', '护胸'], sourcePool: '固定NPC制式装备', requirements: { vit: 5 }, durability: 10, acBonus: 2, traits: ['护甲+2'], repairRule: '皮匠补强铆钉。' },
+  { id: 'npc-guard-gauntlet', name: '挡拆护手', grade: '冒险级', slot: 'hands', tags: ['护手', '格挡'], sourcePool: '固定NPC制式装备', requirements: { str: 3 }, durability: 8, traits: ['反应格挡减伤+1'], repairRule: '换绑带。' },
+  { id: 'npc-reagent-dart', name: '试剂短镖', grade: '精制级', slot: 'weapon', tags: ['短镖', '炼金'], sourcePool: '固定NPC制式装备', requirements: { int: 5 }, durability: 7, hitBonus: 2, damageBonus: 1, traits: ['炼金攻击命中+2', '炼金伤害+1'], repairRule: '补充镖头与试剂槽。' },
+  { id: 'npc-reagent-apron', name: '防蚀炼金围裙', grade: '精制级', slot: 'upper', tags: ['工坊', '防蚀'], sourcePool: '固定NPC制式装备', requirements: { vit: 4 }, durability: 8, acBonus: 1, traits: ['护甲+1', '毒素豁免+1'], repairRule: '清洗防蚀层。' },
+  { id: 'npc-reagent-kit', name: '随身试剂箱', grade: '精制级', slot: 'tool', tags: ['炼金', '药剂'], sourcePool: '固定NPC制式装备', requirements: { int: 5 }, durability: 8, traits: ['炼金技能可用', '药剂处理目标值-1'], repairRule: '补瓶、补塞、补标签。' },
+  { id: 'npc-rivet-hammer', name: '铆钉战锤', grade: '精制级', slot: 'weapon', tags: ['锤', '机关', '近战'], sourcePool: '固定NPC制式装备', requirements: { str: 5, int: 3 }, durability: 10, hitBonus: 2, damageBonus: 2, traits: ['近战命中+2', '构装目标伤害+2'], repairRule: '工坊重校锤头。' },
+  { id: 'npc-work-coat', name: '耐磨工匠外套', grade: '精制级', slot: 'upper', tags: ['工坊', '护具'], sourcePool: '固定NPC制式装备', requirements: { vit: 4 }, durability: 9, acBonus: 1, traits: ['护甲+1', '机关事故减伤+1'], repairRule: '补皮面和铜扣。' },
+  { id: 'npc-rivet-kit', name: '铆钉工具盒', grade: '冒险级', slot: 'tool', tags: ['机关', '维修'], sourcePool: '固定NPC制式装备', requirements: { int: 4 }, durability: 8, traits: ['机关维修目标值-1'], repairRule: '补齐缺件。' },
+  { id: 'npc-prayer-rod', name: '祈光短杖', grade: '精制级', slot: 'weapon', tags: ['圣铃', '治疗', '导魔'], sourcePool: '固定NPC制式装备', requirements: { spr: 5 }, durability: 8, hitBonus: 2, damageBonus: 1, traits: ['祈祷命中+2', '治疗量+1'], repairRule: '修道院重新校音。' },
+  { id: 'npc-prayer-robe', name: '净纹外勤袍', grade: '精制级', slot: 'upper', tags: ['医护', '净化'], sourcePool: '固定NPC制式装备', requirements: { spr: 4 }, durability: 8, acBonus: 1, traits: ['护甲+1', '净化检定+1'], repairRule: '清洗并重绣净纹。' },
+  { id: 'npc-reliquary', name: '小圣匣', grade: '冒险级', slot: 'tool', tags: ['治疗', '净化'], sourcePool: '固定NPC制式装备', requirements: { spr: 4 }, durability: 7, traits: ['治疗与净化可用'], repairRule: '补香料和封蜡。' },
+  { id: 'npc-contract-rod', name: '契约短杖', grade: '精制级', slot: 'weapon', tags: ['召唤', '契约', '导魔'], sourcePool: '固定NPC制式装备', requirements: { spr: 5 }, durability: 8, hitBonus: 2, damageBonus: 1, traits: ['召唤命中+2', '契约伤害+1'], repairRule: '契约桌校准。' },
+  { id: 'npc-contract-ring', name: '稳相契约环', grade: '精制级', slot: 'ring', tags: ['召唤', '契约'], sourcePool: '固定NPC制式装备', requirements: { spr: 5 }, durability: 8, traits: ['召唤控制目标值-1'], repairRule: '重新描契约线。' },
+  { id: 'npc-circle-chalk', name: '防断线粉笔盒', grade: '冒险级', slot: 'tool', tags: ['召唤', '工具'], sourcePool: '固定NPC制式装备', durability: 7, traits: ['召唤圈处理目标值-1'], repairRule: '补粉笔和盒扣。' },
   { id: 'dawn-shield-fragment', name: '拂晓盾纹残片', grade: '圣遗级', slot: 'shield', tags: ['神器线索', '盾牌'], sourcePool: '拂晓之盾旧誓页', requirements: { spr: 12, vit: 8 }, durability: 3, acBonus: 2, traits: ['短时护甲+2'], repairRule: '需要誓约校验和维护页。' },
   { id: 'storm-key-splinter', name: '风暴钥齿', grade: '圣遗级', slot: 'tool', tags: ['神器线索', '机关'], sourcePool: '风暴之钥残页', requirements: { dex: 12, int: 8 }, durability: 3, traits: ['旧门检定+2'], repairRule: '需要铜桥铭文互证。' },
   { id: 'star-cup-echo', name: '星灯杯影', grade: '神器级', slot: 'tool', tags: ['神器载体', '治疗', '星灯'], sourcePool: '星灯之杯旧光', requirements: { level: 16, int: 16, spr: 14 }, durability: 2, traits: ['S5治疗载体'], repairRule: '需要观测记录、病历和主线许可。' },
@@ -370,7 +440,69 @@ export const proficiencyBonus = (level: number) => {
   return 1;
 };
 
-export const experienceForNextLevel = (level: number) => Math.max(100, level * 100);
+export type ExperienceRewardInput = {
+  recommendedLevel: number;
+  actorLevel: number;
+  weight: 'minor' | 'standard' | 'combat' | 'quest' | 'main' | 'secret';
+  quality: 'failed' | 'partial' | 'complete' | 'extra' | 'perfect';
+  participation: 'actual' | 'support' | 'present' | 'absent';
+};
+
+const experienceWeights: Record<ExperienceRewardInput['weight'], number> = {
+  minor: 0.5,
+  standard: 1,
+  combat: 1.5,
+  quest: 2,
+  main: 3,
+  secret: 4,
+};
+
+const experienceQuality: Record<ExperienceRewardInput['quality'], number> = {
+  failed: 0.3,
+  partial: 0.5,
+  complete: 1,
+  extra: 1.2,
+  perfect: 1.4,
+};
+
+const experienceParticipation: Record<ExperienceRewardInput['participation'], number> = {
+  actual: 1,
+  support: 0.6,
+  present: 0.25,
+  absent: 0,
+};
+
+const difficultyMultiplier = (recommendedLevel: number, actorLevel: number) => {
+  const diff = recommendedLevel - actorLevel;
+  if (diff <= -4) return 0.1;
+  if (diff === -3) return 0.4;
+  if (diff === -2) return 0.6;
+  if (diff === -1) return 0.85;
+  if (diff === 0) return 1;
+  if (diff === 1) return 1.15;
+  if (diff === 2) return 1.3;
+  if (diff === 3) return 1.45;
+  return 1.6;
+};
+
+export const totalExperienceForLevel = (level: number) =>
+  EXPERIENCE_TOTAL_BY_LEVEL[Math.max(1, Math.min(20, Math.floor(level)))] ?? EXPERIENCE_TOTAL_BY_LEVEL[20];
+
+export const experienceForNextLevel = (level: number) =>
+  EXPERIENCE_TO_NEXT_BY_LEVEL[Math.max(1, Math.min(20, Math.floor(level)))] ?? 0;
+
+export const calculateExperienceReward = (input: ExperienceRewardInput) => {
+  const recommendedLevel = Math.max(1, Math.min(20, Math.floor(input.recommendedLevel || 1)));
+  const actorLevel = Math.max(1, Math.min(20, Math.floor(input.actorLevel || 1)));
+  const base = 25 + recommendedLevel * 7;
+  return Math.round(
+    base
+    * experienceWeights[input.weight]
+    * experienceQuality[input.quality]
+    * difficultyMultiplier(recommendedLevel, actorLevel)
+    * experienceParticipation[input.participation],
+  );
+};
 
 export const effectiveAttributes = (attributes: Record<AttributeKey, number>, raceId: CharacterRaceId) => {
   const race = getRaceById(raceId);
@@ -534,14 +666,21 @@ export const gainExperience = (player: PlayerState, amount: number): PlayerState
   }
   if (gainedLevels === 0) return { ...player, experience };
   const availableAttributePoints = player.availableAttributePoints + gainedLevels * 2;
+  const previousStats = player.stats;
   const stats = calculateDerivedStats(level, player.classId, player.baseAttributes, equippedIdsFromLoadout(player.equipmentLoadout), player.raceId);
+  const hpDelta = Math.max(0, stats.maxHp - previousStats.maxHp);
+  const mpDelta = Math.max(0, stats.maxMp - previousStats.maxMp);
   return {
     ...player,
     level,
     experience,
     nextLevelExperience,
     availableAttributePoints,
-    stats,
+    stats: {
+      ...stats,
+      hp: Math.min(stats.maxHp, previousStats.hp + hpDelta),
+      mp: Math.min(stats.maxMp, previousStats.mp + mpDelta),
+    },
     notices: [
       { id: `level-${Date.now()}`, type: 'level', title: `升级提示：${player.name}`, body: `等级提升至${level}，可分配点数+${gainedLevels * 2}`, meta: '五维加点待定' },
       ...player.notices,

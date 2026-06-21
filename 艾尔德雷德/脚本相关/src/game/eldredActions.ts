@@ -358,7 +358,6 @@ const makeCombatEvent = (
     actor: command.actorId,
     target: command.targetId,
     skillId: command.skillId,
-    authoritativeResult: logs.join('；'),
     extraFacts: [
       `行动者：${actor}`,
       `行动类型：${command.kind === 'skill' ? `技能 ${skill?.name || command.skillId}` : command.kind}`,
@@ -375,7 +374,7 @@ export const dispatchEldredCombatCommand = (
     return { runtime, notice: '尚未创建角色。' };
   }
 
-  let units = buildCombatUnits(runtime);
+  const units = buildCombatUnits(runtime);
   const actor = units.find(unit => unit.id === command.actorId);
   const target = command.targetId ? units.find(unit => unit.id === command.targetId) : undefined;
   const logs: string[] = [];
@@ -388,34 +387,7 @@ export const dispatchEldredCombatCommand = (
     return { runtime, notice: '缺少有效目标。' };
   }
 
-  if (command.kind === 'attack' && target) {
-    const result = resolveBasicAttack(actor, target);
-    units = setUnit(units, result.target);
-    logs.push(result.text, result.detail);
-  }
-
-  if (command.kind === 'guard') {
-    const guarded = {
-      ...actor,
-      shield: Math.max(actor.shield || 0, 2 + Math.max(0, attributeModifier(actor.stats.vit))),
-      statusLogs: [...actor.statusLogs.filter(item => !item.startsWith('防御')), '防御：下次受击前护盾提高'],
-    };
-    units = setUnit(units, guarded);
-    logs.push(`${actor.name}采取防御，获得${guarded.shield}点护盾。`);
-  }
-
-  if (command.kind === 'escape') {
-    const d20 = Math.floor(Math.random() * 20) + 1;
-    const total = d20 + attributeModifier(actor.stats.dex) + proficiencyBonus(actor.level);
-    if (total >= 12) {
-      units = units.filter(unit => !unit.isEnemy);
-      logs.push(`${actor.name}撤离成功。`, `撤离检定：d20(${d20})+敏捷+熟练=${total}，目标值12。`);
-    } else {
-      logs.push(`${actor.name}撤离失败。`, `撤离检定：d20(${d20})+敏捷+熟练=${total}，目标值12。`);
-    }
-  }
-
-  if (command.kind === 'skill' && target) {
+  if (command.kind === 'skill') {
     const skill = command.skillId ? getSkillById(command.skillId) : undefined;
     if (!skill) {
       return { runtime, notice: '技能不存在。' };
@@ -426,41 +398,27 @@ export const dispatchEldredCombatCommand = (
     if (actor.mp < skill.mpCost) {
       return { runtime, notice: `${actor.name}法力不足。` };
     }
-    const result = resolveSkillUse(actor, target, skill);
-    if (actor.id === target.id) {
-      units = setUnit(units, {
-        ...result.target,
-        mp: result.actor.mp,
-      });
-    } else {
-      units = setUnit(setUnit(units, result.actor), result.target);
-    }
-    logs.push(result.text, result.detail);
+    logs.push(`${actor.name}准备使用${skill.name}。`, `行动意图：技能；目标：${target?.name || '待正文裁决'}；消耗与效果由正文裁决。`);
   }
 
-  const enemiesAfterAction = livingEnemies(units);
-  const partyAfterAction = livingParty(units);
-  if (enemiesAfterAction.length > 0 && partyAfterAction.length > 0 && command.kind !== 'escape') {
-    const enemy = enemiesAfterAction[0];
-    const enemyTarget = [...partyAfterAction].sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
-    const enemyResult = resolveBasicAttack(enemy, enemyTarget);
-    units = setUnit(units, enemyResult.target);
-    logs.push(enemyResult.text, enemyResult.detail);
+  if (command.kind === 'attack') {
+    logs.push(`${actor.name}准备普通攻击。`, `行动意图：普通攻击；目标：${target?.name || '待正文裁决'}；命中、伤害、耐久与反击由正文裁决。`);
   }
 
-  let nextRuntime = syncRuntimeFromUnits(runtime, units);
-  const defeatedEnemies = runtime.combat.enemyUnits.filter(enemy =>
-    units.some(unit => unit.id === enemy.id && unit.isEnemy && unit.hp <= 0),
-  );
-  if (livingEnemies(units).length === 0 && runtime.combat.enemyUnits.length > 0) {
-    nextRuntime = applyVictoryRewards(nextRuntime, defeatedEnemies.length ? defeatedEnemies : runtime.combat.enemyUnits, logs);
+  if (command.kind === 'guard') {
+    logs.push(`${actor.name}准备防御或护送。`, '行动意图：防御；护甲、减伤、保护目标和持续时间由正文裁决。');
   }
 
+  if (command.kind === 'escape') {
+    logs.push(`${actor.name}准备撤离。`, '行动意图：撤离；撤离检定、追击和代价由正文裁决。');
+  }
+
+  let nextRuntime = runtime;
   nextRuntime = appendCombatLogs(nextRuntime, logs);
   nextRuntime = commitRuntime(nextRuntime);
   return {
     runtime: nextRuntime,
     event: makeCombatEvent(nextRuntime, command, logs),
-    notice: logs[0] || '战斗行动已结算。',
+    notice: logs[0] || '战斗行动已提交正文裁决。',
   };
 };

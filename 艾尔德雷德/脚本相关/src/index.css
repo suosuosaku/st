@@ -1516,6 +1516,10 @@ body {
   }
 }
 
+[data-eldred-hud="tabs"] {
+  position: fixed !important;
+}
+
 @media (max-width: 1439px) {
   [data-eldred-playing="true"] {
     padding: 4.35rem 0.55rem 0.65rem !important;
@@ -1528,6 +1532,7 @@ body {
   }
 
   [data-eldred-hud="tabs"] {
+    position: fixed !important;
     top: 0.5rem !important;
     right: 0.5rem !important;
     bottom: auto !important;

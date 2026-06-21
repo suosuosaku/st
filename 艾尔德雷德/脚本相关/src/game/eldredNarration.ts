@@ -1,4 +1,4 @@
-import { Character, CombatUnit, PlayerState } from '../types';
+import { Character, CombatUnit, DynamicBoardItem, PlayerState } from '../types';
 import { ELDRED_CHAT_BEAUTIFY_RULES, ELDRED_COMBAT_INTERNAL_CHECKLIST, ELDRED_WORLD_ENGINE_PATCH } from './aiIntegration';
 import { buildEldredFrontendEventPayload, EldredFrontendEventInput } from './eldredEvents';
 import {
@@ -493,11 +493,13 @@ const syncQuestTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
   const status = tag.title === '委托接取' ? '进行中' : tagValue(tag, ['状态']) || '可接取';
   const quest = parseQuestTag(tag, status);
   const title = cleanText(quest.标题);
-  updateBoardRecord(statData, '委托', title, quest);
   if (tag.title === '委托接取' || status === '进行中') {
+    removeBoardRecord(statData, '委托', title);
     const questList = ensureRecordAt(statData, ['主角', '任务列表']);
     questList[title] = { ...asRecord(questList[title]), ...quest, 状态: '进行中' };
+    return;
   }
+  updateBoardRecord(statData, '委托', title, quest);
 };
 
 const completeQuestTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
@@ -539,6 +541,8 @@ const fixedNpcVariableRecord = (name: string) => {
     可分配点数: fixed.availableAttributePoints,
     好感: fixed.favorability,
     关系阶段: fixed.relationshipStage,
+    装备: fixed.equipmentIds,
+    装备栏: fixed.equipmentLoadout,
     已知技能: fixed.knownSkillIds,
     激活技能: fixed.activeSkillIds,
     特质: fixed.attributes,
@@ -549,10 +553,11 @@ const syncNpcTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
   const name = tagValue(tag, ['姓名', '名称', '角色']) || tagPrimary(tag, 0);
   if (!name) return;
   const kindText = tag.fields.join('｜');
-  const groupName = /主要|主线|固定/.test(kindText) ? '主要NPC' : '其他NPC';
+  const fixedBase = fixedNpcVariableRecord(name);
+  const groupName = /主要|主线|固定/.test(kindText) || Object.keys(fixedBase).length ? '主要NPC' : '其他NPC';
   const group = ensureRecordAt(statData, ['主角', '角色收集', groupName]);
   const existing = asRecord(group[name]);
-  const base = { ...fixedNpcVariableRecord(name), ...existing };
+  const base = { ...fixedBase, ...existing };
   const attrs = {
     力量: numberFromText(tagValue(tag, ['力量']), numberFromText(base.五维?.力量, 0)),
     敏捷: numberFromText(tagValue(tag, ['敏捷']), numberFromText(base.五维?.敏捷, 0)),
@@ -793,6 +798,46 @@ const mergeSyncedRuntime = (previous: EldredRuntimeSave, statData?: AnyRecord | 
     narration: previous.narration,
     messages: previous.messages,
   };
+};
+
+const removeBoardItemFromGroup = (group: unknown, item: DynamicBoardItem) => {
+  const record = asRecord(group);
+  const itemTitle = cleanText(item.title);
+  const itemId = cleanText(item.id);
+  for (const [key, value] of Object.entries(record)) {
+    const source = asRecord(value);
+    const title = cleanText(source.标题 ?? source.名称 ?? source.title ?? key);
+    const id = cleanText(source.id ?? source.ID ?? key);
+    if (key === itemTitle || key === itemId || title === itemTitle || id === itemId) {
+      delete record[key];
+    }
+  }
+  return record;
+};
+
+export const dismissEldredBoardItem = async (runtime: EldredRuntimeSave, item: DynamicBoardItem) => {
+  const statData = cloneRecord(runtime.rawStatData || {});
+  if (Object.keys(statData).length) {
+    const world = ensureRecordAt(statData, ['世界']);
+    const system = ensureRecordAt(statData, ['系统']);
+    const board = ensureRecordAt(world, ['动态看板']);
+    board[item.type] = removeBoardItemFromGroup(board[item.type], item);
+    world[item.type] = removeBoardItemFromGroup(world[item.type], item);
+    system[item.type] = removeBoardItemFromGroup(system[item.type], item);
+    system[`${item.type}板`] = removeBoardItemFromGroup(system[`${item.type}板`], item);
+    if (item.type === '见闻') system.传闻板 = removeBoardItemFromGroup(system.传闻板, item);
+    await writeStatDataToHost(statData);
+  }
+
+  return persistEldredRuntimeCache({
+    ...runtime,
+    rawStatData: Object.keys(statData).length ? statData : runtime.rawStatData,
+    world: {
+      ...runtime.world,
+      dynamicBoard: runtime.world.dynamicBoard.filter(boardItem => boardItem.id !== item.id && boardItem.title !== item.title),
+    },
+    updatedAt: nowIso(),
+  });
 };
 
 const requestGenerateThroughLoader = (config: AnyRecord) => {
@@ -1053,7 +1098,7 @@ const buildHistoryPrompts = (runtime: EldredRuntimeSave): StoryPrompt[] =>
 
 const buildBaseSystemPrompt = (runtime: EldredRuntimeSave, userInput: string, kind: EldredNarrationKind, party: Character[] = [], enemies: CombatUnit[] = []) => [
   '艾尔德雷德脚本控制台事实输入。',
-  '脚本控制台负责权威状态、按钮交互、战斗数值、装备槽位、技能装配和存档；正文负责演绎、场景反应、变量同步和沉浸提示。',
+  '脚本控制台负责状态展示、按钮交互、装备槽位、技能装配和存档；战斗命中、伤害、状态变化、经验与升级由正文按规则裁决后写入变量。',
   ELDRED_D20_AUTHORITY_RULE,
   ELDRED_WORLD_ENGINE_PATCH,
   ELDRED_CHAT_BEAUTIFY_RULES,
@@ -1257,9 +1302,12 @@ export const generateEldredNarrationFromEvent = async (
   const party = input.party || [];
   const enemies = input.enemies || [];
   const userInput = input.playerIntent || input.title || '前端事件';
+  const eventRule = input.eventType === 'combat_command'
+    ? '按当前变量、世界书和战斗指令生成下一段正文；combat_command 是玩家战斗意图，不是已结算结果。需要裁决命中、伤害、消耗、状态、经验和胜负，并输出 <content> 与 <UpdateVariable> 写回系统.战斗缓存。'
+    : '按当前变量、世界书和前端权威事件生成下一段正文；事件中的 result 与 authoritative_state_after_event 已经发生。需要输出 <content> 与 <UpdateVariable>，变量写回必须与前端结果一致。';
   const systemPrompt = [
     buildBaseSystemPrompt(runtime, eventPayload, kind, party, enemies),
-    '按当前变量、世界书和前端权威事件生成下一段正文；事件中的 result 与 authoritative_state_after_event 已经发生。需要输出 <content> 与 <UpdateVariable>，变量写回必须与前端结果一致。',
+    eventRule,
   ].join('\n\n');
   try {
     const rawStatDataBefore = cloneRecord(runtime.rawStatData || {});

@@ -33,6 +33,7 @@ import {
   getSkillById,
   originLocations,
 } from './rules';
+import { findEldredFixedNpc } from './eldredNpcRegistry';
 import { fixedNpcImageNames, resolveCharacterImage } from '../data';
 
 type AnyRecord = Record<string, any>;
@@ -726,7 +727,14 @@ const boardRecordKeys = new Set([
 
 const looksLikeBoardRecord = (value: unknown) => {
   const source = asRecord(value);
-  return Object.keys(source).some(key => boardRecordKeys.has(key));
+  const keys = Object.keys(source);
+  if (!keys.length) return false;
+  if (dynamicBoardTypes.some(type => source[type] !== undefined)) return false;
+  const directRecordKeyCount = keys.filter(key => boardRecordKeys.has(key)).length;
+  const nestedValues = Object.values(source).filter(value => value && typeof value === 'object' && !Array.isArray(value));
+  const nestedRecordCount = nestedValues.filter(value => Object.keys(asRecord(value)).some(key => boardRecordKeys.has(key))).length;
+  if (nestedRecordCount > 0 && nestedRecordCount >= Math.max(1, Math.ceil(nestedValues.length * 0.6))) return false;
+  return directRecordKeyCount > 0;
 };
 
 const normalizeRisk = (value: unknown): Quest['risk'] | string => {
@@ -826,7 +834,9 @@ const dynamicBoardFromStatData = (statData: AnyRecord): DynamicBoardItem[] => {
   const typeCounts = new Map<DynamicBoardItemType, number>();
   return items
     .filter(item => {
-      const key = `${item.type}:${item.id}:${item.title}:${item.detail}`;
+      const normalizedTitle = item.title.replace(/\s+/g, '');
+      const normalizedSource = item.source.replace(/\s+/g, '');
+      const key = `${item.type}:${normalizedTitle || item.id}:${normalizedSource}`;
       if (seen.has(key)) return false;
       seen.add(key);
       const count = typeCounts.get(item.type) || 0;
@@ -932,6 +942,17 @@ const playerFromStatData = (statData: AnyRecord): PlayerState | null => {
 
 const characterFromVariable = (name: string, raw: unknown, type: Character['type'], fixed = false): Character => {
   const source = asRecord(raw);
+  const fixedNpc = findEldredFixedNpc(name);
+  const fixedStats = fixedNpc?.stats;
+  const fixedAttributes = fixedStats
+    ? {
+      str: fixedStats.str,
+      dex: fixedStats.dex,
+      vit: fixedStats.vit,
+      int: fixedStats.int,
+      spr: fixedStats.spr,
+    }
+    : undefined;
   const mechanicText = [
     typeof raw === 'string' ? raw : '',
     source.机制数值,
@@ -943,19 +964,25 @@ const characterFromVariable = (name: string, raw: unknown, type: Character['type
     ...asRecord(source.战斗 ?? source.数值 ?? source.机制数值 ?? source),
   };
   const directStats = asRecord(source.stats);
-  const classId = resolveClassId(source.classId ?? source.职业 ?? battle.职业 ?? source.profession);
-  const raceId = resolveRaceId(source.raceId ?? source.种族 ?? battle.种族 ?? source.race);
+  const classId = resolveClassId(source.classId ?? source.职业 ?? battle.职业 ?? source.profession ?? fixedNpc?.classId);
+  const raceId = resolveRaceId(source.raceId ?? source.种族 ?? battle.种族 ?? source.race ?? fixedNpc?.raceId);
   const cls = getClassById(classId);
-  const baseAttributes = attributesFrom(firstDefined(battle.五维, battle.属性, source.五维, source.属性, directStats), cls.presetStats);
+  const baseAttributes = attributesFrom(firstDefined(battle.五维, battle.属性, source.五维, source.属性, directStats), fixedAttributes || cls.presetStats);
   const equipmentSource = firstDefined(battle.装备栏, battle.装备位, source.装备, source.装备栏, source.装备位);
-  const loadout = loadoutFrom(equipmentSource);
-  const equipmentIds = [...new Set([...equipmentIdsFrom(equipmentSource), ...equippedIdsFromLoadout(loadout)])];
-  const knownSkillIds = skillIdsFrom(firstDefined(battle.已知技能, battle.技能库, battle.技能, source.已知技能, source.技能库, source.技能, source.knownSkillIds));
-  const activeSkillIds = skillIdsFrom(firstDefined(battle.激活技能, battle.已激活技能, source.激活技能, source.当前技能, source.activeSkillIds))
+  const parsedLoadout = loadoutFrom(equipmentSource);
+  const parsedEquipmentIds = [...new Set([...equipmentIdsFrom(equipmentSource), ...equippedIdsFromLoadout(parsedLoadout)])];
+  const loadout = parsedEquipmentIds.length
+    ? Object.keys(parsedLoadout).length ? parsedLoadout : createLoadoutFromEquipment(parsedEquipmentIds)
+    : fixedNpc?.equipmentLoadout || parsedLoadout;
+  const equipmentIds = parsedEquipmentIds.length ? parsedEquipmentIds : fixedNpc?.equipmentIds || [];
+  const parsedKnownSkillIds = skillIdsFrom(firstDefined(battle.已知技能, battle.技能库, battle.技能, source.已知技能, source.技能库, source.技能, source.knownSkillIds));
+  const knownSkillIds = parsedKnownSkillIds.length ? parsedKnownSkillIds : fixedNpc?.knownSkillIds || [];
+  const parsedActiveSkillIds = skillIdsFrom(firstDefined(battle.激活技能, battle.已激活技能, source.激活技能, source.当前技能, source.activeSkillIds))
     .filter(id => knownSkillIds.length === 0 || knownSkillIds.includes(id))
     .slice(0, 4);
+  const activeSkillIds = parsedActiveSkillIds.length ? parsedActiveSkillIds : fixedNpc?.activeSkillIds || [];
   const directSkills = Array.isArray(source.skills) ? source.skills : [];
-  const level = Math.max(1, numberOf(battle.等级 ?? source.等级 ?? directStats.level ?? source.level, 1));
+  const level = Math.max(1, numberOf(battle.等级 ?? source.等级 ?? directStats.level ?? source.level, fixedStats?.level || 1));
   const derived = calculateDerivedStats(level, classId, baseAttributes, equippedIdsFromLoadout(loadout), raceId);
   const hp = parseVitals(
     firstDefined(
@@ -968,8 +995,8 @@ const characterFromVariable = (name: string, raw: unknown, type: Character['type
       battle.生命值 !== undefined || battle.生命值上限 !== undefined ? `${battle.生命值 ?? derived.hp}/${battle.生命值上限 ?? derived.maxHp}` : undefined,
       source.生命值 !== undefined || source.生命值上限 !== undefined ? `${source.生命值 ?? derived.hp}/${source.生命值上限 ?? derived.maxHp}` : undefined,
     ),
-    derived.hp,
-    derived.maxHp,
+    fixedStats?.hp ?? derived.hp,
+    fixedStats?.maxHp ?? derived.maxHp,
   );
   const mp = parseVitals(
     firstDefined(
@@ -982,30 +1009,30 @@ const characterFromVariable = (name: string, raw: unknown, type: Character['type
       battle.法力值 !== undefined || battle.法力值上限 !== undefined ? `${battle.法力值 ?? derived.mp}/${battle.法力值上限 ?? derived.maxMp}` : undefined,
       source.法力值 !== undefined || source.法力值上限 !== undefined ? `${source.法力值 ?? derived.mp}/${source.法力值上限 ?? derived.maxMp}` : undefined,
     ),
-    derived.mp,
-    derived.maxMp,
+    fixedStats?.mp ?? derived.mp,
+    fixedStats?.maxMp ?? derived.maxMp,
   );
 
   return {
-    id: textOf(source.id, name),
+    id: textOf(source.id, fixedNpc?.id || name),
     name,
-    fullName: textOf(source.全名 ?? source.fullName, name),
+    fullName: textOf(source.全名 ?? source.fullName, fixedNpc?.fullName || name),
     type,
-    race: textOf(source.race, getRaceById(raceId).name),
+    race: textOf(source.race ?? source.种族, fixedNpc?.race || getRaceById(raceId).name),
     raceId,
-    gender: textOf(source.性别 ?? source.gender, '未记录'),
-    age: textOf(source.年龄 ?? source.age, '未记录'),
-    affiliation: textOf(source.所属 ?? source.所属地区 ?? source.所属地标 ?? source.势力 ?? source.affiliation, '未登记'),
-    identity: textOf(source.身份 ?? source.职责 ?? source.identity, '未登记'),
+    gender: textOf(source.性别 ?? source.gender, fixedNpc?.gender || '未记录'),
+    age: textOf(source.年龄 ?? source.age, fixedNpc?.age === undefined ? '未记录' : String(fixedNpc.age)),
+    affiliation: textOf(source.所属 ?? source.所属地区 ?? source.所属地标 ?? source.势力 ?? source.affiliation, fixedNpc?.affiliation || '未登记'),
+    identity: textOf(source.身份 ?? source.职责 ?? source.identity, fixedNpc?.identity || '未登记'),
     classId,
-    profession: textOf(source.职业 ?? source.职责 ?? source.profession, getClassById(classId).name),
+    profession: textOf(source.职业 ?? source.职责 ?? source.profession, fixedNpc?.profession || getClassById(classId).name),
     avatarUrl: resolveCharacterImage(name, '头像', {
-      fixed,
-      raw: source.头像 ?? source.avatarUrl ?? source.avatar,
+      fixed: fixed || Boolean(fixedNpc),
+      raw: source.头像 ?? source.avatarUrl ?? source.avatar ?? fixedNpc?.avatarUrl,
     }),
     portraitUrl: resolveCharacterImage(name, '立绘', {
-      fixed,
-      raw: source.立绘 ?? source.portraitUrl ?? source.portrait,
+      fixed: fixed || Boolean(fixedNpc),
+      raw: source.立绘 ?? source.portraitUrl ?? source.portrait ?? fixedNpc?.portraitUrl,
     }),
     stats: {
       ...derived,
@@ -1013,21 +1040,25 @@ const characterFromVariable = (name: string, raw: unknown, type: Character['type
       maxHp: hp.max,
       mp: mp.current,
       maxMp: mp.max,
-      ac: numberOf(firstDefined(battle.护甲, battle.护甲等级, battle.AC, battle.ac, source.护甲, source.AC, directStats.ac), derived.ac),
+      ac: numberOf(firstDefined(battle.护甲, battle.护甲等级, battle.AC, battle.ac, source.护甲, source.AC, directStats.ac), fixedStats?.ac ?? derived.ac),
     },
-    experience: numberOf(battle.经验 ?? source.经验 ?? source.experience, 0),
-    nextLevelExperience: numberOf(battle.下级经验 ?? source.下级经验 ?? source.nextLevelExperience, experienceForNextLevel(level)),
+    experience: numberOf(battle.经验 ?? source.经验 ?? source.experience, fixedNpc?.experience || 0),
+    nextLevelExperience: numberOf(battle.下级经验 ?? source.下级经验 ?? source.nextLevelExperience, fixedNpc?.nextLevelExperience || experienceForNextLevel(level)),
     availableAttributePoints: numberOf(battle.可分配点数 ?? source.可分配点数 ?? source.availableAttributePoints, 0),
-    favorability: numberOf(source.好感 ?? source.好感度 ?? source.favorability, 0),
-    relationshipStage: textOf(source.关系阶段 ?? source.阶段 ?? source.relationshipStage, '陌生'),
+    favorability: numberOf(source.好感 ?? source.好感度 ?? source.favorability, fixedNpc?.favorability || 0),
+    relationshipStage: textOf(source.关系阶段 ?? source.阶段 ?? source.relationshipStage, fixedNpc?.relationshipStage || '陌生'),
     equipmentIds,
     equipmentLoadout: loadout,
     activeSkillIds,
     knownSkillIds,
-    attributes: splitTextList(source.特质 ?? source.属性 ?? source.标签 ?? source.attributes),
+    attributes: splitTextList(source.特质 ?? source.属性 ?? source.标签 ?? source.attributes).length
+      ? splitTextList(source.特质 ?? source.属性 ?? source.标签 ?? source.attributes)
+      : fixedNpc?.attributes || [],
     skills: directSkills.length
       ? directSkills
-      : activeSkillIds.map(id => getSkillById(id)).filter((skill): skill is NonNullable<typeof skill> => Boolean(skill)),
+      : activeSkillIds.map(id => getSkillById(id)).filter((skill): skill is NonNullable<typeof skill> => Boolean(skill)).length
+        ? activeSkillIds.map(id => getSkillById(id)).filter((skill): skill is NonNullable<typeof skill> => Boolean(skill))
+        : fixedNpc?.skills || [],
   };
 };
 

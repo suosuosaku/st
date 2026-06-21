@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Character, GameState, PlayerState, TabState } from './types';
+import { Character, DynamicBoardItem, GameState, PlayerState, TabState } from './types';
 import { CreationFlow } from './components/CreationFlow';
 import { HUD } from './components/HUD';
 import { OverviewPanel } from './components/panels/OverviewPanel';
@@ -27,12 +27,11 @@ import {
   rerollLatestEldredNarration,
 } from './game/eldredNarration';
 import {
-  dispatchEldredCombatCommand,
   dispatchEldredD20Check,
-  EldredCombatCommand,
   persistRuntimeNpcs,
   persistRuntimePlayer,
 } from './game/eldredActions';
+import { dismissEldredBoardItem } from './game/eldredNarration';
 
 export default function App() {
   const [initialRuntime] = useState<EldredRuntimeSave>(() => loadEldredRuntimeSave());
@@ -115,43 +114,6 @@ export default function App() {
       setInteractionStatus(generatedRuntime.narration.lastError ? generatedRuntime.narration.lastError : '正文已生成');
     } catch (error) {
       setInteractionStatus(error instanceof Error ? error.message : '正文生成失败');
-    } finally {
-      setIsGeneratingNarration(false);
-    }
-  };
-
-  const submitCombatCommand = async (command: EldredCombatCommand) => {
-    if (!playerState) return;
-    setInteractionStatus('前端结算中');
-    setIsGeneratingNarration(true);
-    try {
-      const sourceRuntime = {
-        ...loadEldredRuntimeSave(),
-        player: playerState,
-        npcs: runtime.npcs,
-        quests: runtime.quests,
-        combat: runtime.combat,
-        world: runtime.world,
-      };
-      const result = dispatchEldredCombatCommand(sourceRuntime, command);
-      setRuntime(result.runtime);
-      setPlayerState(result.runtime.player || playerState);
-      setInteractionStatus(result.notice);
-      if (result.event) {
-        const generatedRuntime = await generateEldredNarrationFromEvent(result.runtime, {
-          ...result.event,
-          player: result.runtime.player,
-          party: result.runtime.player
-            ? result.runtime.npcs.filter(npc => result.runtime.player?.partyMemberIds.includes(npc.id) || result.runtime.player?.partyMemberIds.includes(npc.name))
-            : [],
-          enemies: result.runtime.combat.enemyUnits,
-        });
-        setRuntime(generatedRuntime);
-        setPlayerState(generatedRuntime.player || result.runtime.player || playerState);
-        setInteractionStatus(generatedRuntime.narration.lastError ? generatedRuntime.narration.lastError : '战斗正文已同步');
-      }
-    } catch (error) {
-      setInteractionStatus(error instanceof Error ? error.message : '战斗结算失败');
     } finally {
       setIsGeneratingNarration(false);
     }
@@ -241,6 +203,12 @@ export default function App() {
     });
   };
 
+  const dismissBoardItem = async (item: DynamicBoardItem) => {
+    const nextRuntime = await dismissEldredBoardItem(loadEldredRuntimeSave(), item);
+    setRuntime(nextRuntime);
+    setInteractionStatus(`已忽略：${item.title}`);
+  };
+
   const renderActivePanel = () => {
     if (!playerState) return <EmptyPanel title="等待入局" message="尚未读取到角色变量" />;
     switch (activeTab) {
@@ -248,9 +216,9 @@ export default function App() {
       case 'map': return <MapPanel player={playerState} runtime={runtime} />;
       case 'party': return <PartyPanel player={playerState} onUpdatePlayer={updatePlayerPreview} onUpdateNpcs={updateNpcs} npcs={runtime.npcs} onSubmitEvent={submitRuntimeEvent} />;
       case 'npc': return <NpcPanel npcs={runtime.npcs} />;
-      case 'quests': return <QuestPanel quests={runtime.quests} boardItems={runtime.world.dynamicBoard} onSubmitEvent={submitRuntimeEvent} />;
+      case 'quests': return <QuestPanel quests={runtime.quests} boardItems={runtime.world.dynamicBoard} onSubmitEvent={submitRuntimeEvent} onDismissBoardItem={dismissBoardItem} />;
       case 'clues': return <CluePanel cluePhases={runtime.cluePhases} />;
-      case 'combat': return <CombatPanel player={playerState} partyNpcs={runtime.npcs.filter(npc => playerState.partyMemberIds.includes(npc.id) || playerState.partyMemberIds.includes(npc.name))} enemyUnits={runtime.combat.enemyUnits} initialTurn={runtime.combat.turn} initialLogs={runtime.combat.logs} runtime={runtime} onSubmitEvent={submitRuntimeEvent} onSubmitCommand={submitCombatCommand} />;
+      case 'combat': return <CombatPanel player={playerState} partyNpcs={runtime.npcs.filter(npc => playerState.partyMemberIds.includes(npc.id) || playerState.partyMemberIds.includes(npc.name))} enemyUnits={runtime.combat.enemyUnits} initialTurn={runtime.combat.turn} initialLogs={runtime.combat.logs} runtime={runtime} onSubmitEvent={submitRuntimeEvent} />;
       case 'inventory': return <InventoryPanel player={playerState} />;
       case 'system': return <SystemPanel runtime={runtime} player={playerState} />;
       default: return <EmptyPanel title="未知区域" />;

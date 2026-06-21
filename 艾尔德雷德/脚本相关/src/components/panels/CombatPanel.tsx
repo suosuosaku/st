@@ -4,7 +4,6 @@ import { motion } from 'motion/react';
 import { Character, CombatUnit, PlayerState, Skill } from '../../types';
 import { equippedIdsFromLoadout, getClassById, getEquipmentById, getSkillById, playerToCombatUnit } from '../../game/rules';
 import { EldredFrontendEventInput } from '../../game/eldredEvents';
-import { EldredCombatCommand } from '../../game/eldredActions';
 import { EldredRuntimeSave } from '../../game/eldredSave';
 import { formatEldredLocation } from '../../game/locationFormat';
 
@@ -37,7 +36,6 @@ type CombatPanelProps = {
   initialLogs?: string[];
   runtime?: EldredRuntimeSave;
   onSubmitEvent?: (event: Omit<EldredFrontendEventInput, 'player' | 'party' | 'enemies'>) => Promise<void>;
-  onSubmitCommand?: (command: EldredCombatCommand) => Promise<void>;
 };
 
 const npcToCombatUnit = (npc: Character): CombatUnit => {
@@ -88,7 +86,6 @@ export function CombatPanel({
   initialLogs = EMPTY_LOGS,
   runtime,
   onSubmitEvent,
-  onSubmitCommand,
 }: CombatPanelProps) {
   const initialUnits = useMemo(() => {
     const party = partyNpcs.map(npcToCombatUnit);
@@ -182,17 +179,8 @@ export function CombatPanel({
       return;
     }
 
-    let status = '已提交正文生成';
-    if (onSubmitCommand) {
-      await onSubmitCommand({
-        kind,
-        actorId: selectedActor.id,
-        targetId: selectedTarget?.id,
-        skillId: kind === 'skill' ? selectedSkill?.id : undefined,
-        targetIsAlly: selectedSkillTargetsAlly,
-      });
-      status = '前端结算完成，正文同步中';
-    } else if (onSubmitEvent) {
+    let status = '已提交正文结算';
+    if (onSubmitEvent) {
       await onSubmitEvent({
         eventType: 'combat_command',
         title: `回合${turn}：${selectedActor.name}${commandLabel[kind]}`,
@@ -226,7 +214,7 @@ export function CombatPanel({
           </div>
           <div className="min-w-0">
             <div className="text-sm font-serif text-gray-200 truncate">{locationDisplay.fullName}</div>
-            <div className="text-xs text-gray-400">前端结算 / MVU同步</div>
+            <div className="text-xs text-gray-400">正文结算 / MVU同步</div>
           </div>
         </div>
 

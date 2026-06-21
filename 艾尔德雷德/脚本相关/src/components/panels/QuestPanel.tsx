@@ -7,6 +7,7 @@ type QuestPanelProps = {
   quests?: Quest[];
   boardItems?: DynamicBoardItem[];
   onSubmitEvent?: (event: Omit<EldredFrontendEventInput, 'player' | 'party' | 'enemies'>) => Promise<void>;
+  onDismissBoardItem?: (item: DynamicBoardItem) => void | Promise<void>;
 };
 
 const EMPTY_QUESTS: Quest[] = [];
@@ -57,7 +58,7 @@ const InfoTile = ({ label, value, tone = 'normal' }: { label: string; value?: st
   );
 };
 
-export function QuestPanel({ quests = EMPTY_QUESTS, boardItems = EMPTY_BOARD_ITEMS, onSubmitEvent }: QuestPanelProps) {
+export function QuestPanel({ quests = EMPTY_QUESTS, boardItems = EMPTY_BOARD_ITEMS, onSubmitEvent, onDismissBoardItem }: QuestPanelProps) {
   const [selectedQuestId, setSelectedQuestId] = useState('');
   const [selectedBoardId, setSelectedBoardId] = useState('');
   const newsItems = boardItems.filter(item => NEWS_TYPES.has(item.type));
@@ -103,7 +104,7 @@ export function QuestPanel({ quests = EMPTY_QUESTS, boardItems = EMPTY_BOARD_ITE
 
   return (
     <div className="h-full w-full flex flex-col xl:flex-row gap-4 xl:gap-6 overflow-y-auto xl:overflow-hidden">
-      <div className="w-full xl:w-1/3 max-h-72 xl:max-h-none glass-panel rounded-xl flex flex-col overflow-hidden shrink-0">
+      <div className="w-full xl:w-[34rem] max-h-72 xl:max-h-none glass-panel rounded-xl flex flex-col overflow-hidden shrink-0">
         <div className="p-5 border-b border-fantasy-gold/20 bg-fantasy-darker/60 flex items-center justify-between">
           <h2 className="text-lg font-serif text-gray-200">城镇看板</h2>
           <span className="text-xs text-gray-400 flex items-center gap-1"><Clock className="w-3 h-3" /> {quests.length + boardItems.length}条</span>
@@ -137,6 +138,9 @@ export function QuestPanel({ quests = EMPTY_QUESTS, boardItems = EMPTY_BOARD_ITE
               <div className="p-4 rounded bg-black/20 border border-white/5 text-sm text-gray-500">暂无委托记录</div>
             )}
             {boardQuestItems.map(item => (
+              (() => {
+                const boardQuest = questFromBoardItem(item);
+                return (
               <button
                 key={item.id}
                 onClick={() => {
@@ -147,7 +151,14 @@ export function QuestPanel({ quests = EMPTY_QUESTS, boardItems = EMPTY_BOARD_ITE
               >
                 <div className="text-sm font-medium text-fantasy-gold line-clamp-2">{item.title}</div>
                 <div className="text-xs text-gray-400 line-clamp-2">{item.detail || item.source || '委托已张贴'}</div>
+                <div className="grid grid-cols-3 gap-2 text-[10px]">
+                  <span className="rounded border border-white/10 bg-black/25 px-2 py-1 text-gray-400">等级{boardQuest.recLevel}</span>
+                  <span className={`rounded border border-white/10 bg-black/25 px-2 py-1 ${riskColor(boardQuest.risk)}`}>风险{boardQuest.risk}</span>
+                  <span className="rounded border border-white/10 bg-black/25 px-2 py-1 text-fantasy-gold truncate">{boardQuest.reward || '奖励未登记'}</span>
+                </div>
               </button>
+                );
+              })()
             ))}
             {quests.map(q => (
               <button
@@ -166,6 +177,7 @@ export function QuestPanel({ quests = EMPTY_QUESTS, boardItems = EMPTY_BOARD_ITE
                   </div>
                   <span className="text-gray-500 font-mono">等级{q.recLevel}</span>
                 </div>
+                <div className="text-[11px] text-fantasy-gold truncate">{q.reward || '奖励未登记'}</div>
               </button>
             ))}
           </section>
@@ -208,27 +220,29 @@ export function QuestPanel({ quests = EMPTY_QUESTS, boardItems = EMPTY_BOARD_ITE
                 <span className={`px-2 py-1 text-[10px] rounded border border-fantasy-gold/30 bg-fantasy-gold/10 ${activeQuest.status === '进行中' ? 'text-fantasy-gold' : 'text-gray-300'}`}>{activeQuest.status || '可接取'}</span>
               </div>
               <h1 className="text-xl md:text-3xl font-serif text-white mb-5 leading-snug">{activeQuest.title}</h1>
-              <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
                 <InfoTile label="建议等级" value={`等级${activeQuest.recLevel}`} tone="blue" />
                 <InfoTile label="危险等级" value={activeQuest.risk} tone={activeQuest.risk === '高' || activeQuest.risk === '极高' ? 'red' : 'gold'} />
                 <InfoTile label="截止时限" value={activeQuest.timeLimit} />
                 <InfoTile label="委托状态" value={activeQuest.status || '可接取'} tone="gold" />
+                <InfoTile label="发布来源" value={activeQuest.source} tone="blue" />
               </div>
             </div>
 
             <div className="flex-1 p-5 md:p-8 overflow-y-auto space-y-6 md:space-y-8">
-              <div>
+              <div className="rounded-xl border border-white/10 bg-black/25 p-5">
                 <h3 className="text-sm text-fantasy-gold font-serif mb-3 tracking-widest flex items-center gap-2">
                   <Scroll className="w-4 h-4" /> 委托陈述
                 </h3>
-                <p className="text-gray-300 leading-relaxed text-sm p-4 bg-black/20 rounded border border-white/5">
+                <p className="text-gray-200 leading-relaxed text-sm md:text-base">
                   {activeQuest.task || '未登记'}
                 </p>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-4">
-                <InfoTile label="发布来源" value={activeQuest.source} tone="blue" />
+              <div className="grid md:grid-cols-3 gap-4">
                 <InfoTile label="预期报酬" value={activeQuest.reward} tone="gold" />
+                <InfoTile label="危险等级" value={activeQuest.risk} tone={activeQuest.risk === '高' || activeQuest.risk === '极高' ? 'red' : 'gold'} />
+                <InfoTile label="截止时限" value={activeQuest.timeLimit} />
               </div>
 
               <div className="p-4 bg-fantasy-gold/5 border border-fantasy-gold/20 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -245,7 +259,15 @@ export function QuestPanel({ quests = EMPTY_QUESTS, boardItems = EMPTY_BOARD_ITE
             </div>
 
             <div className="p-4 md:p-6 border-t border-white/5 bg-black/40 flex flex-col sm:flex-row justify-end gap-3 md:gap-4">
-              <button className="btn-rpg bg-black px-6 py-2 rounded text-sm text-gray-400 border-gray-600">忽略</button>
+              <button
+                onClick={() => {
+                  if (selectedBoardItem) void onDismissBoardItem?.(selectedBoardItem);
+                }}
+                disabled={!selectedBoardItem}
+                className="btn-rpg bg-black px-6 py-2 rounded text-sm text-gray-400 border-gray-600 disabled:opacity-40"
+              >
+                忽略
+              </button>
               <button onClick={acceptQuest} className="btn-rpg bg-fantasy-gold/20 text-fantasy-gold border-fantasy-gold px-8 py-2 rounded text-sm tracking-widest hover:bg-fantasy-gold hover:text-black">
                 揭下委托单
               </button>

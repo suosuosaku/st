@@ -19,6 +19,25 @@ const npcDetailPages: { id: NpcDetailPage; label: string }[] = [
 
 const npcAvatarKey = (name: string) => `npc:${name}`;
 
+const formatAge = (age: Character['age']) => {
+  const text = String(age || '').trim();
+  if (!text) return '未记录';
+  return /岁|外貌|未知|未记录/.test(text) ? text : `${text}岁`;
+};
+
+const traitTone = (text: string) => {
+  if (text.startsWith('牵系')) return 'border-fantasy-gold/30 bg-fantasy-gold/10 text-fantasy-gold';
+  if (text.startsWith('剧情')) return 'border-violet-300/30 bg-violet-300/10 text-violet-100';
+  if (text.startsWith('能力')) return 'border-sky-300/30 bg-sky-300/10 text-sky-100';
+  return 'border-white/10 bg-white/5 text-gray-100';
+};
+
+const splitTrait = (text: string) => {
+  const [label, ...body] = text.split(/[：:]/);
+  if (body.length === 0) return { label: '特质', body: text };
+  return { label: label.trim(), body: body.join('：').trim() };
+};
+
 export function NpcPanel({ npcs = [] }: NpcPanelProps) {
   const [selectedNpcId, setSelectedNpcId] = useState('');
   const [detailPage, setDetailPage] = useState<NpcDetailPage>('stats');
@@ -71,7 +90,7 @@ export function NpcPanel({ npcs = [] }: NpcPanelProps) {
 
   return (
     <div className="h-full w-full flex flex-col xl:flex-row gap-4 xl:gap-6 overflow-y-auto xl:overflow-hidden">
-      <div className="w-full xl:w-72 max-h-60 xl:max-h-none glass-panel rounded-xl flex flex-col overflow-hidden shrink-0">
+      <div className="w-full xl:w-80 max-h-60 xl:max-h-none glass-panel rounded-xl flex flex-col overflow-hidden shrink-0">
         <div className="p-4 border-b border-fantasy-gold/20 flex justify-between items-center bg-fantasy-darker/50">
           <h2 className="text-xl font-serif text-fantasy-gold">已知角色</h2>
           <span className="text-sm font-mono text-gray-400">{npcs.length}人</span>
@@ -131,8 +150,8 @@ export function NpcPanel({ npcs = [] }: NpcPanelProps) {
                   <span className="px-2 py-0.5 rounded text-[10px] bg-fantasy-blue/20 border border-blue-400/30 text-blue-300">{selectedNpc.type}</span>
                   <h1 className="text-2xl md:text-3xl font-serif text-white tracking-widest leading-tight">{selectedNpc.fullName}</h1>
                 </div>
-                <div className="text-gray-400 text-sm mb-4">
-                  {selectedNpc.race} / {selectedNpc.gender} / {selectedNpc.age}岁 / {selectedClass.name}
+                <div className="text-gray-300 text-sm mb-4">
+                  {selectedNpc.race} / {selectedNpc.gender} / {formatAge(selectedNpc.age)} / {selectedClass.name}
                 </div>
                 <div className="flex flex-col md:flex-row gap-2 md:gap-4">
                   <div className="text-xs text-gray-300 flex items-center gap-1 bg-black/40 px-3 py-1.5 rounded border border-white/10">
@@ -188,10 +207,19 @@ export function NpcPanel({ npcs = [] }: NpcPanelProps) {
               {detailPage === 'traits' && (
                 <section className="space-y-4">
                   <h3 className="text-sm font-serif text-fantasy-gold pb-2 border-b border-white/10">情报特质</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedNpc.attributes.map((attr, idx) => (
-                      <span key={idx} className="px-3 py-1 bg-fantasy-gold/10 text-fantasy-gold text-xs rounded border border-fantasy-gold/30">{attr}</span>
-                    ))}
+                  <div className="grid gap-4">
+                    {selectedNpc.attributes.map((attr, idx) => {
+                      const trait = splitTrait(attr);
+                      return (
+                        <article key={idx} className={`rounded-xl border p-4 md:p-5 ${traitTone(attr)}`}>
+                          <div className="text-sm md:text-base font-serif tracking-widest mb-2">{trait.label}</div>
+                          <div className="text-sm md:text-base leading-relaxed text-gray-100">{trait.body}</div>
+                        </article>
+                      );
+                    })}
+                    {selectedNpc.attributes.length === 0 && (
+                      <div className="rounded-xl border border-white/10 bg-black/25 p-5 text-gray-400">暂无特质记录</div>
+                    )}
                   </div>
                 </section>
               )}

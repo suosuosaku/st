@@ -1,4 +1,5 @@
 import { motion } from 'motion/react';
+import { useEffect, useState } from 'react';
 import { TabState } from '../types';
 import { LayoutDashboard, Map as MapIcon, Users, Contact, ClipboardList, Package, Sword, Settings, SearchCheck } from 'lucide-react';
 
@@ -22,13 +23,26 @@ interface HUDProps {
 }
 
 export function HUD({ activeTab, onTabChange, isExpanded, onToggleExpand }: HUDProps) {
+  const [isCompact, setIsCompact] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 1439px)').matches : false,
+  );
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 1439px)');
+    const syncCompact = () => setIsCompact(media.matches);
+    syncCompact();
+    media.addEventListener('change', syncCompact);
+    return () => media.removeEventListener('change', syncCompact);
+  }, []);
+
   return (
     <motion.div 
-      drag
+      key={isCompact ? 'compact-hud' : 'desktop-hud'}
+      drag={!isCompact}
       dragMomentum={false}
       dragElastic={0.1}
       data-eldred-hud="tabs"
-      className={`fixed left-2 right-2 top-2 bottom-auto lg:right-auto lg:left-4 lg:top-1/2 lg:bottom-auto lg:-translate-y-1/2 z-50 flex flex-row lg:flex-col items-center lg:items-stretch gap-1 lg:gap-2 p-1.5 lg:p-2 glass-panel rounded-xl select-none ${isExpanded ? 'lg:w-48' : 'lg:w-16'} transition-all duration-300 cursor-move border border-fantasy-gold/40 hover:border-fantasy-gold/70 overflow-x-auto overflow-y-hidden lg:overflow-visible`}
+      className={`fixed left-2 right-2 top-2 bottom-auto lg:right-auto lg:left-4 lg:top-1/2 lg:bottom-auto lg:-translate-y-1/2 z-50 flex flex-row lg:flex-col items-center lg:items-stretch gap-1 lg:gap-2 p-1.5 lg:p-2 glass-panel rounded-xl select-none ${isExpanded ? 'lg:w-48' : 'lg:w-16'} transition-all duration-300 cursor-default lg:cursor-move border border-fantasy-gold/40 hover:border-fantasy-gold/70 overflow-x-auto overflow-y-hidden lg:overflow-visible`}
       style={{ boxShadow: '0 10px 40px rgba(0,0,0,0.8), inset 0 0 15px rgba(212,175,55,0.1)' }}
     >
       <div 

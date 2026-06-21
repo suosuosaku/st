@@ -70,6 +70,11 @@ export const buildEldredFrontendEventPayload = (input: EldredFrontendEventInput)
   const skill = input.skillId ? getSkillById(input.skillId) : undefined;
   const equipment = input.equipmentId ? getEquipmentById(input.equipmentId) : undefined;
   const facts = input.extraFacts?.length ? input.extraFacts : ['无'];
+  const isCombatCommand = input.eventType === 'combat_command';
+  const stateHeader = isCombatCommand ? '  current_state_snapshot:' : '  authoritative_state_after_event:';
+  const syncRequest = isCombatCommand
+    ? '同步请求：以上为脚本控制台提交的战斗行动意图与当前战斗快照。正文必须按当前变量、世界书、二十面骰、技能、装备、站位和敌方反应裁决命中、伤害、消耗、状态、经验与胜负，并在 <UpdateVariable> 写回系统.战斗缓存。'
+    : '同步请求：以上为脚本控制台已经结算的前端权威事实。正文只演绎结果、补足场景反应，并在 <UpdateVariable> 写回同一结果；不得反转命中、伤害、消耗、装备槽位、经验、升级或队伍状态。';
 
   return [
     '【艾尔德雷德前端事件】',
@@ -88,8 +93,8 @@ export const buildEldredFrontendEventPayload = (input: EldredFrontendEventInput)
     `    equipment_name: "${quote(equipment?.name)}"`,
     `    quest_id: "${quote(input.quest?.id)}"`,
     `    quest_title: "${quote(input.quest?.title)}"`,
-    `    result: "${quote(input.authoritativeResult || input.playerIntent)}"`,
-    '  authoritative_state_after_event:',
+    `    result: "${quote(isCombatCommand ? input.playerIntent : input.authoritativeResult || input.playerIntent)}"`,
+    stateHeader,
     ...playerFacts(input.player),
     ...partyFacts(input.party),
     ...enemyFacts(input.enemies),
@@ -97,6 +102,6 @@ export const buildEldredFrontendEventPayload = (input: EldredFrontendEventInput)
     ...facts.map(fact => `    - "${quote(fact)}"`),
     '```',
     '',
-    '同步请求：以上为脚本控制台已经结算的前端权威事实。正文只演绎结果、补足场景反应，并在 <UpdateVariable> 写回同一结果；不得反转命中、伤害、消耗、装备槽位、经验、升级或队伍状态。',
+    syncRequest,
   ].join('\n');
 };

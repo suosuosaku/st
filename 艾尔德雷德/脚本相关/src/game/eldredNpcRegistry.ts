@@ -1,4 +1,4 @@
-import type { Character, Skill } from '../types';
+import type { Character, CharacterClassId, EquipmentLoadout, Skill, SkillActionType, SkillRank } from '../types';
 
 export const eldredFixedNpcNames = [
   "绯欧菈",
@@ -33,7 +33,7 @@ export const eldredFixedNpcNames = [
   "小原"
 ] as const;
 
-export const eldredFixedNpcRegistry: Character[] = [
+const rawEldredFixedNpcRegistry: Character[] = [
   {
     "id": "npc-fiora",
     "name": "绯欧菈",
@@ -2235,6 +2235,219 @@ export const eldredFixedNpcRegistry: Character[] = [
     ]
   }
 ] as Character[];
+
+const npcExperienceForNextLevel = (level = 1) => {
+  const table: Record<number, number> = {
+    1: 120,
+    2: 180,
+    3: 260,
+    4: 360,
+    5: 480,
+    6: 620,
+    7: 780,
+    8: 960,
+    9: 1160,
+    10: 1400,
+    11: 1680,
+    12: 2000,
+    13: 2360,
+    14: 2760,
+    15: 3200,
+    16: 3700,
+    17: 4260,
+    18: 4880,
+    19: 5560,
+    20: 0,
+  };
+  return table[Math.max(1, Math.min(20, Math.floor(level)))] ?? 0;
+};
+
+const rankForLevel = (level = 1): SkillRank => {
+  if (level >= 16) return 'S5';
+  if (level >= 11) return 'S4';
+  if (level >= 7) return 'S3';
+  if (level >= 4) return 'S2';
+  return 'S1';
+};
+
+const rankProfile: Record<SkillRank, {
+  attackDice: string;
+  healDice: string;
+  dc: number;
+  casterMp: number;
+  heavyMp: number;
+  buff: number;
+  shield: number;
+}> = {
+  S1: { attackDice: '1d6', healDice: '1d6', dc: 11, casterMp: 2, heavyMp: 3, buff: 1, shield: 2 },
+  S2: { attackDice: '1d8', healDice: '1d8', dc: 13, casterMp: 4, heavyMp: 5, buff: 2, shield: 3 },
+  S3: { attackDice: '1d10', healDice: '2d6', dc: 15, casterMp: 6, heavyMp: 7, buff: 2, shield: 5 },
+  S4: { attackDice: '2d8', healDice: '3d6', dc: 18, casterMp: 9, heavyMp: 10, buff: 3, shield: 8 },
+  S5: { attackDice: '3d10', healDice: '4d8', dc: 21, casterMp: 14, heavyMp: 15, buff: 4, shield: 12 },
+};
+
+const classEquipmentLoadouts: Record<CharacterClassId, EquipmentLoadout> = {
+  paladin: { weapon: 'npc-oath-saber', shield: 'npc-oath-shield', upper: 'npc-mail-coat' },
+  sage: { weapon: 'npc-archive-staff', upper: 'npc-ward-robe', tool: 'npc-ledger-satchel' },
+  ranger: { weapon: 'npc-field-bow', boots: 'npc-route-boots', tool: 'npc-route-knife' },
+  'battle-master': { weapon: 'npc-guard-saber', upper: 'npc-guard-mail', hands: 'npc-guard-gauntlet' },
+  alchemist: { weapon: 'npc-reagent-dart', upper: 'npc-reagent-apron', tool: 'npc-reagent-kit' },
+  artificer: { weapon: 'npc-rivet-hammer', upper: 'npc-work-coat', tool: 'npc-rivet-kit' },
+  priest: { weapon: 'npc-prayer-rod', upper: 'npc-prayer-robe', tool: 'npc-reliquary' },
+  summoner: { weapon: 'npc-contract-rod', ring: 'npc-contract-ring', tool: 'npc-circle-chalk' },
+};
+
+const raceFlavor = (race: string) => {
+  if (/精灵|月/.test(race)) return '月根';
+  if (/矮人|炉/.test(race)) return '炉印';
+  if (/半身/.test(race)) return '小路';
+  if (/侏儒/.test(race)) return '机关';
+  if (/镜/.test(race)) return '镜面';
+  if (/潮|海/.test(race)) return '潮息';
+  if (/半精灵/.test(race)) return '双界';
+  return '通行';
+};
+
+const normalizedClassId = (npc: Character): CharacterClassId => {
+  if (npc.name === '小原') return 'sage';
+  if (npc.name === '玛洛') return 'battle-master';
+  if (npc.name === '妮娅' || npc.name === '帕琪' || npc.name === '佩拉') return 'sage';
+  if (npc.name === '玛蒂') return 'priest';
+  return npc.classId;
+};
+
+const equipmentIdsFromLoadout = (loadout: EquipmentLoadout) =>
+  Object.values(loadout).filter((id): id is string => Boolean(id));
+
+const skillId = (npc: Character, suffix: string) => `${npc.id}-${suffix}`;
+
+const mpCost = (npc: Character, cost: number) => npc.stats.maxMp > 0 ? Math.min(cost, Math.max(1, Math.floor(npc.stats.maxMp * 0.35))) : 0;
+
+const combatSkill = (
+  npc: Character,
+  classId: CharacterClassId,
+  idSuffix: string,
+  name: string,
+  rank: SkillRank,
+  actionType: SkillActionType,
+  attribute: Skill['attribute'],
+  hitType: Skill['hitType'],
+  target: string,
+  range: string,
+  baseMp: number,
+  cooldown: number,
+  effects: string[],
+  extra: Partial<Skill> = {},
+): Skill => ({
+  id: skillId(npc, idSuffix),
+  name,
+  rank,
+  sourceClasses: [classId],
+  source: `${npc.name}固定战斗模板`,
+  actionType,
+  attribute,
+  hitType,
+  target,
+  range,
+  mpCost: mpCost(npc, baseMp),
+  cooldown,
+  effects,
+  desc: effects.join('；'),
+  ...extra,
+});
+
+const classCombatSkills = (npc: Character): Skill[] => {
+  const classId = normalizedClassId(npc);
+  const rank = rankForLevel(npc.stats.level || 1);
+  const profile = rankProfile[rank];
+  const flavor = raceFlavor(npc.race);
+  const highRankCooldown = rank === 'S4' || rank === 'S5' ? 2 : 1;
+
+  if (classId === 'paladin') {
+    return [
+      combatSkill(npc, classId, 'oath-cut', `${flavor}誓斩`, rank, 'attack', 'str', 'vsAC', '单体敌人', '近身', profile.casterMp, 0, [`命中造成${profile.attackDice}+力量加值+装备伤害`, `自身获得护甲+${profile.buff}至下回合`], { damageDice: profile.attackDice }),
+      combatSkill(npc, classId, 'guard-wall', '盾墙代受', rank, 'support', 'vit', 'auto', '单体友方', '近身', profile.casterMp, 1, [`目标护甲+${profile.buff}至下回合`, `可替目标承受一次近身伤害并减免${profile.shield}`]),
+      combatSkill(npc, classId, 'radiant-bind', '誓光压制', rank, 'control', 'spr', 'vsDC', '单体敌人', '中距', profile.heavyMp, highRankCooldown, [`精神对抗目标值${profile.dc}`, `失败则目标命中-${profile.buff}且不能越过守护线1轮`], { dc: profile.dc }),
+    ];
+  }
+
+  if (classId === 'sage') {
+    return [
+      combatSkill(npc, classId, 'spark-formula', `${flavor}短焰`, rank, 'attack', 'int', 'vsAC', '单体敌人', '中距', profile.casterMp, 0, [`命中造成${profile.attackDice}+智力加值+装备伤害`, `若目标已被标记则额外+${profile.buff}伤害`], { damageDice: profile.attackDice }),
+      combatSkill(npc, classId, 'ward-page', '短咒护页', rank, 'support', 'int', 'auto', '单体友方', '中距', profile.casterMp, 1, [`目标护甲+${profile.buff}至下回合`, `目标下一次豁免+${profile.buff}`]),
+      combatSkill(npc, classId, 'weak-point', '破绽标注', rank, 'control', 'int', 'vsDC', '单体敌人', '中距', profile.casterMp, 1, [`智力对抗目标值${profile.dc}`, `失败则目标护甲-${profile.buff}至下回合`], { dc: profile.dc }),
+    ];
+  }
+
+  if (classId === 'ranger') {
+    return [
+      combatSkill(npc, classId, 'quick-shot', `${flavor}快射`, rank, 'attack', 'dex', 'vsAC', '单体敌人', '远距', profile.casterMp, 0, [`命中造成${profile.attackDice}+敏捷加值+装备伤害`, `本回合移动过则命中+${profile.buff}`], { damageDice: profile.attackDice }),
+      combatSkill(npc, classId, 'snare-line', '绊线牵制', rank, 'control', 'dex', 'vsDC', '单体敌人', '中距', profile.casterMp, 1, [`敏捷对抗目标值${profile.dc}`, `失败则速度-1且下次先攻-${profile.buff}`], { dc: profile.dc }),
+      combatSkill(npc, classId, 'field-cover', '侧步掩护', rank, 'support', 'dex', 'auto', '单体友方', '中距', profile.casterMp, 1, [`目标远程受击命中-${profile.buff}`, `自身可移动到相邻安全位`]),
+    ];
+  }
+
+  if (classId === 'battle-master') {
+    return [
+      combatSkill(npc, classId, 'heavy-blow', `${flavor}重击`, rank, 'attack', 'str', 'vsAC', '单体敌人', '近身', 0, 0, [`命中造成${profile.attackDice}+力量加值+装备伤害`, `若目标被嘲讽则额外+${profile.buff}伤害`], { damageDice: profile.attackDice }),
+      combatSkill(npc, classId, 'bodyguard', '护身挡拆', rank, 'reaction', 'vit', 'auto', '邻近友方', '近身', 0, 1, [`友方受击时伤害-${profile.shield}`, `自身获得守护标记1轮`]),
+      combatSkill(npc, classId, 'taunt-lock', '压阵挑衅', rank, 'control', 'str', 'vsDC', '单体敌人', '近身', 0, 1, [`力量对抗目标值${profile.dc}`, `失败则目标下次优先攻击自己且命中-${profile.buff}`], { dc: profile.dc }),
+    ];
+  }
+
+  if (classId === 'alchemist') {
+    return [
+      combatSkill(npc, classId, 'burst-vial', `${flavor}爆剂`, rank, 'attack', 'int', 'vsAC', '单体或小范围敌人', '中距', profile.casterMp, 1, [`命中造成${profile.attackDice}+智力加值+装备伤害`, `目标下次先攻-${profile.buff}`], { damageDice: profile.attackDice }),
+      combatSkill(npc, classId, 'smoke-bind', '呛雾控场', rank, 'control', 'int', 'vsDC', '小范围敌人', '中距', profile.casterMp, 2, [`智力对抗目标值${profile.dc}`, `失败则命中-${profile.buff}并暴露站位`], { dc: profile.dc }),
+      combatSkill(npc, classId, 'stable-dose', '稳定剂注入', rank, 'heal', 'int', 'auto', '单体友方', '近身', profile.heavyMp, 2, [`恢复${profile.healDice}+智力加值生命`, `移除轻微中毒、流血或惊慌`], { healingDice: profile.healDice }),
+    ];
+  }
+
+  if (classId === 'artificer') {
+    return [
+      combatSkill(npc, classId, 'rivet-hit', `${flavor}铆击`, rank, 'attack', 'str', 'vsAC', '单体敌人或构装体', '近身', profile.casterMp, 0, [`命中造成${profile.attackDice}+力量加值+装备伤害`, `构装或机关目标额外+${profile.buff}伤害`], { damageDice: profile.attackDice }),
+      combatSkill(npc, classId, 'shock-wire', '电弧绊线', rank, 'control', 'int', 'vsDC', '单体敌人', '中距', profile.casterMp, 1, [`智力对抗目标值${profile.dc}`, `失败则行动资源-1或速度-1`], { dc: profile.dc }),
+      combatSkill(npc, classId, 'armor-rivet', '临时铆甲', rank, 'support', 'int', 'auto', '单体友方', '近身', profile.casterMp, 1, [`目标护甲+${profile.buff}至下回合`, `装备耐久损伤减免${profile.shield}`]),
+    ];
+  }
+
+  if (classId === 'priest') {
+    return [
+      combatSkill(npc, classId, 'prayer-mend', `${flavor}祈疗`, rank, 'heal', 'spr', 'auto', '单体友方', '中距', profile.casterMp, 1, [`恢复${profile.healDice}+精神加值生命`, `移除轻微恐慌或污染`], { healingDice: profile.healDice }),
+      combatSkill(npc, classId, 'clean-light', '净光惩戒', rank, 'attack', 'spr', 'vsAC', '单体敌人', '中距', profile.casterMp, 0, [`命中造成${profile.attackDice}+精神加值+装备伤害`, `污染或亡灵目标额外+${profile.buff}伤害`], { damageDice: profile.attackDice }),
+      combatSkill(npc, classId, 'calm-ward', '安魂护幕', rank, 'support', 'spr', 'auto', '全体友方', '中距', profile.heavyMp, highRankCooldown, [`友方下一次精神豁免+${profile.buff}`, `全体获得${profile.shield}点临时护盾`]),
+    ];
+  }
+
+  return [
+    combatSkill(npc, classId, 'familiar-bite', `${flavor}使魔扑击`, rank, 'attack', 'spr', 'vsAC', '单体敌人', '中距', profile.casterMp, 0, [`命中造成${profile.attackDice}+精神加值+装备伤害`, `目标被契约标记时额外+${profile.buff}伤害`], { damageDice: profile.attackDice }),
+    combatSkill(npc, classId, 'tether-mark', '契约牵缚', rank, 'control', 'spr', 'vsDC', '单体敌人或召唤物', '中距', profile.casterMp, 1, [`精神对抗目标值${profile.dc}`, `失败则目标命中-${profile.buff}且速度-1`], { dc: profile.dc }),
+    combatSkill(npc, classId, 'circle-guard', '圆阵护位', rank, 'support', 'int', 'auto', '单体友方或召唤物', '中距', profile.casterMp, 1, [`目标护甲+${profile.buff}至下回合`, `契约失控检定目标值-1`]),
+  ];
+};
+
+const normalizeFixedNpc = (npc: Character): Character => {
+  const classId = normalizedClassId(npc);
+  const equipmentLoadout = Object.keys(npc.equipmentLoadout || {}).length
+    ? npc.equipmentLoadout
+    : classEquipmentLoadouts[classId];
+  const equipmentIds = equipmentIdsFromLoadout(equipmentLoadout);
+  const skills = classCombatSkills({ ...npc, classId, equipmentLoadout, equipmentIds });
+  const activeSkillIds = skills.slice(0, 4).map(skill => skill.id);
+  return {
+    ...npc,
+    classId,
+    equipmentLoadout,
+    equipmentIds,
+    activeSkillIds,
+    knownSkillIds: activeSkillIds,
+    skills,
+    nextLevelExperience: npcExperienceForNextLevel(npc.stats.level || 1),
+    attributes: npc.attributes.map(text => text.replace(/技能S\d[^;；。]*/g, '战斗技能见固定技能栏')),
+  };
+};
+
+export const eldredFixedNpcRegistry: Character[] = rawEldredFixedNpcRegistry.map(normalizeFixedNpc);
 
 export const eldredFixedNpcByName = new Map(
   eldredFixedNpcRegistry.flatMap(npc => [
