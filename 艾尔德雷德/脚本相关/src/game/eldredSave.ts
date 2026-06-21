@@ -19,6 +19,7 @@ import {
 } from '../types';
 import {
   ATTRIBUTE_KEYS,
+  allSkills,
   calculateDerivedStats,
   characterClasses,
   characterRaces,
@@ -31,7 +32,6 @@ import {
   getRaceById,
   getSkillById,
   originLocations,
-  skills,
 } from './rules';
 import { fixedNpcImageNames, resolveCharacterImage } from '../data';
 
@@ -570,7 +570,7 @@ const findSkillId = (value: unknown): string | undefined => {
   const source = asRecord(value);
   const raw = textOf(source.id ?? source.ID ?? source.名称 ?? source.名字 ?? source.技能 ?? value);
   if (!raw || raw === '空置' || raw === '无') return undefined;
-  return skills.find(item => item.id === raw || item.name === raw || raw.includes(item.name))?.id;
+  return allSkills().find(item => item.id === raw || item.name === raw || raw.includes(item.name))?.id;
 };
 
 const loadoutFrom = (raw: unknown): EquipmentLoadout => {

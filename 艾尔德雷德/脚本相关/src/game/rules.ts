@@ -14,6 +14,7 @@
   Skill,
   SkillRank,
 } from '../types';
+import { fixedNpcSkillRegistry } from './eldredNpcRegistry';
 
 export const ATTRIBUTE_LABELS: Record<AttributeKey, string> = {
   str: '力量',
@@ -343,7 +344,9 @@ export const equipmentPool: Equipment[] = [
 
 export const getClassById = (classId: CharacterClassId) => characterClasses.find(item => item.id === classId) || characterClasses[0];
 export const getRaceById = (raceId: CharacterRaceId) => characterRaces.find(item => item.id === raceId) || characterRaces[0];
-export const getSkillById = (skillId: string) => skills.find(item => item.id === skillId);
+export const allSkills = () => [...skills, ...fixedNpcSkillRegistry];
+export const getSkillById = (skillId: string) =>
+  allSkills().find(item => item.id === skillId || item.name === skillId);
 export const getTalentById = (talentId: string) => classTalents.find(item => item.id === talentId);
 export const getEquipmentById = (equipmentId: string) => equipmentPool.find(item => item.id === equipmentId);
 

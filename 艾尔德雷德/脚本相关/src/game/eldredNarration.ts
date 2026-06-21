@@ -20,7 +20,6 @@ import {
   runtimeFromStatData,
 } from './eldredSave';
 import { formatEldredLocation } from './locationFormat';
-import { eldredNPCs } from '../data';
 
 type AnyRecord = Record<string, any>;
 type StoryPrompt = { role: 'system' | 'assistant' | 'user'; content: string };
@@ -177,7 +176,7 @@ const writeStatDataToHost = async (
       notifyRuntimeChanged();
       return true;
     } catch (error) {
-      console.warn('[艾尔德雷德] 标签变量写回 MVU 失败，尝试消息变量写回。', error);
+      console.warn('[艾尔德雷德] 标签变量写回 MVU 失败，改用消息变量写回。', error);
     }
   }
 
@@ -329,19 +328,6 @@ const applyJsonPatchOperations = (baseStatData: unknown, operations: JsonPatchOp
   return applied ? nextStatData : null;
 };
 
-const textValue = (value: unknown, fallback = '') => String(value ?? fallback).trim();
-
-const splitTagPayload = (body: string) =>
-  String(body || '')
-    .split(/[｜|]/)
-    .map(part => part.trim())
-    .filter(Boolean);
-
-const parseSignedNumber = (value: unknown) => {
-  const match = textValue(value).match(/[+-]?\d+/);
-  return match ? Number(match[0]) : 0;
-};
-
 const ensureRecordAt = (root: AnyRecord, path: string[]) => {
   let cursor = root;
   for (const segment of path) {
@@ -368,93 +354,6 @@ const appendFrontendNotice = (statData: AnyRecord, title: string, body: string) 
   system.前端提示 = notices.slice(-16);
 };
 
-const knownNpc = (name: string) =>
-  eldredNPCs.find(npc => npc.name === name || npc.fullName.includes(name));
-
-const npcStatRecord = (name: string, identity: string) => {
-  const known = knownNpc(name);
-  if (known) {
-    return {
-      身份: identity || known.identity,
-      职责: identity || known.identity,
-      职业: known.profession,
-      种族: known.race,
-      性别: known.gender,
-      年龄: known.age,
-      所属: known.affiliation,
-      等级: known.stats.level || 1,
-      HP: `${known.stats.hp}/${known.stats.maxHp}`,
-      MP: `${known.stats.mp}/${known.stats.maxMp}`,
-      AC: known.stats.ac,
-      属性: {
-        力量: known.stats.str,
-        敏捷: known.stats.dex,
-        体质: known.stats.vit,
-        智力: known.stats.int,
-        精神: known.stats.spr,
-      },
-      装备: known.equipmentIds,
-      已知技能: known.knownSkillIds,
-      激活技能: known.activeSkillIds,
-      经验: known.experience,
-      下级经验: known.nextLevelExperience,
-      可分配点数: known.availableAttributePoints,
-      战斗: {
-        等级: known.stats.level || 1,
-        生命: `${known.stats.hp}/${known.stats.maxHp}`,
-        法力: `${known.stats.mp}/${known.stats.maxMp}`,
-        护甲: known.stats.ac,
-        五维: {
-          力量: known.stats.str,
-          敏捷: known.stats.dex,
-          体质: known.stats.vit,
-          智力: known.stats.int,
-          精神: known.stats.spr,
-        },
-        已知技能: known.knownSkillIds,
-        激活技能: known.activeSkillIds,
-      },
-      好感: known.favorability,
-      关系阶段: known.relationshipStage,
-    };
-  }
-  return {
-    身份: identity || '路人',
-    职责: identity || '路人',
-    职业: '学徒',
-    种族: '人类',
-    性别: '未记录',
-    年龄: '未记录',
-    等级: 1,
-    HP: '12/12',
-    MP: '4/4',
-    AC: 10,
-    属性: { 力量: 1, 敏捷: 2, 体质: 2, 智力: 2, 精神: 2 },
-    装备: {},
-    已知技能: {},
-    激活技能: {},
-    经验: 0,
-    下级经验: 100,
-    可分配点数: 0,
-    战斗: {
-      等级: 1,
-      生命: '12/12',
-      法力: '4/4',
-      护甲: 10,
-      五维: { 力量: 1, 敏捷: 2, 体质: 2, 智力: 2, 精神: 2 },
-      已知技能: [],
-      激活技能: [],
-    },
-    好感: 0,
-    关系阶段: '陌生',
-  };
-};
-
-const parseFieldFromParts = (parts: string[], label: string) => {
-  const item = parts.find(part => part.startsWith(`${label}:`) || part.startsWith(`${label}：`));
-  return item ? item.replace(new RegExp(`^${label}[:：]\\s*`), '').trim() : '';
-};
-
 const extractNarrativeTagLines = (rawText: string) =>
   String(rawText || '')
     .split(/\r?\n/)
@@ -463,166 +362,19 @@ const extractNarrativeTagLines = (rawText: string) =>
     .filter((match): match is RegExpMatchArray => Boolean(match && ELDRED_NOTICE_TAGS.includes(match[1])))
     .map(match => ({ title: match[1], body: match[2].trim() }));
 
-const deriveStatDataFromNarrativeTags = (rawText: string, previousStatData: unknown) => {
+const deriveFrontendNoticesFromNarrativeTags = (rawText: string, previousStatData: unknown) => {
   const tags = extractNarrativeTagLines(rawText);
   if (!tags.length) return null;
   const nextStatData = cloneRecord(previousStatData);
-  const world = ensureRecordAt(nextStatData, ['世界']);
-  const main = ensureRecordAt(nextStatData, ['主角']);
-  const relation = ensureRecordAt(nextStatData, ['关系']);
-  const system = ensureRecordAt(nextStatData, ['系统']);
-  let changed = false;
-
-  for (const tag of tags) {
-    const parts = splitTagPayload(tag.body);
-    appendFrontendNotice(nextStatData, tag.title, tag.body);
-    changed = true;
-
-    if (tag.title === '地点解锁' || tag.title === '地图加载' || tag.title === '路径行动') {
-      const [region, subRegion, landmark] = parts;
-      if (region) world.大区域 = region;
-      if (subRegion) world.子区域 = subRegion;
-      if (landmark) world.具体地标 = landmark;
-      if (region || subRegion) world.当前地点 = [region, subRegion].filter(Boolean).join('·');
-      continue;
-    }
-
-    if (tag.title === '获得物品') {
-      const [name, category, amountText] = parts;
-      if (!name) continue;
-      const backpack = ensureRecordAt(main, ['背包']);
-      backpack[name] = {
-        名称: name,
-        分类: category || '物品',
-        数量: Math.max(1, parseSignedNumber(amountText || 1)),
-        状态: '已获得',
-      };
-      continue;
-    }
-
-    if (/^委托/.test(tag.title)) {
-      const [questName, ...rest] = parts;
-      if (!questName) continue;
-      const source = parseFieldFromParts(rest, '来源') || textValue((main.任务列表?.[questName] || {}).来源, '');
-      const recLevel = parseSignedNumber(parseFieldFromParts(rest, '建议等级') || 1) || 1;
-      const risk = parseFieldFromParts(rest, '风险') || textValue((main.任务列表?.[questName] || {}).风险, '低');
-      const reward = parseFieldFromParts(rest, '奖励') || textValue((main.任务列表?.[questName] || {}).奖励, '');
-      const quests = ensureRecordAt(main, ['任务列表']);
-      quests[questName] = {
-        ...(isRecord(quests[questName]) ? quests[questName] : {}),
-        标题: questName,
-        来源: source,
-        建议等级: recLevel,
-        风险: risk,
-        奖励: reward,
-        状态: tag.title === '委托完成' ? '已完成' : '已接取',
-      };
-      const boardQuests = ensureRecordAt(world, ['动态看板', '委托']);
-      boardQuests[questName] = {
-        标题: questName,
-        任务详情: tag.body,
-        来源: source,
-        地点: textValue(world.当前地点),
-        风险: risk,
-        奖励: reward,
-        报酬: reward,
-        建议等级: recLevel,
-        状态: tag.title === '委托完成' ? '已完成' : '可接取',
-      };
-      continue;
-    }
-
-    if (['新闻', '新闻更新', '见闻', '见闻更新', '看板更新'].includes(tag.title)) {
-      const boardType = tag.title.includes('见闻') ? '见闻' : '新闻';
-      const [title, ...rest] = parts;
-      const itemTitle = title || tag.body;
-      const board = ensureRecordAt(world, ['动态看板', boardType]);
-      board[itemTitle] = {
-        标题: itemTitle,
-        详情描述: rest.join('｜') || tag.body,
-        来源: parseFieldFromParts(rest, '来源'),
-        地点: textValue(world.当前地点),
-        状态: parseFieldFromParts(rest, '状态') || '记录中',
-      };
-      continue;
-    }
-
-    if (tag.title === 'NPC收录') {
-      const [name, identity, npcType] = parts;
-      if (!name) continue;
-      const collectionType = /主要/.test(npcType || '') ? '主要NPC' : '其他NPC';
-      const collection = ensureRecordAt(main, ['角色收集', collectionType]);
-      collection[name] = {
-        ...(isRecord(collection[name]) ? collection[name] : {}),
-        ...npcStatRecord(name, identity || ''),
-        类型: npcType || collectionType,
-      };
-      continue;
-    }
-
-    if (tag.title === '好感变化') {
-      const [name, deltaText, stage] = parts;
-      if (!name) continue;
-      const favor = ensureRecordAt(relation, ['好感']);
-      const current = isRecord(favor[name]) ? parseSignedNumber(favor[name].数值) : parseSignedNumber(favor[name]);
-      favor[name] = {
-        数值: current + parseSignedNumber(deltaText),
-        阶段: stage || textValue(isRecord(favor[name]) ? favor[name].阶段 : '', '陌生'),
-        最近变化: tag.body,
-      };
-      continue;
-    }
-
-    if (tag.title === '声望变化') {
-      const [region, deltaText, tier] = parts;
-      if (!region) continue;
-      const reputations = ensureRecordAt(relation, ['地区声望']);
-      const current = isRecord(reputations[region]) ? parseSignedNumber(reputations[region].数值) : parseSignedNumber(reputations[region]);
-      reputations[region] = {
-        数值: current + parseSignedNumber(deltaText),
-        阶段: tier || textValue(isRecord(reputations[region]) ? reputations[region].阶段 : '', '听闻'),
-        最近变化: tag.body,
-      };
-      continue;
-    }
-
-    if (/^线索/.test(tag.title)) {
-      const stageName = parts.find(part => /^阶段[一二三四五六七1-7]/.test(part)) || '风声汇账';
-      const clueName = parts.find(part => part !== stageName) || tag.body;
-      const stageBook = ensureRecordAt(nextStatData, ['主线', '阶段钥匙册', stageName]);
-      const clues = ensureRecordAt(stageBook, ['线索']);
-      clues[clueName] = {
-        显示: clueName,
-        状态: '已发现',
-        发现地点: textValue(world.当前地点),
-        展开详情: tag.body,
-      };
-      stageBook.完成度 = `${Math.min(3, Object.keys(clues).length)}/3`;
-      stageBook.状态 = '记录中';
-      continue;
-    }
-
-    if (tag.title === '战斗实况') {
-      const roundMatch = tag.body.match(/回合\s*(\d+)/);
-      system.战斗缓存 = {
-        ...(isRecord(system.战斗缓存) ? system.战斗缓存 : {}),
-        回合: roundMatch ? Number(roundMatch[1]) : 1,
-        回合变化: [tag.body],
-      };
-    }
-  }
-
-  return changed ? nextStatData : null;
+  tags.forEach(tag => appendFrontendNotice(nextStatData, tag.title, tag.body));
+  return nextStatData;
 };
-
-const overlayNarrativeTags = (rawText: string, baseStatData: unknown) =>
-  deriveStatDataFromNarrativeTags(rawText, baseStatData) || (isRecord(baseStatData) ? baseStatData : null);
 
 const syncGeneratedMvuVariables = async (rawText: string, previous: EldredRuntimeSave) => {
   if (!/<UpdateVariable(?:variable)?\b|<JSONPatch\b/i.test(rawText)) {
-    const derived = deriveStatDataFromNarrativeTags(rawText, previous.rawStatData || {});
-    if (derived) await writeStatDataToHost(derived);
-    return derived;
+    const noticeOnly = deriveFrontendNoticesFromNarrativeTags(rawText, previous.rawStatData || {});
+    if (noticeOnly) await writeStatDataToHost(noticeOnly);
+    return noticeOnly;
   }
   const mvu = getMvuBridge();
   if (!mvu?.getMvuData || !mvu.parseMessage || !mvu.replaceMvuData) {
@@ -637,10 +389,10 @@ const syncGeneratedMvuVariables = async (rawText: string, previous: EldredRuntim
         await mvu.replaceMvuData(parsed, option);
         const parsedStatData = extractEldredStatData(parsed);
         if (parsedStatData) {
-          const overlaid = overlayNarrativeTags(rawText, parsedStatData);
-          if (overlaid) await writeStatDataToHost(overlaid, { option, oldData: parsed });
+          const noticeOnly = deriveFrontendNoticesFromNarrativeTags(rawText, parsedStatData);
+          if (noticeOnly) await writeStatDataToHost(noticeOnly, { option, oldData: parsed });
           else notifyRuntimeChanged();
-          return overlaid;
+          return noticeOnly || parsedStatData;
         }
         notifyRuntimeChanged();
       }
@@ -651,14 +403,14 @@ const syncGeneratedMvuVariables = async (rawText: string, previous: EldredRuntim
 
   const patchedStatData = applyJsonPatchOperations(previous.rawStatData || {}, extractJsonPatchOperations(rawText));
   if (patchedStatData) {
-    const overlaid = overlayNarrativeTags(rawText, patchedStatData);
-    if (overlaid) await writeStatDataToHost(overlaid);
-    return overlaid;
+    const noticeOnly = deriveFrontendNoticesFromNarrativeTags(rawText, patchedStatData);
+    await writeStatDataToHost(noticeOnly || patchedStatData);
+    return noticeOnly || patchedStatData;
   }
-  const derived = deriveStatDataFromNarrativeTags(rawText, previous.rawStatData || {});
-  if (derived) {
-    await writeStatDataToHost(derived);
-    return derived;
+  const noticeOnly = deriveFrontendNoticesFromNarrativeTags(rawText, previous.rawStatData || {});
+  if (noticeOnly) {
+    await writeStatDataToHost(noticeOnly);
+    return noticeOnly;
   }
   return null;
 };
@@ -1085,6 +837,7 @@ export const generateEldredNarrationFromInput = async (
   const trimmedInput = userInput.trim();
   if (!trimmedInput) return runtime;
   try {
+    const rawStatDataBefore = cloneRecord(runtime.rawStatData || {});
     const rawText = await generateWithEldredPreset({
       runtime,
       userInput: trimmedInput,
@@ -1100,6 +853,8 @@ export const generateEldredNarrationFromInput = async (
       userInput: trimmedInput,
       text: content,
       characterTags: extractCharacterTags(content),
+      rawStatDataBefore,
+      rawStatDataAfter: cloneRecord(statData || syncedRuntime.rawStatData || rawStatDataBefore),
     });
   } catch (error) {
     return persistGenerationError(runtime, error);
@@ -1114,6 +869,7 @@ export const generateEldredNarrationFromOpening = async (runtime: EldredRuntimeS
     '生成第一幕正文。只按入局设定初始化变量；未选择技能、默认剧情、默认队友、默认背包、默认好感、默认声望不得写入。需要基于出生点和第一幕事实生成4条本地新闻/见闻与4条可接委托，并写入变量。需要输出 <content> 与 <UpdateVariable>。',
   ].join('\n\n');
   try {
+    const rawStatDataBefore = cloneRecord(runtime.rawStatData || {});
     const rawText = await generateWithEldredPreset({
       runtime,
       userInput,
@@ -1130,6 +886,8 @@ export const generateEldredNarrationFromOpening = async (runtime: EldredRuntimeS
       text: content,
       sourceEventType: 'opening_setup',
       characterTags: extractCharacterTags(content),
+      rawStatDataBefore,
+      rawStatDataAfter: cloneRecord(statData || syncedRuntime.rawStatData || rawStatDataBefore),
     });
   } catch (error) {
     return persistGenerationError(runtime, error);
@@ -1150,6 +908,7 @@ export const generateEldredNarrationFromEvent = async (
     '按当前变量、世界书和前端权威事件生成下一段正文；事件中的 result 与 authoritative_state_after_event 已经发生。需要输出 <content> 与 <UpdateVariable>，变量写回必须与前端结果一致。',
   ].join('\n\n');
   try {
+    const rawStatDataBefore = cloneRecord(runtime.rawStatData || {});
     const rawText = await generateWithEldredPreset({
       runtime,
       userInput,
@@ -1166,6 +925,8 @@ export const generateEldredNarrationFromEvent = async (
       text: content,
       sourceEventType: input.eventType,
       characterTags: extractCharacterTags(content),
+      rawStatDataBefore,
+      rawStatDataAfter: cloneRecord(statData || syncedRuntime.rawStatData || rawStatDataBefore),
     });
   } catch (error) {
     return persistGenerationError(runtime, error);
@@ -1175,12 +936,18 @@ export const generateEldredNarrationFromEvent = async (
 export const rerollLatestEldredNarration = async (runtime: EldredRuntimeSave) => {
   const latest = runtime.narration.entries[0];
   if (!latest) return runtime;
-  const sourceRuntime = runtimeWithoutLatestNarration(runtime, latest);
+  const restoredStatData = cloneRecord(latest.rawStatDataBefore || {});
+  if (Object.keys(restoredStatData).length) await writeStatDataToHost(restoredStatData);
+  const sourceRuntimeBase = runtimeWithoutLatestNarration(runtime, latest);
+  const sourceRuntime = Object.keys(restoredStatData).length
+    ? mergeSyncedRuntime({ ...sourceRuntimeBase, rawStatData: restoredStatData }, restoredStatData)
+    : sourceRuntimeBase;
   const rerollPrompt = [
     buildBaseSystemPrompt(sourceRuntime, latest.userInput, latest.kind),
     '重新生成当前轮正文。保留本轮输入事实，替换上一版正文。需要输出 <content> 与 <UpdateVariable>。',
   ].join('\n\n');
   try {
+    const rawStatDataBefore = cloneRecord(sourceRuntime.rawStatData || restoredStatData);
     const rawText = await generateWithEldredPreset({
       runtime: sourceRuntime,
       userInput: latest.userInput,
@@ -1197,6 +964,8 @@ export const rerollLatestEldredNarration = async (runtime: EldredRuntimeSave) =>
       text: content,
       sourceEventType: latest.sourceEventType,
       characterTags: extractCharacterTags(content),
+      rawStatDataBefore,
+      rawStatDataAfter: cloneRecord(statData || syncedRuntime.rawStatData || rawStatDataBefore),
     });
   } catch (error) {
     return persistGenerationError(runtime, error);

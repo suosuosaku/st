@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { eldredNPCs, resolveCharacterImage } from '../data';
 import { ImmersiveNotice } from '../types';
-import { calculateDerivedStats } from '../game/rules';
 
 type NoticeKind = 'item' | 'skill' | 'quest' | 'npc' | 'clue' | 'relation' | 'combat' | 'level' | 'event' | 'soft-location';
 
@@ -222,40 +221,46 @@ function NpcArchiveNotice({ body, compact = false }: { body: string; compact?: b
   const { parts, fields } = noticeFieldsFrom(body);
   const name = fields.get('姓名') || parts[0]?.replace(/^姓名[:：]/, '').trim() || '未知角色';
   const known = knownNpcByName(name);
-  const fallbackStats = known?.stats || calculateDerivedStats(1, known?.classId || 'sage', { str: 1, dex: 3, vit: 3, int: 5, spr: 3 });
-  const identity = fieldOrPart(fields, parts, ['身份', '职责'], undefined, parts[1] || '身份待登记');
+  const exactStats = known?.stats;
+  const identity = fieldOrPart(fields, parts, ['身份', '职责'], undefined, parts[1] || known?.identity || '');
+  const isMajorNpc = /主要/.test(fields.get('类型') || fields.get('分类') || parts.join('｜'));
   const level = usableText(fields.get('等级'))
     || usableText(fields.get('机制数值'))?.match(/(?:Lv\.?|等级)\s*([0-9]+)/i)?.[1]
     || pickPart(parts, /(?:Lv\.?|等级)\s*([0-9]+)/i)?.match(/(?:Lv\.?|等级)\s*([0-9]+)/i)?.[1]
-    || String(fallbackStats.level || 1);
+    || (exactStats ? String(exactStats.level || 1) : '');
   const hp = usableText(fields.get('生命'))
     || usableText(fields.get('HP'))
     || usableText(fields.get('机制数值'))?.match(/(?:HP|生命)[:：]?\s*([0-9]+\/[0-9]+)/i)?.[1]
     || pickPart(parts, /(?:HP|生命)[:：]?\s*([0-9]+\/[0-9]+)/i)?.match(/(?:HP|生命)[:：]?\s*([0-9]+\/[0-9]+)/i)?.[1]
-    || `${fallbackStats.hp}/${fallbackStats.maxHp}`;
+    || (exactStats ? `${exactStats.hp}/${exactStats.maxHp}` : '');
   const mp = usableText(fields.get('法力'))
     || usableText(fields.get('MP'))
     || usableText(fields.get('机制数值'))?.match(/(?:MP|法力)[:：]?\s*([0-9]+\/[0-9]+)/i)?.[1]
     || pickPart(parts, /(?:MP|法力)[:：]?\s*([0-9]+\/[0-9]+)/i)?.match(/(?:MP|法力)[:：]?\s*([0-9]+\/[0-9]+)/i)?.[1]
-    || `${fallbackStats.mp}/${fallbackStats.maxMp}`;
+    || (exactStats ? `${exactStats.mp}/${exactStats.maxMp}` : '');
   const ac = usableText(fields.get('护甲'))
     || usableText(fields.get('AC'))
     || usableText(fields.get('机制数值'))?.match(/(?:AC|护甲)[:：]?\s*([0-9]+)/i)?.[1]
     || pickPart(parts, /(?:AC|护甲)[:：]?\s*([0-9]+)/i)?.match(/(?:AC|护甲)[:：]?\s*([0-9]+)/i)?.[1]
-    || String(fallbackStats.ac);
-  const attributes = usableText(fields.get('属性')) || usableText(fields.get('五维')) || pickPart(parts, /力量|敏捷|体质|智力|精神/) || '';
+    || (exactStats ? String(exactStats.ac) : '');
+  const attributes = usableText(fields.get('属性'))
+    || usableText(fields.get('五维'))
+    || pickPart(parts, /力量|敏捷|体质|智力|精神/)
+    || (exactStats ? `力量${exactStats.str} 敏捷${exactStats.dex} 体质${exactStats.vit} 智力${exactStats.int} 精神${exactStats.spr}` : '');
   const portrait = imageFromField(fields.get('立绘'), name, '立绘');
-  const affiliation = fields.get('所属') || fields.get('所属地区') || fields.get('所属地标') || fields.get('势力') || '';
+  const affiliation = fields.get('所属') || fields.get('所属地区') || fields.get('所属地标') || fields.get('势力') || known?.affiliation || '';
   const revisit = fields.get('可回访') || fields.get('可回访地点') || fields.get('可回访事项') || parts.find(part => /可回访|回访/.test(part)) || '';
   const details = [
-    `身份：${identity}`,
-    `等级：Lv.${level}`,
-    `生命：${hp}`,
-    `法力：${mp}`,
-    `护甲：${ac}`,
+    identity ? `身份：${identity}` : '',
+    level ? `等级：Lv.${level}` : '',
+    hp ? `生命：${hp}` : '',
+    mp ? `法力：${mp}` : '',
+    ac ? `护甲：${ac}` : '',
     attributes ? `属性：${attributes}` : '',
     affiliation ? `所属：${affiliation}` : '',
     revisit ? `可回访：${revisit}` : '',
+    !known && isMajorNpc ? '固定档案未匹配' : '',
+    !known && !isMajorNpc ? '随机角色数据等待变量写入' : '',
   ].filter(Boolean);
   return (
     <div className={`eldred-notice eldred-notice-npc ${compact ? 'eldred-notice-compact' : ''}`}>
@@ -268,7 +273,7 @@ function NpcArchiveNotice({ body, compact = false }: { body: string; compact?: b
           <div className="eldred-npc-body">
             <div className="eldred-npc-name">{name}</div>
             <div className="eldred-npc-detail-grid">
-              {(details.length ? details : ['资料待补全']).map((part, index) => (
+              {(details.length ? details : ['档案未绑定']).map((part, index) => (
                 <div className="eldred-npc-detail" key={`${name}-${index}`}><HighlightText text={part} /></div>
               ))}
             </div>
