@@ -21,6 +21,8 @@ import {
 } from './game/eldredSave';
 import { EldredFrontendEventInput } from './game/eldredEvents';
 import {
+  discardEldredInventoryItem,
+  dismissEldredBoardItem,
   generateEldredNarrationFromEvent,
   generateEldredNarrationFromInput,
   generateEldredNarrationFromOpening,
@@ -31,7 +33,6 @@ import {
   persistRuntimeNpcs,
   persistRuntimePlayer,
 } from './game/eldredActions';
-import { dismissEldredBoardItem } from './game/eldredNarration';
 import {
   loadEldredAsyncVariableApiSettings,
   processEldredVariablesWithAsyncApi,
@@ -247,6 +248,13 @@ export default function App() {
     setInteractionStatus(`已忽略：${item.title}`);
   };
 
+  const discardInventoryItem = async (item: { id?: string; name: string; category?: string; equipmentId?: string }) => {
+    const nextRuntime = await discardEldredInventoryItem(loadEldredRuntimeSave(), item);
+    setRuntime(nextRuntime);
+    if (nextRuntime.player) setPlayerState(nextRuntime.player);
+    setInteractionStatus(`已丢弃：${item.name}`);
+  };
+
   const handleRuntimeProcessed = (nextRuntime: EldredRuntimeSave, message: string) => {
     setRuntime(nextRuntime);
     if (nextRuntime.player) setPlayerState(nextRuntime.player);
@@ -260,10 +268,10 @@ export default function App() {
       case 'map': return <MapPanel player={playerState} runtime={runtime} />;
       case 'party': return <PartyPanel player={playerState} onUpdatePlayer={updatePlayerPreview} onUpdateNpcs={updateNpcs} npcs={runtime.npcs} onSubmitEvent={submitRuntimeEvent} />;
       case 'npc': return <NpcPanel npcs={runtime.npcs} />;
-      case 'quests': return <QuestPanel quests={runtime.quests} boardItems={runtime.world.dynamicBoard} onSubmitEvent={submitRuntimeEvent} onDismissBoardItem={dismissBoardItem} />;
+      case 'quests': return <QuestPanel quests={runtime.quests} boardItems={runtime.world.dynamicBoard} onSubmitEvent={submitRuntimeEvent} onDismissBoardItem={dismissBoardItem} onOpenOverview={() => setActiveTab('overview')} />;
       case 'clues': return <CluePanel cluePhases={runtime.cluePhases} />;
       case 'combat': return <CombatPanel player={playerState} partyNpcs={runtime.npcs.filter(npc => playerState.partyMemberIds.includes(npc.id) || playerState.partyMemberIds.includes(npc.name))} enemyUnits={runtime.combat.enemyUnits} initialTurn={runtime.combat.turn} initialLogs={runtime.combat.logs} runtime={runtime} onSubmitEvent={submitRuntimeEvent} />;
-      case 'inventory': return <InventoryPanel player={playerState} />;
+      case 'inventory': return <InventoryPanel player={playerState} runtime={runtime} onSubmitEvent={submitRuntimeEvent} onDiscardItem={discardInventoryItem} onOpenOverview={() => setActiveTab('overview')} />;
       case 'system': return <SystemPanel runtime={runtime} player={playerState} onRuntimeProcessed={handleRuntimeProcessed} />;
       default: return <EmptyPanel title="未知区域" />;
     }

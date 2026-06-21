@@ -402,7 +402,7 @@ export const dispatchEldredCombatCommand = (
   }
 
   if (command.kind === 'attack') {
-    logs.push(`${actor.name}准备普通攻击。`, `行动意图：普通攻击；目标：${target?.name || '待正文裁决'}；命中、伤害、耐久与反击由正文裁决。`);
+    logs.push(`${actor.name}准备普通攻击。`, `行动意图：普通攻击；目标：${target?.name || '待正文裁决'}；命中、伤害与反击由正文裁决。`);
   }
 
   if (command.kind === 'guard') {

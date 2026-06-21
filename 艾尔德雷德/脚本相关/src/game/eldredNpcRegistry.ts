@@ -2419,7 +2419,7 @@ const classCombatSkills = (npc: Character): Skill[] => {
     return [
       combatSkill(npc, classId, 'rivet-hit', `${flavor}铆击`, rank, 'attack', 'str', 'vsAC', '单体敌人或构装体', '近身', profile.casterMp, 0, [`命中造成${profile.attackDice}+力量加值+装备伤害`, `构装或机关目标额外+${profile.buff}伤害`], { damageDice: profile.attackDice }),
       combatSkill(npc, classId, 'shock-wire', '电弧绊线', rank, 'control', 'int', 'vsDC', '单体敌人', '中距', profile.casterMp, 1, [`智力对抗目标值${profile.dc}`, `失败则行动资源-1或速度-1`], { dc: profile.dc }),
-      combatSkill(npc, classId, 'armor-rivet', '临时铆甲', rank, 'support', 'int', 'auto', '单体友方', '近身', profile.casterMp, 1, [`目标护甲+${profile.buff}至下回合`, `装备耐久损伤减免${profile.shield}`]),
+      combatSkill(npc, classId, 'armor-rivet', '临时铆甲', rank, 'support', 'int', 'auto', '单体友方', '近身', profile.casterMp, 1, [`目标护甲+${profile.buff}至下回合`, `获得${profile.shield}点临时护盾`]),
     ];
   }
 

@@ -42,6 +42,8 @@ export function OverviewPanel({
     const saved = Number(window.localStorage.getItem(NARRATIVE_FONT_SCALE_KEY));
     return Number.isFinite(saved) ? clampNarrativeFontScale(saved) : 1;
   });
+  const [currentNarrativePage, setCurrentNarrativePage] = useState(1);
+  const [narrativePageInput, setNarrativePageInput] = useState('1');
   const narrativeScrollRef = useRef<HTMLDivElement>(null);
   const entries = runtime?.narration.entries || [];
   const world = runtime?.world;
@@ -51,7 +53,12 @@ export function OverviewPanel({
   const riskText = world?.risk || player.location.trouble || '未登记';
   const travelText = world?.travelState || '未移动';
   const presentCharacters = world?.presentCharacters?.length ? world.presentCharacters.join('、') : '未登记';
-  const visibleEntries = [...entries].reverse();
+  const visibleEntries = useMemo(() => [...entries].reverse(), [entries]);
+  const totalNarrativePages = visibleEntries.length;
+  const normalizedNarrativePage = totalNarrativePages
+    ? Math.min(totalNarrativePages, Math.max(1, currentNarrativePage))
+    : 1;
+  const currentNarrativeEntry = totalNarrativePages ? visibleEntries[normalizedNarrativePage - 1] : null;
   const latestEntry = entries[0];
   const latestQuest = runtime?.quests?.[0];
   const boardItems = runtime?.world.dynamicBoard?.slice(0, 6) || [];
@@ -151,6 +158,19 @@ export function OverviewPanel({
   }, []);
 
   useEffect(() => {
+    const nextPage = totalNarrativePages || 1;
+    setCurrentNarrativePage(nextPage);
+    setNarrativePageInput(String(nextPage));
+  }, [latestEntry?.id, totalNarrativePages]);
+
+  useEffect(() => {
+    const page = String(normalizedNarrativePage);
+    setNarrativePageInput(page);
+    const node = narrativeScrollRef.current;
+    if (node) node.scrollTop = 0;
+  }, [currentNarrativeEntry?.id, normalizedNarrativePage]);
+
+  useEffect(() => {
     window.localStorage.setItem(NARRATIVE_FONT_SCALE_KEY, String(narrativeFontScale));
   }, [narrativeFontScale]);
 
@@ -164,6 +184,17 @@ export function OverviewPanel({
   const rerollLatest = async () => {
     if (!canReroll || isGenerating) return;
     await onRerollLatest?.();
+  };
+
+  const jumpNarrativePage = (value: number) => {
+    const page = totalNarrativePages ? Math.min(totalNarrativePages, Math.max(1, value)) : 1;
+    setCurrentNarrativePage(page);
+    setNarrativePageInput(String(page));
+  };
+
+  const commitNarrativePageInput = () => {
+    const parsed = Number.parseInt(narrativePageInput, 10);
+    jumpNarrativePage(Number.isFinite(parsed) ? parsed : normalizedNarrativePage);
   };
 
   return (
@@ -190,6 +221,41 @@ export function OverviewPanel({
           </label>
         </div>
 
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded border border-[#8b4513]/20 bg-white/25 px-3 py-2 text-xs font-bold text-[#6b3d1f]">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => jumpNarrativePage(normalizedNarrativePage - 1)}
+              disabled={!totalNarrativePages || normalizedNarrativePage <= 1}
+              className="rounded border border-[#8b4513]/30 bg-[#5c3a21]/10 px-2.5 py-1 disabled:opacity-35"
+            >
+              上一页
+            </button>
+            <button
+              type="button"
+              onClick={() => jumpNarrativePage(normalizedNarrativePage + 1)}
+              disabled={!totalNarrativePages || normalizedNarrativePage >= totalNarrativePages}
+              className="rounded border border-[#8b4513]/30 bg-[#5c3a21]/10 px-2.5 py-1 disabled:opacity-35"
+            >
+              下一页
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <span>第</span>
+            <input
+              aria-label="正文页码"
+              value={narrativePageInput}
+              onChange={event => setNarrativePageInput(event.target.value.replace(/[^\d]/g, '').slice(0, 3))}
+              onBlur={commitNarrativePageInput}
+              onKeyDown={event => {
+                if (event.key === 'Enter') commitNarrativePageInput();
+              }}
+              className="h-7 w-14 rounded border border-[#8b4513]/30 bg-white/45 px-2 text-center font-mono text-[#3A2C1D] outline-none focus:border-[#8b4513]"
+            />
+            <span>页 / 共 {totalNarrativePages || 1} 页</span>
+          </div>
+        </div>
+
         <div
           ref={narrativeScrollRef}
           onScroll={event => {
@@ -198,22 +264,22 @@ export function OverviewPanel({
           style={narrativeFontStyle}
           className="eldred-narrative-scroll flex-1 overflow-y-auto pr-1 md:pr-3 space-y-5 md:space-y-7 text-[#3A2C1D] relative z-10"
         >
-          {visibleEntries.length === 0 && (
+          {!currentNarrativeEntry && (
             <div className="rounded border border-[#8b4513]/25 bg-[#f8edd4]/55 px-4 py-5 text-sm text-[#6b4b2e]">
               等待第一幕生成。
             </div>
           )}
-          {visibleEntries.map(entry => (
-            <article key={entry.id} className="eldred-story-card">
+          {currentNarrativeEntry && (
+            <article key={currentNarrativeEntry.id} className="eldred-story-card">
               <div className="eldred-story-head">
-                <div className="eldred-story-title">{entry.title}</div>
-                <div className="eldred-story-time">{new Date(entry.createdAt).toLocaleString()}</div>
+                <div className="eldred-story-title">{currentNarrativeEntry.title}</div>
+                <div className="eldred-story-time">{new Date(currentNarrativeEntry.createdAt).toLocaleString()}</div>
               </div>
               <div className="eldred-story-body">
-                <RichNarrative text={entry.text || '正文未返回。'} />
+                <RichNarrative text={currentNarrativeEntry.text || '正文未返回。'} />
               </div>
             </article>
-          ))}
+          )}
         </div>
 
         <div className="mt-4 pt-4 border-t border-[#8b4513]/20 flex flex-col gap-2">

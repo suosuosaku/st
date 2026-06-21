@@ -8,6 +8,7 @@ type QuestPanelProps = {
   boardItems?: DynamicBoardItem[];
   onSubmitEvent?: (event: Omit<EldredFrontendEventInput, 'player' | 'party' | 'enemies'>) => Promise<void>;
   onDismissBoardItem?: (item: DynamicBoardItem) => void | Promise<void>;
+  onOpenOverview?: () => void;
 };
 
 const EMPTY_QUESTS: Quest[] = [];
@@ -64,7 +65,7 @@ const InfoTile = ({ label, value, tone = 'normal' }: { label: string; value?: st
   );
 };
 
-export function QuestPanel({ quests = EMPTY_QUESTS, boardItems = EMPTY_BOARD_ITEMS, onSubmitEvent, onDismissBoardItem }: QuestPanelProps) {
+export function QuestPanel({ quests = EMPTY_QUESTS, boardItems = EMPTY_BOARD_ITEMS, onSubmitEvent, onDismissBoardItem, onOpenOverview }: QuestPanelProps) {
   const [selectedQuestId, setSelectedQuestId] = useState('');
   const [selectedBoardId, setSelectedBoardId] = useState('');
   const newsItems = boardItems.filter(item => NEWS_TYPES.has(item.type));
@@ -73,9 +74,14 @@ export function QuestPanel({ quests = EMPTY_QUESTS, boardItems = EMPTY_BOARD_ITE
     item.type === '委托' && !questTitleSet.has(normalizeQuestTitle(item.title || item.id)),
   );
   const selectedBoardItem = boardItems.find(item => item.id === selectedBoardId) || null;
-  const selectedQuest = selectedBoardItem ? null : quests.find(q => q.id === selectedQuestId) || quests[0] || null;
-  const selectedBoardQuest = selectedBoardItem?.type === '委托' ? questFromBoardItem(selectedBoardItem) : null;
-  const activeQuest = selectedQuest || selectedBoardQuest;
+  const selectedAcceptedBoardQuest = selectedBoardItem?.type === '委托'
+    ? quests.find(quest => normalizeQuestTitle(quest.title || quest.id) === normalizeQuestTitle(selectedBoardItem.title || selectedBoardItem.id)) || null
+    : null;
+  const selectedQuest = selectedBoardItem && !selectedAcceptedBoardQuest ? null : quests.find(q => q.id === selectedQuestId) || quests[0] || null;
+  const selectedBoardQuest = selectedBoardItem?.type === '委托' && !selectedAcceptedBoardQuest ? questFromBoardItem(selectedBoardItem) : null;
+  const activeQuest = selectedAcceptedBoardQuest || selectedQuest || selectedBoardQuest;
+  const isBoardQuest = Boolean(selectedBoardItem && selectedBoardQuest && !selectedAcceptedBoardQuest);
+  const isQuestInProgress = Boolean(activeQuest && /进行中/.test(activeQuest.status || ''));
 
   useEffect(() => {
     if (selectedBoardId && !boardItems.some(item => item.id === selectedBoardId)) setSelectedBoardId('');
@@ -94,7 +100,8 @@ export function QuestPanel({ quests = EMPTY_QUESTS, boardItems = EMPTY_BOARD_ITE
   }, [selectedBoardId, selectedQuest, selectedQuestId]);
 
   const acceptQuest = () => {
-    if (!activeQuest) return;
+    if (!activeQuest || !isBoardQuest || isQuestInProgress) return;
+    onOpenOverview?.();
     void onSubmitEvent?.({
       eventType: 'quest_accept',
       title: `揭下委托单：${activeQuest.title}`,
@@ -107,6 +114,25 @@ export function QuestPanel({ quests = EMPTY_QUESTS, boardItems = EMPTY_BOARD_ITE
         `风险：${activeQuest.risk}`,
         `报酬：${activeQuest.reward || '未登记'}`,
         `时限：${activeQuest.timeLimit || '未登记'}`,
+      ],
+    });
+  };
+
+  const abandonQuest = () => {
+    if (!activeQuest || !isQuestInProgress) return;
+    onOpenOverview?.();
+    void onSubmitEvent?.({
+      eventType: 'quest_abandon',
+      title: `中断委托：${activeQuest.title}`,
+      playerIntent: `中断正在进行的委托「${activeQuest.title}」`,
+      target: activeQuest.title,
+      quest: activeQuest,
+      extraFacts: [
+        `当前状态：${activeQuest.status || '进行中'}`,
+        `发布者：${activeQuest.source || '未登记'}`,
+        `建议等级：${activeQuest.recLevel}`,
+        `风险：${activeQuest.risk}`,
+        `报酬：${activeQuest.reward || '未登记'}`,
       ],
     });
   };
@@ -270,15 +296,23 @@ export function QuestPanel({ quests = EMPTY_QUESTS, boardItems = EMPTY_BOARD_ITE
             <div className="p-4 md:p-6 border-t border-white/5 bg-black/40 flex flex-col sm:flex-row justify-end gap-3 md:gap-4">
               <button
                 onClick={() => {
+                  if (isQuestInProgress) {
+                    abandonQuest();
+                    return;
+                  }
                   if (selectedBoardItem) void onDismissBoardItem?.(selectedBoardItem);
                 }}
-                disabled={!selectedBoardItem}
+                disabled={!selectedBoardItem && !isQuestInProgress}
                 className="btn-rpg bg-black px-6 py-2 rounded text-sm text-gray-400 border-gray-600 disabled:opacity-40"
               >
-                忽略
+                {isQuestInProgress ? '中断' : '忽略'}
               </button>
-              <button onClick={acceptQuest} className="btn-rpg bg-fantasy-gold/20 text-fantasy-gold border-fantasy-gold px-8 py-2 rounded text-sm tracking-widest hover:bg-fantasy-gold hover:text-black">
-                揭下委托单
+              <button
+                onClick={acceptQuest}
+                disabled={!isBoardQuest || isQuestInProgress}
+                className="btn-rpg bg-fantasy-gold/20 text-fantasy-gold border-fantasy-gold px-8 py-2 rounded text-sm tracking-widest hover:bg-fantasy-gold hover:text-black disabled:opacity-45 disabled:hover:bg-fantasy-gold/20 disabled:hover:text-fantasy-gold"
+              >
+                {isQuestInProgress ? '委托进行中' : '揭下委托单'}
               </button>
             </div>
           </>

@@ -945,6 +945,116 @@ export const dismissEldredBoardItem = async (runtime: EldredRuntimeSave, item: D
   });
 };
 
+const normalizedInventoryIdentity = (value: unknown) =>
+  cleanText(value)
+    .replace(/[【】「」《》“”"'`]/g, '')
+    .replace(/\s+/g, '')
+    .toLowerCase();
+
+const recordValueMatchesInventoryItem = (key: string, value: unknown, identifiers: Set<string>) => {
+  if (identifiers.has(normalizedInventoryIdentity(key))) return true;
+  if (typeof value === 'string' || typeof value === 'number') {
+    return identifiers.has(normalizedInventoryIdentity(value));
+  }
+  const record = asRecord(value);
+  return [
+    record.id,
+    record.ID,
+    record.名称,
+    record.名字,
+    record.标题,
+    record.name,
+    record.itemId,
+    record.equipmentId,
+  ].some(candidate => identifiers.has(normalizedInventoryIdentity(candidate)));
+};
+
+const removeInventoryRecordMatches = (container: unknown, identifiers: Set<string>) => {
+  const record = asRecord(container);
+  let changed = false;
+  Object.entries(record).forEach(([key, value]) => {
+    if (recordValueMatchesInventoryItem(key, value, identifiers)) {
+      delete record[key];
+      changed = true;
+    }
+  });
+  return changed;
+};
+
+const removeInventoryArrayMatches = (container: unknown, identifiers: Set<string>) => {
+  if (!Array.isArray(container)) return { value: container, changed: false };
+  const next = container.filter((value, index) => !recordValueMatchesInventoryItem(String(index), value, identifiers));
+  return { value: next, changed: next.length !== container.length };
+};
+
+const removeEquipmentLoadoutMatches = (container: unknown, identifiers: Set<string>) => {
+  const record = asRecord(container);
+  let changed = false;
+  Object.entries(record).forEach(([slot, value]) => {
+    if (recordValueMatchesInventoryItem(slot, value, identifiers)) {
+      delete record[slot];
+      changed = true;
+    }
+  });
+  return changed;
+};
+
+export type EldredInventoryDiscardTarget = {
+  id?: string;
+  name: string;
+  category?: string;
+  equipmentId?: string;
+};
+
+export const discardEldredInventoryItem = async (
+  runtime: EldredRuntimeSave,
+  item: EldredInventoryDiscardTarget,
+) => {
+  const statData = cloneRecord(runtime.rawStatData || {});
+  const identifiers = new Set(
+    [item.id, item.name, item.equipmentId]
+      .map(normalizedInventoryIdentity)
+      .filter(Boolean),
+  );
+  if (!identifiers.size) return runtime;
+
+  if (Object.keys(statData).length) {
+    const main = ensureRecordAt(statData, ['主角']);
+    removeInventoryRecordMatches(main.背包, identifiers);
+    removeInventoryRecordMatches(main.物品栏, identifiers);
+    const mainInventory = removeInventoryArrayMatches(main.inventory, identifiers);
+    if (mainInventory.changed) main.inventory = mainInventory.value;
+
+    const battle = ensureRecordAt(statData, ['主角', '战斗']);
+    removeInventoryRecordMatches(battle.装备, identifiers);
+    removeInventoryRecordMatches(main.装备, identifiers);
+    removeEquipmentLoadoutMatches(battle.装备栏, identifiers);
+    removeEquipmentLoadoutMatches(battle.装备位, identifiers);
+    removeEquipmentLoadoutMatches(main.装备栏, identifiers);
+    removeEquipmentLoadoutMatches(main.装备位, identifiers);
+    await writeStatDataToHost(statData);
+  }
+
+  const nextPlayer = runtime.player
+    ? {
+      ...runtime.player,
+      inventory: runtime.player.inventory.filter(value => !identifiers.has(normalizedInventoryIdentity(value))),
+      equipmentIds: runtime.player.equipmentIds.filter(value => !identifiers.has(normalizedInventoryIdentity(value))),
+      equipmentLoadout: Object.fromEntries(
+        Object.entries(runtime.player.equipmentLoadout)
+          .filter(([, value]) => !identifiers.has(normalizedInventoryIdentity(value))),
+      ),
+    }
+    : runtime.player;
+
+  return persistEldredRuntimeCache({
+    ...runtime,
+    player: nextPlayer,
+    rawStatData: Object.keys(statData).length ? statData : runtime.rawStatData,
+    updatedAt: nowIso(),
+  });
+};
+
 const requestGenerateThroughLoader = (config: AnyRecord) => {
   const requestId = createId('eldred-bridge');
   const parentWindow = safeScope(() => window.parent) as (Window & AnyRecord) | null;

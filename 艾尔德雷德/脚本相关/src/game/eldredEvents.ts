@@ -5,6 +5,8 @@ import { getEquipmentById, getSkillById } from './rules';
 export type EldredFrontendEventType =
   | 'opening_setup'
   | 'quest_accept'
+  | 'quest_abandon'
+  | 'item_use'
   | 'map_focus'
   | 'party_update'
   | 'equipment_change'

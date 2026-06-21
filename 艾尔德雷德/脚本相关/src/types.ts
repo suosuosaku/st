@@ -111,12 +111,10 @@ export type Equipment = {
   tags: string[];
   sourcePool: string;
   requirements?: Partial<Record<AttributeKey, number>> & { level?: number };
-  durability: number;
   acBonus?: number;
   hitBonus?: number;
   damageBonus?: number;
   traits: string[];
-  repairRule: string;
 };
 
 export type CharacterClass = {
