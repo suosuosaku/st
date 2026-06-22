@@ -669,22 +669,28 @@ const syncClueTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
   if (!row.阶段完成显示) row.阶段完成显示 = phaseDef.eventName;
 };
 
+const clampVitalPair = (current: string, max: string) => {
+  const safeMax = Math.max(0, Number(max) || 0);
+  const safeCurrent = Math.max(0, Math.min(safeMax, Number(current) || 0));
+  return `${safeCurrent}/${safeMax}`;
+};
+
 const parseCombatUnitField = (field: string) => {
-  const hp = field.match(/(\d+)\s*\/\s*(\d+)\s*HP/i);
-  const mp = field.match(/(\d+)\s*\/\s*(\d+)\s*MP/i);
+  const hp = field.match(/(-?\d+)\s*\/\s*(-?\d+)\s*HP/i);
+  const mp = field.match(/(-?\d+)\s*\/\s*(-?\d+)\s*MP/i);
   const ac = field.match(/AC\s*(\d+)/i);
   if (!hp && !mp && !ac) return null;
   const name = field
-    .replace(/\d+\s*\/\s*\d+\s*HP/ig, '')
-    .replace(/\d+\s*\/\s*\d+\s*MP/ig, '')
+    .replace(/-?\d+\s*\/\s*-?\d+\s*HP/ig, '')
+    .replace(/-?\d+\s*\/\s*-?\d+\s*MP/ig, '')
     .replace(/AC\s*\d+/ig, '')
     .trim();
   if (!name) return null;
   return {
     name,
     data: {
-      生命: hp ? `${hp[1]}/${hp[2]}` : undefined,
-      法力: mp ? `${mp[1]}/${mp[2]}` : undefined,
+      生命: hp ? clampVitalPair(hp[1], hp[2]) : undefined,
+      法力: mp ? clampVitalPair(mp[1], mp[2]) : undefined,
       护甲: ac ? Number(ac[1]) : undefined,
     },
   };
@@ -703,6 +709,14 @@ const syncCombatTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
   if (turnField) cache.回合 = numberFromText(turnField, numberFromText(cache.回合, 1));
   const logs = Array.isArray(cache.日志) ? cache.日志 : Object.values(asRecord(cache.日志));
   cache.日志 = [tag.body, ...logs.map(cleanText).filter(Boolean)].slice(0, 20);
+  if (tag.title === '战斗结算' || /结束|结算|胜利|失败|撤离|投降|击退|脱战/.test(tag.body)) {
+    cache.状态 = '已结束';
+    cache.阶段 = '战斗结束';
+    cache.结果 = tag.body;
+    cache.敌方 = {};
+    cache.行动顺序 = [];
+    return;
+  }
   const participants = ensureRecordAt(cache, ['参战名单']);
   const enemies = ensureRecordAt(cache, ['敌方']);
   const main = asRecord(statData.主角);
@@ -739,11 +753,20 @@ const syncItemTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
   const name = tagValue(tag, ['名称', '物品']) || tagPrimary(tag, 0);
   if (!name) return;
   const bag = ensureRecordAt(statData, ['主角', '背包']);
+  const field1 = tagPrimary(tag, 1);
+  const field2 = tagPrimary(tag, 2);
+  const field1LooksCategory = /装备|消耗|药剂|药水|线索|证据|材料|素材|任务|委托|钥匙|道具|物品|金币|卷轴|符咒/.test(field1);
+  const description = tagValue(tag, ['用途', '说明', '描述', '效果', '详情', '内容'])
+    || (!/^数量/.test(field2) ? field2 : '')
+    || (!field1LooksCategory && !/^来源/.test(field1) ? field1 : '');
   bag[name] = {
+    ...asRecord(bag[name]),
     名称: name,
-    分类: tagPrimary(tag, 1, '物品'),
+    分类: tagValue(tag, ['分类', '类型']) || (field1LooksCategory ? field1 : asRecord(bag[name]).分类) || '物品',
     数量: numberFromText(tagValue(tag, ['数量']) || tag.fields.find(field => /^数量/.test(field)), 1),
-    来源: tagValue(tag, ['来源']),
+    来源: tagValue(tag, ['来源']) || (!field1LooksCategory ? field1 : asRecord(bag[name]).来源),
+    用途: description || asRecord(bag[name]).用途,
+    说明: description || asRecord(bag[name]).说明,
   };
 };
 
@@ -767,10 +790,10 @@ const syncFavorOrReputation = (statData: AnyRecord, tag: NarrativeTagLine) => {
   };
 };
 
-const syncFortuneFlipTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
+const syncFortuneFlipTag = (statData: AnyRecord, baseCount?: number) => {
   const fortune = ensureRecordAt(statData, ['系统', '翻牌']);
-  const amount = Math.max(1, numberFromText(tag.body || tagPrimary(tag, 0), 1));
-  fortune.次数 = numberFromText(fortune.次数, 0) + amount;
+  const amount = 1;
+  fortune.次数 = Math.max(0, (baseCount ?? numberFromText(fortune.次数, 0)) + amount);
   fortune.最近获得 = {
     类型: '翻牌次数',
     数量: amount,
@@ -778,10 +801,18 @@ const syncFortuneFlipTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
   };
 };
 
-const syncNarrativeTagsToStatData = (rawText: string, previousStatData: unknown) => {
+const flipCountFromStatData = (statData: unknown) => {
+  const system = asRecord(asRecord(statData).系统);
+  const fortune = asRecord(system.翻牌 ?? system.抽卡 ?? system.翻牌系统);
+  return numberFromText(fortune.次数 ?? fortune.翻牌次数 ?? fortune.count, 0);
+};
+
+const syncNarrativeTagsToStatData = (rawText: string, previousStatData: unknown, referenceStatData?: unknown) => {
   const tags = extractNarrativeTagLines(rawText);
   if (!tags.length) return null;
   const nextStatData = cloneRecord(previousStatData);
+  const flipBaseCount = flipCountFromStatData(referenceStatData ?? previousStatData);
+  let fortuneFlipGranted = false;
   tags.forEach(tag => {
     appendFrontendNotice(nextStatData, tag.title, tag.body);
     if (tag.title === '新闻' || tag.title === '新闻更新') updateBoardRecord(nextStatData, '新闻', boardNewsFromTag(tag, '新闻').标题, boardNewsFromTag(tag, '新闻'));
@@ -791,9 +822,12 @@ const syncNarrativeTagsToStatData = (rawText: string, previousStatData: unknown)
     if (tag.title === '委托结算' || tag.title === '奖励结算') settleQuestTag(nextStatData, tag);
     if (tag.title === 'NPC收录') syncNpcTag(nextStatData, tag);
     if (tag.title === '线索收录' || tag.title === '线索更新' || tag.title === '线索进展') syncClueTag(nextStatData, tag);
-    if (tag.title === '战斗实况' || tag.title === '战斗回合' || tag.title === '战斗行动' || tag.title === '战斗开始') syncCombatTag(nextStatData, tag);
+    if (tag.title === '战斗实况' || tag.title === '战斗回合' || tag.title === '战斗行动' || tag.title === '战斗开始' || tag.title === '战斗结算') syncCombatTag(nextStatData, tag);
     if (tag.title === '获得物品') syncItemTag(nextStatData, tag);
-    if (tag.title === '获得一次翻牌次数') syncFortuneFlipTag(nextStatData, tag);
+    if (tag.title === '获得一次翻牌次数' && !fortuneFlipGranted) {
+      syncFortuneFlipTag(nextStatData, flipBaseCount);
+      fortuneFlipGranted = true;
+    }
     if (tag.title === '好感变化' || tag.title === '声望变化') syncFavorOrReputation(nextStatData, tag);
   });
   return nextStatData;
@@ -865,7 +899,7 @@ const syncGeneratedMvuVariables = async (rawText: string, previous: EldredRuntim
         await mvu.replaceMvuData(parsed, option);
         const parsedStatData = extractEldredStatData(parsed);
         if (parsedStatData) {
-          const noticeOnly = deriveFrontendNoticesFromNarrativeTags(rawText, parsedStatData);
+          const noticeOnly = deriveFrontendNoticesFromNarrativeTags(rawText, parsedStatData, extractEldredStatData(oldData) || previous.rawStatData || {});
           if (noticeOnly) await writeStatDataToHost(noticeOnly, { option, oldData: parsed });
           else notifyRuntimeChanged();
           return noticeOnly || parsedStatData;
@@ -894,13 +928,15 @@ const syncGeneratedMvuVariables = async (rawText: string, previous: EldredRuntim
 const mergeSyncedRuntime = (previous: EldredRuntimeSave, statData?: AnyRecord | null) => {
   const synced = statData ? runtimeFromStatData(statData) : loadEldredRuntimeSave();
   if (synced.source !== 'mvu') return previous;
+  const system = asRecord(statData?.系统);
+  const hasCombatCache = Object.prototype.hasOwnProperty.call(system, '战斗缓存');
   return {
     ...synced,
     player: mergePlayerWithCachedOpening(synced.player, previous.player),
     npcs: synced.npcs.length ? synced.npcs : previous.npcs,
     quests: synced.quests.length ? synced.quests : previous.quests,
     cluePhases: synced.cluePhases.some(phase => phase.clues.length) ? synced.cluePhases : previous.cluePhases,
-    combat: synced.combat.enemyUnits.length || synced.combat.logs.length ? synced.combat : previous.combat,
+    combat: hasCombatCache || synced.combat.enemyUnits.length || synced.combat.logs.length ? synced.combat : previous.combat,
     world: {
       currentTime: synced.world.currentTime || previous.world.currentTime,
       currentLocation: synced.world.currentLocation || previous.world.currentLocation,

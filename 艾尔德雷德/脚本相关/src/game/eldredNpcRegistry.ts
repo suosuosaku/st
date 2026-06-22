@@ -2438,28 +2438,46 @@ const classCombatSkills = (npc: Character): Skill[] => {
   ];
 };
 
-const normalizeFixedNpc = (npc: Character): Character => {
+export const completeEldredNpcMechanics = (npc: Character): Character => {
   const classId = normalizedClassId(npc);
   const equipmentLoadout = Object.keys(npc.equipmentLoadout || {}).length
     ? npc.equipmentLoadout
     : classEquipmentLoadouts[classId];
   const equipmentIds = equipmentIdsFromLoadout(equipmentLoadout);
-  const skills = classCombatSkills({ ...npc, classId, equipmentLoadout, equipmentIds });
-  const activeSkillIds = skills.slice(0, 4).map(skill => skill.id);
+  const generatedSkills = classCombatSkills({ ...npc, classId, equipmentLoadout, equipmentIds });
+  const existingCombatSkills = (npc.skills || []).filter(skill => skill && /^S[1-5]$/.test(skill.rank));
+  const skills = existingCombatSkills.length >= 2 ? existingCombatSkills : generatedSkills;
+  const generatedActiveSkillIds = skills.slice(0, 4).map(skill => skill.id);
+  const knownSkillIds = npc.knownSkillIds.length ? [...new Set([...npc.knownSkillIds, ...generatedActiveSkillIds])] : generatedActiveSkillIds;
+  const filteredActiveSkillIds = npc.activeSkillIds.length
+    ? npc.activeSkillIds.filter(id => knownSkillIds.includes(id)).slice(0, 4)
+    : [];
+  const activeSkillIds = filteredActiveSkillIds.length ? filteredActiveSkillIds : generatedActiveSkillIds;
+  const meaningfulAttributes = npc.attributes.filter(text =>
+    text && !/^(力量|敏捷|体质|智力|精神|等级|生命|法力|护甲)$/.test(text.trim())
+  );
+  const attributes = meaningfulAttributes.length
+    ? meaningfulAttributes
+    : [
+      `种族：${npc.race}`,
+      `职业：${npc.profession}`,
+      `身份：${npc.identity}`,
+      `战斗定位：${skills.map(skill => skill.actionType).slice(0, 3).join('、')}`,
+    ].filter(text => !/未登记|未记录/.test(text));
   return {
     ...npc,
     classId,
     equipmentLoadout,
     equipmentIds,
     activeSkillIds,
-    knownSkillIds: activeSkillIds,
+    knownSkillIds,
     skills,
     nextLevelExperience: npcExperienceForNextLevel(npc.stats.level || 1),
-    attributes: npc.attributes.map(text => text.replace(/技能S\d[^;；。]*/g, '战斗技能见固定技能栏')),
+    attributes: attributes.map(text => text.replace(/技能S\d[^;；。]*/g, '战斗技能见固定技能栏')),
   };
 };
 
-export const eldredFixedNpcRegistry: Character[] = rawEldredFixedNpcRegistry.map(normalizeFixedNpc);
+export const eldredFixedNpcRegistry: Character[] = rawEldredFixedNpcRegistry.map(completeEldredNpcMechanics);
 
 export const eldredFixedNpcByName = new Map(
   eldredFixedNpcRegistry.flatMap(npc => [

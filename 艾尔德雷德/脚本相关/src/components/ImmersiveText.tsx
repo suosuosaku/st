@@ -110,6 +110,13 @@ const usableText = (value: string | undefined) => {
   return text && !/^(未登记|未记录|待登记|待补充|无)$/.test(text) ? text : '';
 };
 
+const cleanNoticeValue = (value = '', options: { dropPureNumber?: boolean } = {}) => {
+  const text = value.trim();
+  if (!text || /^(无|未登记|未记录|待登记|待补充)$/.test(text)) return '';
+  if (options.dropPureNumber && /^\d{1,4}$/.test(text)) return '';
+  return text;
+};
+
 function ImageOrInitial({
   src,
   name,
@@ -312,8 +319,10 @@ type CombatUnitDisplay = {
 const extractCombatPair = (raw: string, pattern: RegExp) => {
   const match = raw.match(pattern);
   if (!match) return { value: '', next: raw };
+  const max = Math.max(0, Number(match[2]));
+  const current = Math.min(Math.max(0, Number(match[1])), max);
   return {
-    value: `${match[1]}/${match[2]}`,
+    value: `${current}/${max}`,
     next: raw.replace(match[0], ' '),
   };
 };
@@ -323,9 +332,9 @@ const parseCombatUnit = (rawUnit: string): CombatUnitDisplay => {
   const levelMatch = rest.match(/(?:Lv\.?|等级)\s*([0-9]+)/i);
   const acMatch = rest.match(/(?:AC|护甲)\s*[:：]?\s*([0-9]+)/i);
   const statusMatch = rest.match(/(?:状态|态势)\s*[:：]\s*([^，,；;｜|]+)/);
-  const hpExtract = extractCombatPair(rest, /(?:HP|生命|血量)?\s*[:：]?\s*([0-9]+)\s*\/\s*([0-9]+)\s*(?:HP|生命|血量|血)?/i);
+  const hpExtract = extractCombatPair(rest, /(?:HP|生命|血量)?\s*[:：]?\s*(-?[0-9]+)\s*\/\s*(-?[0-9]+)\s*(?:HP|生命|血量|血)?/i);
   rest = hpExtract.next;
-  const mpExtract = extractCombatPair(rest, /(?:MP|法力)?\s*[:：]?\s*([0-9]+)\s*\/\s*([0-9]+)\s*(?:MP|法力)?/i);
+  const mpExtract = extractCombatPair(rest, /(?:MP|法力)?\s*[:：]?\s*(-?[0-9]+)\s*\/\s*(-?[0-9]+)\s*(?:MP|法力)?/i);
   rest = mpExtract.next;
   [levelMatch?.[0], acMatch?.[0], statusMatch?.[0]]
     .filter(Boolean)
@@ -412,29 +421,66 @@ function CombatUnitStrip({ title, value, enemy = false }: { title: string; value
 function CombatNotice({ title, body, compact = false }: { title: string; body: string; compact?: boolean }) {
   const noticeTitle = stripLabel(title);
   const { parts, fields } = noticeFieldsFrom(body);
-  const unitParts = parts.filter(part => !splitField(part) && combatPartLooksLikeUnit(part));
+  const part = (index: number) => cleanNoticeValue(parts[index] || '');
+  const field = (...keys: string[]) => {
+    for (const key of keys) {
+      const value = cleanNoticeValue(fields.get(key));
+      if (value) return value;
+    }
+    return '';
+  };
+  const valueFor = (...keysOrIndexes: Array<string | number>) => {
+    for (const key of keysOrIndexes) {
+      const value = typeof key === 'number' ? part(key) : field(key);
+      if (value) return value;
+    }
+    return '';
+  };
+  const unitParts = parts.filter(partValue => !splitField(partValue) && combatPartLooksLikeUnit(partValue));
   const inferredAllies = unitParts[0] || '';
   const inferredEnemies = unitParts.slice(1).join('；');
-  const round = fields.get('回合') || fields.get('触发') || parts[0] || noticeTitle;
-  const actor = fields.get('行动者') || fields.get('执行者') || fields.get('单位') || fields.get('触发') || '';
-  const rawAction = fields.get('招式') || fields.get('技能名') || fields.get('行动') || fields.get('阶段') || parts[1] || '';
-  const action = combatPartLooksLikeUnit(rawAction) ? '' : rawAction;
-  const result = fields.get('结果') || fields.get('命中') || fields.get('判定') || '';
-  const damage = fields.get('伤害') || fields.get('威力') || fields.get('消耗') || '';
-  const status = fields.get('状态') || fields.get('状态变化') || fields.get('下一压力') || fields.get('环境') || '';
-  const allies = fields.get('主角方') || fields.get('友方') || fields.get('我方') || inferredAllies;
-  const enemies = fields.get('敌方') || fields.get('敌人') || inferredEnemies;
+  const isLiveSnapshot = noticeTitle === '战斗实况';
+  const isCombatAction = noticeTitle === '战斗行动';
+  const isSkillShow = noticeTitle === '技能演出';
+  const round = isLiveSnapshot
+    ? valueFor('回合', 1, '阶段', 2) || noticeTitle
+    : isCombatAction
+      ? valueFor('回合', 0) || noticeTitle
+      : noticeTitle === '战斗结算'
+        ? field('结果') || '战斗结束'
+        : noticeTitle;
+  const actor = isSkillShow
+    ? valueFor('行动者', 0)
+    : isCombatAction
+      ? valueFor('行动者', '执行者', '单位', 1)
+      : field('行动者', '执行者', '单位');
+  const rawAction = isSkillShow
+    ? valueFor('技能名', 2)
+    : isCombatAction
+      ? valueFor('招式', '技能名', '行动', 3)
+      : valueFor('招式', '技能名', '行动');
+  const action = combatPartLooksLikeUnit(rawAction) ? '' : cleanNoticeValue(rawAction, { dropPureNumber: true });
+  const result = isSkillShow ? valueFor('命中或目标值', 7, '结果', '命中', '判定') : isCombatAction ? valueFor('命中', 4, '结果', 5, '判定') : field('结果', '命中', '判定');
+  const damage = isSkillShow ? valueFor('威力', 8, '消耗', 5) : isCombatAction ? valueFor('伤害', 6, '消耗') : field('伤害', '威力', '消耗');
+  const status = isSkillShow ? valueFor('状态变化', 10, '冷却', 11, '效果', 9) : isCombatAction ? valueFor('状态', 7) : valueFor('状态', '状态变化', '下一压力', 9, '环境', 8);
+  const allies = isLiveSnapshot ? valueFor('主角方', '友方', '我方', 6) || inferredAllies : field('主角方', '友方', '我方') || inferredAllies;
+  const enemies = isLiveSnapshot ? valueFor('敌方', '敌人', 7) || inferredEnemies : field('敌方', '敌人') || inferredEnemies;
+  const liveTrigger = isLiveSnapshot ? cleanNoticeValue(valueFor('触发', 0), { dropPureNumber: true }) : '';
   const detailParts = [
-    fields.get('地点') ? `地点：${fields.get('地点')}` : '',
-    fields.get('胜负目标') ? `胜负目标：${fields.get('胜负目标')}` : '',
-    fields.get('先攻顺序') ? `先攻顺序：${fields.get('先攻顺序')}` : '',
-    actor ? `行动者：${actor}` : '',
+    liveTrigger ? `触发：${liveTrigger}` : '',
+    valueFor('阶段', 2) && isLiveSnapshot ? `阶段：${valueFor('阶段', 2)}` : '',
+    valueFor('地点', 3) ? `地点：${valueFor('地点', 3)}` : '',
+    valueFor('胜负目标', 4) ? `胜负目标：${valueFor('胜负目标', 4)}` : '',
+    valueFor('先攻顺序', 5) ? `先攻顺序：${valueFor('先攻顺序', 5)}` : '',
+    cleanNoticeValue(actor, { dropPureNumber: true }) ? `行动者：${cleanNoticeValue(actor, { dropPureNumber: true })}` : '',
+    isSkillShow && valueFor('阵营', 1) ? `阵营：${valueFor('阵营', 1)}` : '',
+    isSkillShow && valueFor('阶位', 4) ? `阶位：${valueFor('阶位', 4)}` : '',
     action ? `行动：${action}` : '',
-    result ? `判定：${result}` : '',
-    damage ? `数值：${damage}` : '',
-    status ? `状态：${status}` : '',
-    fields.get('环境') ? `环境：${fields.get('环境')}` : '',
-    fields.get('下一压力') ? `下一压力：${fields.get('下一压力')}` : '',
+    cleanNoticeValue(result) ? `判定：${cleanNoticeValue(result)}` : '',
+    cleanNoticeValue(damage) ? `数值：${cleanNoticeValue(damage)}` : '',
+    cleanNoticeValue(status) ? `状态：${cleanNoticeValue(status)}` : '',
+    isLiveSnapshot && valueFor('环境', 8) ? `环境：${valueFor('环境', 8)}` : '',
+    isLiveSnapshot && valueFor('下一压力', 9) ? `下一压力：${valueFor('下一压力', 9)}` : '',
   ].filter(Boolean);
 
   return (

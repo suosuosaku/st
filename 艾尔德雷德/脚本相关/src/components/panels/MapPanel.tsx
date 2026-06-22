@@ -18,6 +18,20 @@ export function MapPanel({ player, runtime }: { player: PlayerState; runtime?: E
   const selectedRegion = selectedRegionId ? getRegionById(selectedRegionId) : null;
   const locationDisplay = formatEldredLocation(runtime?.world, player.location);
   const currentRegion = locationDisplay.region || getRegionById(player.location.regionId);
+  const reputationByKey = new Map<string, typeof player.reputations[number]>();
+  player.reputations.forEach(record => {
+    [record.regionId, record.label].filter(Boolean).forEach(key => reputationByKey.set(key, record));
+  });
+  const reputationRows = [
+    ...regions.map(region => ({
+      id: region.id,
+      label: region.name,
+      record: reputationByKey.get(region.id) || reputationByKey.get(region.name),
+    })),
+    ...player.reputations
+      .filter(record => !regions.some(region => region.id === record.regionId || region.name === record.label))
+      .map(record => ({ id: record.regionId || record.label, label: record.label || record.regionId, record })),
+  ];
 
   return (
     <div className="h-full w-full glass-panel rounded-xl overflow-y-auto xl:overflow-hidden flex flex-col xl:flex-row relative">
@@ -127,6 +141,31 @@ export function MapPanel({ player, runtime }: { player: PlayerState; runtime?: E
                 <ShieldAlert className="w-5 h-5 text-gray-400 mb-1" />
                 <span className="text-xs text-gray-300 text-center">{selectedRegion ? selectedRegion.risk : currentRegion.risk}</span>
               </div>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs text-fantasy-gold mb-3 font-semibold tracking-wider">地区声望</div>
+            <div className="grid gap-2">
+              {reputationRows.map(row => {
+                const value = row.record?.value ?? 0;
+                const tier = row.record?.tier || '未登记';
+                const active = row.label === currentRegion.name || row.id === currentRegion.id;
+                return (
+                  <div
+                    key={row.id || row.label}
+                    className={`pixel-data-tile flex items-center justify-between gap-3 p-3 ${active ? 'border-fantasy-gold/90 bg-fantasy-gold/10' : ''}`}
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate font-serif text-sm text-gray-100">{row.label}</div>
+                      <div className="mt-1 text-[11px] text-gray-400">{tier}</div>
+                    </div>
+                    <div className={`font-mono text-base font-bold ${value >= 0 ? 'text-fantasy-gold' : 'text-fantasy-red'}`}>
+                      {value > 0 ? `+${value}` : value}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 

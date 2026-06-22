@@ -30,6 +30,23 @@ type InventoryPanelProps = {
 const PAGE_SIZE = 8;
 const CATEGORIES: InventoryCategory[] = ['消耗品', '装备', '线索', '材料', '任务物品', '其他'];
 
+const KNOWN_ITEM_DETAILS: Record<string, string> = {
+  热包纸袋: '恢复用消耗品。适合短休、赶路或轻伤后的补给，使用时由正文按当前地点与状态判定恢复量。',
+  微光糖浆: '低阶法力补给。使用时进入正文判定，可恢复少量法力或缓解轻微施法疲劳。',
+  微光糖液: '低阶法力补给。使用时进入正文判定，可恢复少量法力或缓解轻微施法疲劳。',
+  干净绷带卷: '野营、急救与低阶治疗技能的常用材料，可用于止血、包扎和稳定轻伤。',
+  行会铜券: '行会发行的小额抵扣券，可用于登记、问询、低价补给或抵扣部分杂费。',
+  热汤折扣券: '酒馆或便宜旅店可用的折扣券，适合休整、打听消息或恢复轻微疲劳。',
+};
+
+const inferItemDetail = (name: string) => {
+  if (/糖浆|糖液|法力|微光/.test(name)) return '低阶法力补给。使用时进入正文判定，可恢复少量法力或缓解轻微施法疲劳。';
+  if (/绷带|药膏|药剂|药水|治疗|急救/.test(name)) return '治疗与急救用消耗品。使用时进入正文判定，按伤势、环境和职业技能结算效果。';
+  if (/券|票|凭证|铜券|折扣/.test(name)) return '交易凭证。可在对应商铺、行会或服务点抵扣费用，具体折抵由正文按地点结算。';
+  if (/账|纸|页|残片|线索|证据|钥匙|拓印|病历|档案/.test(name)) return '线索或任务物。用于调查、对照记录、交付委托或推进相关事件。';
+  return '用途待鉴定。';
+};
+
 const slotLabel: Record<string, string> = {
   weapon: '武器',
   upper: '上身',
@@ -85,8 +102,16 @@ const itemQuantity = (raw: Record<string, any>) => {
   return quantity === undefined || quantity === null || quantity === '' ? '' : String(quantity);
 };
 
-const itemDetail = (name: string, raw: Record<string, any>) =>
-  textOf(raw.说明 ?? raw.描述 ?? raw.详情 ?? raw.内容 ?? raw.效果 ?? raw.用途, `${name} 已登记在行囊中。`);
+const itemDetail = (name: string, raw: Record<string, any>) => {
+  const detail = textOf(
+    raw.用途 ?? raw.效果 ?? raw.说明 ?? raw.描述 ?? raw.详情 ?? raw.内容,
+    '用途待鉴定。'
+  );
+  if (/已收入行囊|已经记在行囊|已登记|已记录|已加入背包|已放入背包/.test(detail)) {
+    return KNOWN_ITEM_DETAILS[name] || inferItemDetail(name);
+  }
+  return detail === '用途待鉴定。' ? KNOWN_ITEM_DETAILS[name] || inferItemDetail(name) : detail;
+};
 
 const buildInventoryItems = (player: PlayerState, runtime?: EldredRuntimeSave): InventoryDisplayItem[] => {
   const equippedIds = new Set(equippedIdsFromLoadout(player.equipmentLoadout));

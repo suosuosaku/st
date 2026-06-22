@@ -396,6 +396,7 @@ const applyRewardToState = (
       分类: reward.item.category,
       数量: (Number(existing.数量) || 0) + reward.item.quantity,
       来源: '翻牌',
+      用途: reward.item.description,
       说明: reward.item.description,
     };
     if (player && !player.inventory.includes(reward.item.name)) {
@@ -512,15 +513,21 @@ const persistFortuneRuntime = async (
 };
 
 export const addEldredFortuneFlips = async (runtime: EldredRuntimeSave, amount = 1) => {
+  const safeAmount = amount > 0 ? 1 : 0;
   const statData = cloneRecord(runtime.rawStatData);
   const fortune = {
     ...createEmptyFortuneState(),
     ...runtime.fortune,
-    flipCount: Math.max(0, runtime.fortune.flipCount + amount),
+    flipCount: Math.max(0, runtime.fortune.flipCount + safeAmount),
   };
   const fortuneRecord = ensureRecordAt(statData, ['系统', '翻牌']);
   fortuneRecord.次数 = fortune.flipCount;
-  appendFrontendNotice(statData, '获得一次翻牌次数', `次数+${amount}`);
+  fortuneRecord.最近获得 = {
+    类型: '翻牌次数',
+    数量: safeAmount,
+    时间: nowIso(),
+  };
+  appendFrontendNotice(statData, '获得一次翻牌次数', `次数+${safeAmount}`);
   const synced = await writeEldredStatDataToHost(statData);
   return persistEldredRuntimeCache({
     ...runtime,

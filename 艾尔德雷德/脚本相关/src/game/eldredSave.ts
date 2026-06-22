@@ -36,7 +36,7 @@ import {
   getSkillById,
   originLocations,
 } from './rules';
-import { findEldredFixedNpc } from './eldredNpcRegistry';
+import { completeEldredNpcMechanics, findEldredFixedNpc } from './eldredNpcRegistry';
 import { fixedNpcImageNames, resolveCharacterImage } from '../data';
 import {
   clueRecordFromCanonical,
@@ -302,6 +302,26 @@ const splitTextList = (value: unknown): string[] => {
     .split(/[、,，;\n；]+/)
     .map(item => item.trim())
     .filter(Boolean);
+};
+
+const traitListFrom = (...values: unknown[]) => {
+  const mechanicalKeys = new Set(['力量', '敏捷', '体质', '智力', '精神', '等级', '生命', '法力', '护甲', 'HP', 'MP', 'AC']);
+  for (const value of values) {
+    if (value === undefined || value === null) continue;
+    const list = Array.isArray(value)
+      ? value.map(item => textOf(item)).filter(Boolean)
+      : typeof value === 'object'
+        ? Object.entries(asRecord(value))
+          .filter(([key]) => !mechanicalKeys.has(key))
+          .map(([key, item]) => {
+            const detail = textOf(item);
+            return detail ? `${key}：${detail}` : key;
+          })
+        : splitTextList(value);
+    const meaningful = list.filter(item => item && !mechanicalKeys.has(item.trim()));
+    if (meaningful.length) return meaningful;
+  }
+  return [];
 };
 
 const valueListFrom = (raw: unknown): unknown[] => {
@@ -583,13 +603,20 @@ const mechanicsFromText = (raw: unknown): AnyRecord => {
   return record;
 };
 
+const clampNumber = (value: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, value));
+
 const parseVitals = (value: unknown, fallbackCurrent: number, fallbackMax: number) => {
-  if (typeof value === 'number') return { current: value, max: fallbackMax };
+  if (typeof value === 'number') {
+    const max = Math.max(0, fallbackMax);
+    return { current: clampNumber(value, 0, max), max };
+  }
   const source = String(value ?? '');
-  const [left, right] = source.match(/\d+/g)?.map(Number) || [];
+  const [left, right] = source.match(/-?\d+/g)?.map(Number) || [];
+  const max = Math.max(0, right ?? left ?? fallbackMax);
   return {
-    current: left ?? fallbackCurrent,
-    max: right ?? left ?? fallbackMax,
+    current: clampNumber(left ?? fallbackCurrent, 0, max),
+    max,
   };
 };
 
@@ -1304,7 +1331,7 @@ const characterFromVariable = (name: string, raw: unknown, type: Character['type
     fixedStats?.maxMp ?? derived.maxMp,
   );
 
-  return {
+  const character: Character = {
     id: textOf(source.id, fixedNpc?.id || name),
     name,
     fullName: textOf(source.全名 ?? source.fullName, fixedNpc?.fullName || name),
@@ -1342,8 +1369,8 @@ const characterFromVariable = (name: string, raw: unknown, type: Character['type
     equipmentLoadout: loadout,
     activeSkillIds,
     knownSkillIds,
-    attributes: splitTextList(source.特质 ?? source.属性 ?? source.标签 ?? source.attributes).length
-      ? splitTextList(source.特质 ?? source.属性 ?? source.标签 ?? source.attributes)
+    attributes: traitListFrom(source.特质, source.标签, source.attributes, source.人物特质, source.情报特质).length
+      ? traitListFrom(source.特质, source.标签, source.attributes, source.人物特质, source.情报特质)
       : fixedNpc?.attributes || [],
     skills: directSkills.length
       ? directSkills
@@ -1351,6 +1378,7 @@ const characterFromVariable = (name: string, raw: unknown, type: Character['type
         ? activeSkillIds.map(id => getSkillById(id)).filter((skill): skill is NonNullable<typeof skill> => Boolean(skill))
         : fixedNpc?.skills || [],
   };
+  return fixedNpc ? character : completeEldredNpcMechanics(character);
 };
 
 const npcsFromStatData = (statData: AnyRecord): Character[] => {
@@ -1465,6 +1493,15 @@ const isAllyCombatName = (name: string, aliases: Set<string>) => {
 
 const combatFromStatData = (statData: AnyRecord): EldredRuntimeSave['combat'] => {
   const cache = asRecord(asRecord(statData.系统).战斗缓存);
+  const phaseText = textOf(cache.阶段 ?? cache.状态 ?? cache.结果 ?? cache.结算 ?? cache.战斗状态);
+  const logs = splitTextList(cache.回合变化 ?? cache.日志);
+  if (/结束|已结束|战斗结束|脱战|撤离成功|投降|击退|结算完成|胜利|失败/.test(phaseText)) {
+    return {
+      turn: Math.max(1, numberOf(cache.回合, 1)),
+      enemyUnits: [],
+      logs,
+    };
+  }
   const participants = asRecord(cache.参战名单);
   const allyAliases = allyCombatAliasesFrom(statData);
   const enemyUnits = Object.entries(participants)
@@ -1476,7 +1513,7 @@ const combatFromStatData = (statData: AnyRecord): EldredRuntimeSave['combat'] =>
   return {
     turn: Math.max(1, numberOf(cache.回合, 1)),
     enemyUnits: [...enemyUnits, ...directEnemies],
-    logs: splitTextList(cache.回合变化 ?? cache.日志),
+    logs,
   };
 };
 
@@ -1645,6 +1682,44 @@ const fortuneFromStatData = (statData: AnyRecord): EldredFortuneState => {
   };
 };
 
+const latestFrontendNoticeTitle = (statData: AnyRecord) => {
+  const notices = asArray(asRecord(statData.系统).前端提示);
+  const latest = notices[notices.length - 1];
+  return textOf(asRecord(latest).标题 ?? asRecord(latest).类型 ?? asRecord(latest).title);
+};
+
+const singleFlipGrantDetected = (statData: AnyRecord) => {
+  const fortune = asRecord(asRecord(statData.系统).翻牌 ?? asRecord(statData.系统).抽卡 ?? asRecord(statData.系统).翻牌系统);
+  const recent = asRecord(fortune.最近获得);
+  return /获得一次翻牌次数/.test(latestFrontendNoticeTitle(statData))
+    || textOf(recent.类型).includes('翻牌次数') && numberOf(recent.数量, 1) === 1;
+};
+
+const mergeFortuneWithCachedRuntime = (
+  synced: EldredRuntimeSave,
+  cached?: EldredRuntimeSave | null,
+  statData?: AnyRecord | null,
+) => {
+  if (!cached || !statData || !singleFlipGrantDetected(statData)) return synced.fortune;
+  const cachedCount = Math.max(0, cached.fortune.flipCount || 0);
+  if (synced.fortune.flipCount > cachedCount + 1) {
+    return {
+      ...synced.fortune,
+      flipCount: cachedCount + 1,
+    };
+  }
+  return synced.fortune;
+};
+
+const combatCacheIsEnded = (statData?: AnyRecord | null) => {
+  const cache = asRecord(asRecord(statData?.系统).战斗缓存);
+  const phaseText = textOf(cache.阶段 ?? cache.状态 ?? cache.结果 ?? cache.结算 ?? cache.战斗状态);
+  return /结束|已结束|战斗结束|脱战|撤离成功|投降|击退|结算完成|胜利|失败/.test(phaseText);
+};
+
+const combatCacheExists = (statData?: AnyRecord | null) =>
+  Object.prototype.hasOwnProperty.call(asRecord(statData?.系统), '战斗缓存');
+
 const normalizeRuntime = (raw: Partial<EldredRuntimeSave>, source: EldredRuntimeSource): EldredRuntimeSave => {
   const entries = Array.isArray(raw.narration?.entries) ? raw.narration.entries : [];
   const messages = Array.isArray(raw.messages) ? raw.messages : [];
@@ -1769,14 +1844,14 @@ export const loadEldredRuntimeSave = (): EldredRuntimeSave => {
         cluePhases: runtime.cluePhases.some(phase => phase.clues.length)
           ? runtime.cluePhases
           : canUseCachedRuntime ? cachedRuntime?.cluePhases || runtime.cluePhases : runtime.cluePhases,
-        combat: runtime.combat.enemyUnits.length || runtime.combat.logs.length
+        combat: combatCacheExists(statData) || combatCacheIsEnded(statData) || runtime.combat.enemyUnits.length || runtime.combat.logs.length
           ? runtime.combat
           : canUseCachedRuntime ? cachedRuntime?.combat || runtime.combat : runtime.combat,
         world,
         narration: canUseCachedRuntime ? cachedRuntime?.narration || runtime.narration : runtime.narration,
         messages: canUseCachedRuntime ? cachedRuntime?.messages || runtime.messages : runtime.messages,
         fortune: runtime.fortune.flipCount || runtime.fortune.logs.length || runtime.fortune.activeEncounters.length || runtime.fortune.dailyKey
-          ? runtime.fortune
+          ? mergeFortuneWithCachedRuntime(runtime, canUseCachedRuntime ? cachedRuntime : null, statData)
           : cachedFortune || runtime.fortune,
       };
     }
