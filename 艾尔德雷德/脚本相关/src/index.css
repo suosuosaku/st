@@ -2520,30 +2520,36 @@ body,
   background: rgba(212, 175, 55, 0.16);
 }
 
-/* Light theme pass: scoped to the playing console so creation keeps its original styling. */
+/* Light theme pass: v3.5.25 palette only, scoped to the playing console. */
 html[data-eldred-theme="light"] [data-eldred-playing="true"] {
-  --eldred-bg-deep: #d2b77f;
-  --eldred-bg-panel: rgba(255, 247, 224, 0.48);
-  --eldred-bg-panel-soft: rgba(244, 221, 174, 0.42);
-  --eldred-text-main: #3a2618;
-  --eldred-text-soft: #6b4b2b;
-  --eldred-line-gold: rgba(139, 91, 32, 0.42);
-  --eldred-line-red: rgba(123, 51, 39, 0.42);
   background:
-    radial-gradient(circle at 50% 0%, rgba(224, 192, 128, 0.28) 0%, transparent 34rem),
-    linear-gradient(180deg, #cdb071, #a87d3f) !important;
-  color: #3a2618 !important;
+    radial-gradient(circle at 50% 0%, #1A2235 0%, #08090A 70%),
+    url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E") !important;
+  background-color: #08090A !important;
+  color: #d1d5db !important;
 }
 
-html[data-eldred-theme="light"] [data-eldred-playing="true"] [data-eldred-hud="tabs"] {
+html[data-eldred-theme="light"] [data-eldred-playing="true"] .glass-panel {
+  border-color: #8a672b !important;
   background:
-    linear-gradient(180deg, rgba(31, 21, 10, 0.94), rgba(10, 10, 12, 0.96)),
+    linear-gradient(135deg, rgba(31, 21, 10, 0.96), rgba(10, 10, 12, 0.98) 58%, rgba(42, 24, 8, 0.94)),
     repeating-linear-gradient(0deg, rgba(255, 220, 120, 0.025) 0 2px, transparent 2px 8px) !important;
-  color: #f2e8cf !important;
-  box-shadow:
-    0 0 0 1px rgba(255, 226, 128, 0.32),
-    5px 5px 0 rgba(0, 0, 0, 0.36),
-    0 12px 28px rgba(0, 0, 0, 0.5) !important;
+}
+
+html[data-eldred-theme="light"] [data-eldred-playing="true"] .glass-panel-light {
+  border-color: rgba(138, 103, 43, 0.78) !important;
+  background:
+    linear-gradient(180deg, rgba(21, 18, 18, 0.9), rgba(5, 7, 9, 0.92)),
+    repeating-linear-gradient(90deg, rgba(245, 209, 113, 0.035) 0 3px, transparent 3px 12px) !important;
+}
+
+html[data-eldred-theme="light"] [data-eldred-playing="true"] .parchment-panel {
+  background-image:
+    radial-gradient(circle at 100% 0%, rgba(200, 180, 140, 0.4) 0%, transparent 50%),
+    radial-gradient(circle at 0% 100%, rgba(160, 130, 90, 0.3) 0%, transparent 50%),
+    url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.6' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.05'/%3E%3C/svg%3E") !important;
+  background-color: #EADBBB !important;
+  color: #3A2C1D !important;
 }
 
 html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-narrative-scroll {
@@ -2551,15 +2557,14 @@ html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-narrative-s
 }
 
 html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-story-card {
-  width: min(100%, 76rem) !important;
-  border: 3px solid rgba(139, 91, 32, 0.42) !important;
+  border-color: rgba(139, 91, 32, 0.42) !important;
   background:
     linear-gradient(180deg, rgba(255, 247, 224, 0.48), rgba(244, 221, 174, 0.42)),
     repeating-linear-gradient(0deg, rgba(122, 71, 25, 0.025) 0 2px, transparent 2px 10px) !important;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 250, 230, 0.66),
-    inset 0 0 46px rgba(121, 73, 25, 0.07),
-    4px 4px 0 rgba(119, 69, 22, 0.1) !important;
+}
+
+html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-story-head {
+  border-bottom-color: rgba(139, 69, 19, 0.18) !important;
 }
 
 html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-story-title {
@@ -2572,12 +2577,10 @@ html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-story-time 
 
 html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-narrative-paragraph {
   color: #3a281a !important;
-  line-height: 2.02 !important;
 }
 
 html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-drop-cap {
   color: #7b3d13 !important;
-  text-shadow: 1px 1px 0 rgba(255, 244, 210, 0.72) !important;
 }
 
 html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-location-line,
@@ -2596,7 +2599,6 @@ html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-dialogue-na
   border-color: rgba(123, 66, 24, 0.78) !important;
   background: linear-gradient(180deg, rgba(255, 229, 158, 0.88), rgba(211, 157, 82, 0.78)) !important;
   color: #6a3214 !important;
-  box-shadow: 2px 2px 0 rgba(92, 45, 12, 0.14) !important;
 }
 
 html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-dialogue-bubble {
@@ -2604,10 +2606,126 @@ html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-dialogue-bu
 }
 
 html[data-eldred-theme="light"] [data-eldred-playing="true"] .pixel-speech {
+  border-color: #8a672b !important;
   background:
     linear-gradient(180deg, rgba(252, 238, 196, 0.86), rgba(229, 196, 131, 0.78)),
     linear-gradient(90deg, rgba(255, 255, 255, 0.28), transparent 30%) !important;
   color: #3a2411 !important;
+}
+
+html[data-eldred-theme="light"] [data-eldred-playing="true"] .pixel-data-tile {
+  border-color: rgba(138, 103, 43, 0.68) !important;
+  background:
+    linear-gradient(135deg, rgba(42, 23, 11, 0.82), rgba(8, 10, 12, 0.72)),
+    repeating-linear-gradient(90deg, rgba(255, 224, 128, 0.04) 0 3px, transparent 3px 10px) !important;
+  color: inherit !important;
+}
+
+html[data-eldred-theme="light"] [data-eldred-playing="true"] .dossier-hero {
+  border-bottom-color: rgba(138, 103, 43, 0.42) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 232, 150, 0.08), rgba(0, 0, 0, 0)),
+    repeating-linear-gradient(90deg, rgba(255, 224, 128, 0.025) 0 4px, transparent 4px 14px) !important;
+  color: inherit !important;
+}
+
+html[data-eldred-theme="light"] [data-eldred-playing="true"] .dossier-attribute {
+  border-color: rgba(201, 162, 70, 0.72) !important;
+  background:
+    linear-gradient(180deg, rgba(50, 43, 38, 0.94), rgba(14, 14, 16, 0.96)),
+    linear-gradient(135deg, transparent 0 72%, rgba(0, 0, 0, 0.28) 73% 100%) !important;
+}
+
+html[data-eldred-theme="light"] [data-eldred-playing="true"] .dossier-meter {
+  border-color: rgba(138, 103, 43, 0.62) !important;
+  background: rgba(255, 255, 255, 0.045) !important;
+  color: #d9d5ca !important;
+}
+
+html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-notice-frame {
+  border-color: #a57933 !important;
+  background:
+    linear-gradient(180deg, rgba(34, 22, 13, 0.99), rgba(10, 10, 13, 0.99)),
+    repeating-linear-gradient(90deg, rgba(255, 221, 112, 0.045) 0 3px, transparent 3px 12px) !important;
+}
+
+html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-notice-kicker {
+  border-color: rgba(231, 187, 89, 0.84) !important;
+  background:
+    linear-gradient(180deg, rgba(137, 88, 24, 0.96), rgba(45, 27, 11, 0.99)),
+    repeating-linear-gradient(0deg, rgba(255, 234, 154, 0.08) 0 2px, transparent 2px 7px) !important;
+  color: #fff0b2 !important;
+}
+
+html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-notice-primary {
+  border-color: rgba(255, 231, 151, 0.28) !important;
+  background: linear-gradient(135deg, rgba(255, 222, 128, 0.1), rgba(255, 255, 255, 0.035)) !important;
+  color: #fff8d8 !important;
+}
+
+html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-notice-detail,
+html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-notice-meta {
+  border-left-color: rgba(231, 187, 89, 0.72) !important;
+  background: rgba(255, 255, 255, 0.07) !important;
+  color: #ffe8b0 !important;
+}
+
+html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-notice-meta {
+  border-color: rgba(116, 214, 255, 0.7) !important;
+  color: #bfefff !important;
+}
+
+html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-npc-detail {
+  border-color: rgba(255, 231, 151, 0.15) !important;
+  border-left-color: rgba(116, 214, 255, 0.75) !important;
+  background:
+    linear-gradient(90deg, rgba(116, 214, 255, 0.1), transparent 56%),
+    rgba(255, 255, 255, 0.078) !important;
+}
+
+html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-combat-frame {
+  border-color: #9c3f30 !important;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 131, 71, 0.18), transparent 46%),
+    linear-gradient(180deg, rgba(41, 9, 8, 0.99), rgba(9, 7, 10, 0.99)),
+    repeating-linear-gradient(0deg, rgba(255, 91, 64, 0.06) 0 2px, transparent 2px 8px) !important;
+}
+
+html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-combat-head {
+  border-color: rgba(255, 129, 91, 0.68) !important;
+  background: linear-gradient(180deg, rgba(117, 28, 21, 0.9), rgba(38, 13, 10, 0.95)) !important;
+  color: #ffd0b4 !important;
+}
+
+html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-clue-row {
+  border-color: rgba(255, 231, 151, 0.2) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: rgba(255, 238, 194, 0.72) !important;
+}
+
+html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-clue-token,
+html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-clue-event {
+  border-color: rgba(255, 231, 151, 0.25) !important;
+  background: rgba(0, 0, 0, 0.3) !important;
+  color: inherit !important;
+}
+
+html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-clue-event {
+  color: #fff0b7 !important;
+}
+
+html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-clue-page-row {
+  border-color: rgba(255, 226, 125, 0.22) !important;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.055), rgba(0, 0, 0, 0.24)) !important;
+  color: inherit !important;
+}
+
+html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-clue-detail-panel {
+  border-color: rgba(138, 103, 43, 0.72) !important;
+  background:
+    linear-gradient(180deg, rgba(35, 25, 15, 0.92), rgba(8, 9, 12, 0.96)),
+    repeating-linear-gradient(0deg, rgba(255, 226, 128, 0.035) 0 2px, transparent 2px 12px) !important;
+  color: inherit !important;
 }
 
 html[data-eldred-theme="light"] [data-eldred-playing="true"] .eldred-theme-button {
