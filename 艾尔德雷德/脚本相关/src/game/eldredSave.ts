@@ -36,7 +36,7 @@ import {
   getSkillById,
   originLocations,
 } from './rules';
-import { completeEldredNpcMechanics, findEldredFixedNpc } from './eldredNpcRegistry';
+import { completeEldredNpcMechanics, findEldredFixedNpc, generateNpcAttributes } from './eldredNpcRegistry';
 import { fixedNpcImageNames, resolveCharacterImage } from '../data';
 import {
   clueRecordFromCanonical,
@@ -55,6 +55,15 @@ export type EldredRuntimeSource = 'mvu' | 'cache' | 'empty';
 
 export type EldredNarrationKind = 'opening' | 'free' | 'event' | 'combat';
 
+export type EldredNarrationVariant = {
+  id: string;
+  text: string;
+  rawText?: string;
+  rawStatDataAfter?: AnyRecord;
+  createdAtIso: string;
+  sourceEventType?: string;
+};
+
 export type EldredNarrationEntry = {
   id: string;
   kind: EldredNarrationKind;
@@ -66,6 +75,10 @@ export type EldredNarrationEntry = {
   characterTags?: string[];
   rawStatDataBefore?: AnyRecord;
   rawStatDataAfter?: AnyRecord;
+  variants?: EldredNarrationVariant[];
+  activeVariantIndex?: number;
+  summaryBatchId?: string;
+  summarizedAtIso?: string;
 };
 
 export type EldredRuntimeMessage = {
@@ -79,6 +92,23 @@ export type EldredNarrationState = {
   entries: EldredNarrationEntry[];
   lastGeneratedAt?: string;
   lastError?: string;
+};
+
+export type EldredMemorySummaryBatch = {
+  id: string;
+  entryIds: string[];
+  summary: string;
+  createdAtIso: string;
+};
+
+export type EldredRuntimeMemory = {
+  summary: {
+    current: string;
+    batches: EldredMemorySummaryBatch[];
+    lastGeneratedAtIso?: string;
+    lastError?: string;
+  };
+  records: AnyRecord[];
 };
 
 export type EldredRuntimeSave = {
@@ -108,6 +138,7 @@ export type EldredRuntimeSave = {
   rawStatData?: AnyRecord;
   fortune: EldredFortuneState;
   narration: EldredNarrationState;
+  memory: EldredRuntimeMemory;
   messages: EldredRuntimeMessage[];
   updatedAt: string;
   contextKey?: string;
@@ -139,6 +170,14 @@ export const createEmptyNarrationState = (): EldredNarrationState => ({
   entries: [],
 });
 
+export const createEmptyEldredMemory = (): EldredRuntimeMemory => ({
+  summary: {
+    current: '',
+    batches: [],
+  },
+  records: [],
+});
+
 export const createEmptyEldredRuntimeSave = (): EldredRuntimeSave => ({
   schemaVersion: ELDRED_SAVE_SCHEMA_VERSION,
   source: 'empty',
@@ -154,6 +193,7 @@ export const createEmptyEldredRuntimeSave = (): EldredRuntimeSave => ({
   world: emptyWorld(),
   fortune: createEmptyFortuneState(),
   narration: createEmptyNarrationState(),
+  memory: createEmptyEldredMemory(),
   messages: [],
   updatedAt: new Date().toISOString(),
 });
@@ -1258,6 +1298,58 @@ export const mergePlayerWithCachedOpening = (synced?: PlayerState | null, cached
   } satisfies PlayerState;
 };
 
+const usefulProfileText = (value: unknown) => {
+  const text = textOf(value);
+  return text && !/^(未登记|未记录|待登记|待补充|未知|无)$/.test(text) ? text : '';
+};
+
+const stableNpcIndex = (name: string, modulo: number) => {
+  let hash = 0;
+  for (let index = 0; index < name.length; index += 1) hash = (hash * 31 + name.charCodeAt(index)) >>> 0;
+  return modulo > 0 ? hash % modulo : 0;
+};
+
+const inferNpcGender = (name: string, source: AnyRecord) =>
+  usefulProfileText(source.性别 ?? source.gender)
+  || (/姐|娘|女|姨|婆|娜|娅|莉|妮|莎|薇|拉|雅|琳|菈|姬/.test(name)
+    ? '女'
+    : /哥|叔|伯|爷|男|骑士|矿工|卫兵|队长|老板/.test(name)
+      ? '男'
+      : ['男', '女', '中性'][stableNpcIndex(name, 3)]);
+
+const inferNpcRaceId = (name: string, source: AnyRecord): CharacterRaceId => {
+  const direct = usefulProfileText(source.raceId ?? source.种族 ?? source.race);
+  if (direct) return resolveRaceId(direct);
+  const pool: CharacterRaceId[] = ['human', 'half-elf', 'halfling', 'dwarf', 'elf', 'beastkin', 'gnome', 'fae-blood'];
+  return pool[stableNpcIndex(name, pool.length)];
+};
+
+const inferNpcClassId = (source: AnyRecord, roleText: string): CharacterClassId => {
+  const direct = usefulProfileText(source.classId ?? source.职业 ?? source.profession);
+  if (direct) return resolveClassId(direct);
+  if (/骑士|卫兵|守门|护卫|巡逻|盾|秩序/.test(roleText)) return 'paladin';
+  if (/老板|掌柜|佣兵|教头|打手|矿工|搬运|前排/.test(roleText)) return 'battle-master';
+  if (/医|祭|教会|祈|病棚|救济|修道/.test(roleText)) return 'priest';
+  if (/药|炼金|毒|草药|药剂|瓶/.test(roleText)) return 'alchemist';
+  if (/工匠|修理|机关|铆|锻|矿轨|魔导/.test(roleText)) return 'artificer';
+  if (/记录|学徒|书记|档案|账本|观星|教师|贤者/.test(roleText)) return 'sage';
+  if (/契约|召唤|使魔|圆阵/.test(roleText)) return 'summoner';
+  return 'ranger';
+};
+
+const inferNpcAge = (name: string, raceId: CharacterRaceId, source: AnyRecord) => {
+  const direct = usefulProfileText(source.年龄 ?? source.age);
+  if (direct) return direct;
+  const offset = stableNpcIndex(name, 28);
+  if (['elf', 'fae', 'treeborn', 'aasimar', 'tiefling', 'record-spirit'].includes(raceId)) return `${60 + offset * 3}岁`;
+  if (raceId === 'dwarf' || raceId === 'frostborn') return `${32 + offset}岁`;
+  return `${18 + offset}岁`;
+};
+
+const inferNpcAffiliation = (source: AnyRecord) =>
+  usefulProfileText(source.所属 ?? source.所属地区 ?? source.所属地标 ?? source.势力 ?? source.affiliation)
+  || '当前地标临时登记';
+
 const characterFromVariable = (name: string, raw: unknown, type: Character['type'], fixed = false): Character => {
   const source = asRecord(raw);
   const fixedNpc = findEldredFixedNpc(name);
@@ -1282,10 +1374,22 @@ const characterFromVariable = (name: string, raw: unknown, type: Character['type
     ...asRecord(source.战斗 ?? source.数值 ?? source.机制数值 ?? source),
   };
   const directStats = asRecord(source.stats);
-  const classId = resolveClassId(source.classId ?? source.职业 ?? battle.职业 ?? source.profession ?? fixedNpc?.classId);
-  const raceId = resolveRaceId(source.raceId ?? source.种族 ?? battle.种族 ?? source.race ?? fixedNpc?.raceId);
+  const roleText = [
+    name,
+    source.身份,
+    source.职责,
+    source.职业,
+    source.profession,
+    source.所属,
+    source.特质,
+    source.标签,
+  ].map(value => textOf(value)).filter(Boolean).join('｜');
+  const raceId = fixedNpc?.raceId || inferNpcRaceId(name, { ...source, ...battle });
+  const classId = fixedNpc?.classId || inferNpcClassId({ ...source, ...battle }, roleText);
   const cls = getClassById(classId);
-  const baseAttributes = attributesFrom(firstDefined(battle.五维, battle.属性, source.五维, source.属性, directStats), fixedAttributes || cls.presetStats);
+  const level = Math.max(1, numberOf(battle.等级 ?? source.等级 ?? directStats.level ?? source.level, fixedStats?.level || 1));
+  const generatedAttributes = generateNpcAttributes(level, classId, raceId, roleText);
+  const baseAttributes = attributesFrom(firstDefined(battle.五维, battle.属性, source.五维, source.属性, directStats), fixedAttributes || generatedAttributes || cls.presetStats);
   const equipmentSource = firstDefined(battle.装备栏, battle.装备位, source.装备, source.装备栏, source.装备位);
   const parsedLoadout = loadoutFrom(equipmentSource);
   const parsedEquipmentIds = [...new Set([...equipmentIdsFrom(equipmentSource), ...equippedIdsFromLoadout(parsedLoadout)])];
@@ -1300,7 +1404,6 @@ const characterFromVariable = (name: string, raw: unknown, type: Character['type
     .slice(0, 4);
   const activeSkillIds = parsedActiveSkillIds.length ? parsedActiveSkillIds : fixedNpc?.activeSkillIds || [];
   const directSkills = Array.isArray(source.skills) ? source.skills : [];
-  const level = Math.max(1, numberOf(battle.等级 ?? source.等级 ?? directStats.level ?? source.level, fixedStats?.level || 1));
   const derived = calculateDerivedStats(level, classId, baseAttributes, equippedIdsFromLoadout(loadout), raceId);
   const hp = parseVitals(
     firstDefined(
@@ -1330,27 +1433,32 @@ const characterFromVariable = (name: string, raw: unknown, type: Character['type
     fixedStats?.mp ?? derived.mp,
     fixedStats?.maxMp ?? derived.maxMp,
   );
+  const resolvedGender = fixedNpc?.gender || inferNpcGender(name, source);
 
   const character: Character = {
     id: textOf(source.id, fixedNpc?.id || name),
     name,
     fullName: textOf(source.全名 ?? source.fullName, fixedNpc?.fullName || name),
     type,
-    race: textOf(source.race ?? source.种族, fixedNpc?.race || getRaceById(raceId).name),
+    race: usefulProfileText(source.race ?? source.种族) || fixedNpc?.race || getRaceById(raceId).name,
     raceId,
-    gender: textOf(source.性别 ?? source.gender, fixedNpc?.gender || '未记录'),
-    age: textOf(source.年龄 ?? source.age, fixedNpc?.age === undefined ? '未记录' : String(fixedNpc.age)),
-    affiliation: textOf(source.所属 ?? source.所属地区 ?? source.所属地标 ?? source.势力 ?? source.affiliation, fixedNpc?.affiliation || '未登记'),
-    identity: textOf(source.身份 ?? source.职责 ?? source.identity, fixedNpc?.identity || '未登记'),
+    gender: resolvedGender,
+    age: fixedNpc?.age === undefined ? inferNpcAge(name, raceId, source) : String(fixedNpc.age),
+    affiliation: fixedNpc?.affiliation || inferNpcAffiliation(source),
+    identity: usefulProfileText(source.身份 ?? source.职责 ?? source.identity) || fixedNpc?.identity || '可回访人物',
     classId,
-    profession: textOf(source.职业 ?? source.职责 ?? source.profession, fixedNpc?.profession || getClassById(classId).name),
+    profession: usefulProfileText(source.职业 ?? source.职责 ?? source.profession) || fixedNpc?.profession || getClassById(classId).name,
     avatarUrl: resolveCharacterImage(name, '头像', {
       fixed: fixed || Boolean(fixedNpc),
       raw: source.头像 ?? source.avatarUrl ?? source.avatar ?? fixedNpc?.avatarUrl,
+      gender: resolvedGender,
+      generic: !fixed && !fixedNpc,
     }),
     portraitUrl: resolveCharacterImage(name, '立绘', {
       fixed: fixed || Boolean(fixedNpc),
       raw: source.立绘 ?? source.portraitUrl ?? source.portrait ?? fixedNpc?.portraitUrl,
+      gender: resolvedGender,
+      generic: !fixed && !fixedNpc,
     }),
     stats: {
       ...derived,
@@ -1747,20 +1855,67 @@ const normalizeRuntime = (raw: Partial<EldredRuntimeSave>, source: EldredRuntime
     narration: {
       entries: entries
         .filter(entry => entry && typeof entry === 'object')
-        .map(entry => ({
-          id: textOf(entry.id, `nar-${Date.now()}`),
-          kind: (['opening', 'free', 'event', 'combat'].includes(textOf(entry.kind)) ? entry.kind : 'event') as EldredNarrationKind,
-          title: textOf(entry.title, '正文'),
-          userInput: textOf(entry.userInput),
-          text: textOf(entry.text),
-          createdAt: textOf(entry.createdAt, new Date().toISOString()),
-          sourceEventType: textOf(entry.sourceEventType),
-          characterTags: splitTextList(entry.characterTags),
-          rawStatDataBefore: asRecord(entry.rawStatDataBefore),
-          rawStatDataAfter: asRecord(entry.rawStatDataAfter),
-        })),
+        .map(entry => {
+          const createdAt = textOf(entry.createdAt, new Date().toISOString());
+          const variants = Array.isArray(entry.variants) && entry.variants.length
+            ? entry.variants
+              .filter(variant => variant && typeof variant === 'object')
+              .map((variant, index) => ({
+                id: textOf(variant.id, `${textOf(entry.id, 'nar')}-var-${index}`),
+                text: textOf(variant.text),
+                rawText: textOf(variant.rawText),
+                rawStatDataAfter: asRecord(variant.rawStatDataAfter),
+                createdAtIso: textOf(variant.createdAtIso, createdAt),
+                sourceEventType: textOf(variant.sourceEventType),
+              }))
+            : [{
+              id: `${textOf(entry.id, 'nar')}-var-0`,
+              text: textOf(entry.text),
+              rawText: '',
+              rawStatDataAfter: asRecord(entry.rawStatDataAfter),
+              createdAtIso: createdAt,
+              sourceEventType: textOf(entry.sourceEventType),
+            }];
+          const activeVariantIndex = Math.min(Math.max(0, numberOf(entry.activeVariantIndex, variants.length - 1)), Math.max(0, variants.length - 1));
+          const activeVariant = variants[activeVariantIndex] || variants[0];
+          return {
+            id: textOf(entry.id, `nar-${Date.now()}`),
+            kind: (['opening', 'free', 'event', 'combat'].includes(textOf(entry.kind)) ? entry.kind : 'event') as EldredNarrationKind,
+            title: textOf(entry.title, '正文'),
+            userInput: textOf(entry.userInput),
+            text: activeVariant?.text || textOf(entry.text),
+            createdAt,
+            sourceEventType: textOf(entry.sourceEventType),
+            characterTags: splitTextList(entry.characterTags),
+            rawStatDataBefore: asRecord(entry.rawStatDataBefore),
+            rawStatDataAfter: asRecord(activeVariant?.rawStatDataAfter ?? entry.rawStatDataAfter),
+            variants,
+            activeVariantIndex,
+            summaryBatchId: textOf(entry.summaryBatchId),
+            summarizedAtIso: textOf(entry.summarizedAtIso),
+          };
+        }),
       lastGeneratedAt: textOf(raw.narration?.lastGeneratedAt),
       lastError: textOf(raw.narration?.lastError),
+    },
+    memory: {
+      summary: {
+        current: textOf(raw.memory?.summary?.current),
+        batches: Array.isArray(raw.memory?.summary?.batches)
+          ? raw.memory.summary.batches
+            .filter(batch => batch && typeof batch === 'object')
+            .map((batch, index) => ({
+              id: textOf(batch.id, `summary-${index}`),
+              entryIds: splitTextList(batch.entryIds),
+              summary: textOf(batch.summary),
+              createdAtIso: textOf(batch.createdAtIso, new Date().toISOString()),
+            }))
+            .slice(-24)
+          : [],
+        lastGeneratedAtIso: textOf(raw.memory?.summary?.lastGeneratedAtIso),
+        lastError: textOf(raw.memory?.summary?.lastError),
+      },
+      records: Array.isArray(raw.memory?.records) ? raw.memory.records.map(record => asRecord(record)).slice(-80) : [],
     },
     messages: messages
       .filter(message => message && typeof message === 'object')
@@ -1787,6 +1942,7 @@ export const runtimeFromStatData = (statData: AnyRecord): EldredRuntimeSave => (
   rawStatData: statData,
   fortune: fortuneFromStatData(statData),
   narration: createEmptyNarrationState(),
+  memory: createEmptyEldredMemory(),
   messages: [],
   updatedAt: new Date().toISOString(),
   contextKey: currentRuntimeContextKey(),
@@ -1849,6 +2005,7 @@ export const loadEldredRuntimeSave = (): EldredRuntimeSave => {
           : canUseCachedRuntime ? cachedRuntime?.combat || runtime.combat : runtime.combat,
         world,
         narration: canUseCachedRuntime ? cachedRuntime?.narration || runtime.narration : runtime.narration,
+        memory: canUseCachedRuntime ? cachedRuntime?.memory || runtime.memory : runtime.memory,
         messages: canUseCachedRuntime ? cachedRuntime?.messages || runtime.messages : runtime.messages,
         fortune: runtime.fortune.flipCount || runtime.fortune.logs.length || runtime.fortune.activeEncounters.length || runtime.fortune.dailyKey
           ? mergeFortuneWithCachedRuntime(runtime, canUseCachedRuntime ? cachedRuntime : null, statData)

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { eldredNPCs, resolveCharacterImage } from '../data';
 import { ImmersiveNotice } from '../types';
+import { parseNarrativeSegments, splitNarrativeTagParts } from '../game/narrativeTags';
 
 type NoticeKind = 'item' | 'skill' | 'quest' | 'npc' | 'clue' | 'relation' | 'combat' | 'level' | 'event' | 'soft-location';
 
@@ -66,17 +67,20 @@ const getPortrait = (name: string) => {
 
 const imageFromField = (value: string | undefined, name: string, type: '头像' | '立绘') => {
   const raw = String(value || '').trim();
-  if (!raw) return type === '头像' ? getAvatar(name) : getPortrait(name);
-  return resolveCharacterImage(name, type, { raw, fixed: Boolean(knownNpcByName(name)) });
+  const known = knownNpcByName(name);
+  if (!raw && known) return type === '头像' ? getAvatar(name) : getPortrait(name);
+  return resolveCharacterImage(name, type, {
+    raw,
+    fixed: Boolean(known),
+    generic: !known,
+    gender: value,
+  });
 };
 
 const stripLabel = (title: string) => title.replace(/^【|】$/g, '').trim();
 
 const splitNoticeParts = (body: string) =>
-  body
-    .split(/[｜|]/)
-    .map(part => part.trim())
-    .filter(Boolean);
+  splitNarrativeTagParts(body);
 
 const splitField = (part: string): [string, string] | null => {
   const match = part.match(/^([^:：/]{1,12})[:：/]\s*(.+)$/);
@@ -257,7 +261,7 @@ function NpcArchiveNotice({ body, compact = false }: { body: string; compact?: b
     || usableText(fields.get('五维'))
     || pickPart(parts, /力量|敏捷|体质|智力|精神/)
     || (exactStats ? `力量${exactStats.str} 敏捷${exactStats.dex} 体质${exactStats.vit} 智力${exactStats.int} 精神${exactStats.spr}` : '');
-  const portrait = imageFromField(fields.get('立绘'), name, '立绘');
+  const portrait = imageFromField(fields.get('立绘') || fields.get('性别'), name, '立绘');
   const affiliation = fields.get('所属') || fields.get('所属地区') || fields.get('所属地标') || fields.get('势力') || known?.affiliation || '';
   const revisit = fields.get('可回访') || fields.get('可回访地点') || fields.get('可回访事项') || parts.find(part => /可回访|回访/.test(part)) || '';
   const details = [
@@ -442,6 +446,7 @@ function CombatNotice({ title, body, compact = false }: { title: string; body: s
   const isLiveSnapshot = noticeTitle === '战斗实况';
   const isCombatAction = noticeTitle === '战斗行动';
   const isSkillShow = noticeTitle === '技能演出';
+  const skillOnly = isSkillShow && parts.length === 1 && fields.size === 0;
   const round = isLiveSnapshot
     ? valueFor('回合', 1, '阶段', 2) || noticeTitle
     : isCombatAction
@@ -450,19 +455,21 @@ function CombatNotice({ title, body, compact = false }: { title: string; body: s
         ? field('结果') || '战斗结束'
         : noticeTitle;
   const actor = isSkillShow
-    ? valueFor('行动者', 0)
+    ? skillOnly ? '' : valueFor('行动者', '执行者', 0)
     : isCombatAction
       ? valueFor('行动者', '执行者', '单位', 1)
       : field('行动者', '执行者', '单位');
   const rawAction = isSkillShow
-    ? valueFor('技能名', 2)
+    ? skillOnly ? part(0) : valueFor('技能名', '招式', '行动', 1)
     : isCombatAction
       ? valueFor('招式', '技能名', '行动', 3)
       : valueFor('招式', '技能名', '行动');
   const action = combatPartLooksLikeUnit(rawAction) ? '' : cleanNoticeValue(rawAction, { dropPureNumber: true });
-  const result = isSkillShow ? valueFor('命中或目标值', 7, '结果', '命中', '判定') : isCombatAction ? valueFor('命中', 4, '结果', 5, '判定') : field('结果', '命中', '判定');
-  const damage = isSkillShow ? valueFor('威力', 8, '消耗', 5) : isCombatAction ? valueFor('伤害', 6, '消耗') : field('伤害', '威力', '消耗');
-  const status = isSkillShow ? valueFor('状态变化', 10, '冷却', 11, '效果', 9) : isCombatAction ? valueFor('状态', 7) : valueFor('状态', '状态变化', '下一压力', 9, '环境', 8);
+  const rank = isSkillShow ? valueFor('阶位', 2) : '';
+  const cost = isSkillShow ? valueFor('消耗', 3) : field('消耗');
+  const result = isSkillShow ? valueFor('判定', '命中', '结果', 4) : isCombatAction ? valueFor('命中', 4, '结果', 5, '判定') : field('结果', '命中', '判定');
+  const damage = isSkillShow ? valueFor('数值', '伤害', '威力', '治疗', 5) : isCombatAction ? valueFor('伤害', 6) || field('消耗') : field('伤害', '威力');
+  const status = isSkillShow ? valueFor('状态变化', '状态', '效果', '冷却', 6) : isCombatAction ? valueFor('状态', 7) : valueFor('状态', '状态变化', '下一压力', 9, '环境', 8);
   const allies = isLiveSnapshot ? valueFor('主角方', '友方', '我方', 6) || inferredAllies : field('主角方', '友方', '我方') || inferredAllies;
   const enemies = isLiveSnapshot ? valueFor('敌方', '敌人', 7) || inferredEnemies : field('敌方', '敌人') || inferredEnemies;
   const liveTrigger = isLiveSnapshot ? cleanNoticeValue(valueFor('触发', 0), { dropPureNumber: true }) : '';
@@ -474,14 +481,19 @@ function CombatNotice({ title, body, compact = false }: { title: string; body: s
     valueFor('先攻顺序', 5) ? `先攻顺序：${valueFor('先攻顺序', 5)}` : '',
     cleanNoticeValue(actor, { dropPureNumber: true }) ? `行动者：${cleanNoticeValue(actor, { dropPureNumber: true })}` : '',
     isSkillShow && valueFor('阵营', 1) ? `阵营：${valueFor('阵营', 1)}` : '',
-    isSkillShow && valueFor('阶位', 4) ? `阶位：${valueFor('阶位', 4)}` : '',
+    isSkillShow && rank ? `阶位：${rank}` : '',
     action ? `行动：${action}` : '',
+    cleanNoticeValue(cost) ? `消耗：${cleanNoticeValue(cost)}` : '',
     cleanNoticeValue(result) ? `判定：${cleanNoticeValue(result)}` : '',
     cleanNoticeValue(damage) ? `数值：${cleanNoticeValue(damage)}` : '',
     cleanNoticeValue(status) ? `状态：${cleanNoticeValue(status)}` : '',
     isLiveSnapshot && valueFor('环境', 8) ? `环境：${valueFor('环境', 8)}` : '',
     isLiveSnapshot && valueFor('下一压力', 9) ? `下一压力：${valueFor('下一压力', 9)}` : '',
   ].filter(Boolean);
+
+  if (!action && !detailParts.length && !allies && !enemies) {
+    return <StandardNotice title={noticeTitle} body={body || noticeTitle} kind="combat" compact />;
+  }
 
   return (
     <div className={`eldred-notice eldred-notice-combat eldred-combat-notice ${compact ? 'eldred-notice-compact' : ''}`}>
@@ -622,28 +634,32 @@ function TaggedLine({ title, body }: { title: string; body: string }) {
 }
 
 export function RichNarrative({ text }: { text: string }) {
-  const lines = text.split(/\n+/).map(line => line.trim()).filter(Boolean);
+  const segments = parseNarrativeSegments(text);
+  let paragraphIndex = 0;
   return (
     <>
-      {lines.map((line, index) => {
-        const notice = line.match(/^【([^】]{1,32})】(?:[：:]\s*(.*))?$/);
-        if (notice && noticeKindMap[notice[1]]) {
-          return <InlineNotice key={`notice-${index}`} title={notice[1]} body={notice[2] || ''} />;
+      {segments.map((segment, index) => {
+        if (segment.kind === 'tag') {
+          return <InlineNotice key={`notice-${index}`} title={segment.tag.title} body={segment.tag.body} />;
         }
 
+        const line = segment.text.trim();
         const dialogue = line.match(/^【([^】]{1,32})】[：:]\s*[“"](.+?)[”"]?$/);
         if (dialogue) {
           return <DialogueLine key={`${dialogue[1]}-${index}`} speaker={dialogue[1]} text={dialogue[2]} />;
         }
 
+        const notice = line.match(/^【([^】]{1,32})】(?:[：:]\s*(.*))?$/);
         if (notice) {
           return <TaggedLine key={`tagged-${index}`} title={notice[1]} body={notice[2] || ''} />;
         }
 
+        const isFirstParagraph = paragraphIndex === 0;
+        paragraphIndex += 1;
         return (
           <p key={index} className="eldred-narrative-paragraph">
-            {index === 0 && <span className="eldred-drop-cap">{line.slice(0, 1)}</span>}
-            {index === 0 ? line.slice(1) : line}
+            {isFirstParagraph && <span className="eldred-drop-cap">{line.slice(0, 1)}</span>}
+            {isFirstParagraph ? line.slice(1) : line}
           </p>
         );
       })}

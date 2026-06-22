@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Clock, Loader2, MapPin, RefreshCw, Send, ShieldAlert, ScrollText } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, Loader2, MapPin, RefreshCw, Send, ShieldAlert, ScrollText } from 'lucide-react';
 import { RichNarrative } from '../ImmersiveText';
 import { PlayerState } from '../../types';
 import { EldredRuntimeSave } from '../../game/eldredSave';
@@ -26,6 +26,7 @@ export function OverviewPanel({
   runtime,
   onSubmitFreeInput,
   onRerollLatest,
+  onSelectNarrationVariant,
   canReroll = false,
 }: {
   player: PlayerState;
@@ -34,9 +35,17 @@ export function OverviewPanel({
   runtime?: EldredRuntimeSave;
   onSubmitFreeInput?: (text: string) => Promise<void>;
   onRerollLatest?: () => Promise<void>;
+  onSelectNarrationVariant?: (entryId: string, variantIndex: number) => Promise<void>;
   canReroll?: boolean;
 }) {
-  const [draft, setDraft] = useState('');
+  const draftStorageKey = useMemo(
+    () => `eldred:overview-draft:${runtime?.contextKey || player.name || 'default'}`,
+    [player.name, runtime?.contextKey],
+  );
+  const [draft, setDraft] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    return window.localStorage.getItem(draftStorageKey) || '';
+  });
   const [narrativeFontScale, setNarrativeFontScale] = useState(() => {
     if (typeof window === 'undefined') return 1;
     const saved = Number(window.localStorage.getItem(NARRATIVE_FONT_SCALE_KEY));
@@ -59,6 +68,11 @@ export function OverviewPanel({
     ? Math.min(totalNarrativePages, Math.max(1, currentNarrativePage))
     : 1;
   const currentNarrativeEntry = totalNarrativePages ? visibleEntries[normalizedNarrativePage - 1] : null;
+  const currentVariants = currentNarrativeEntry?.variants || [];
+  const activeVariantIndex = currentNarrativeEntry
+    ? Math.min(Math.max(0, currentNarrativeEntry.activeVariantIndex || 0), Math.max(0, currentVariants.length - 1))
+    : 0;
+  const canSwitchVariant = Boolean(currentNarrativeEntry && currentVariants.length > 1 && !isGenerating);
   const latestEntry = entries[0];
   const latestQuest = runtime?.quests?.[0];
   const boardItems = runtime?.world.dynamicBoard?.slice(0, 6) || [];
@@ -66,6 +80,9 @@ export function OverviewPanel({
   const latestReputation = player.reputations[0];
   const latestCombatLog = runtime?.combat.logs.at(-1);
   const narrativeFontPercent = Math.round(narrativeFontScale * 100);
+  const memorySummary = runtime?.memory.summary.current.trim() || '';
+  const memoryBatchCount = runtime?.memory.summary.batches.length || 0;
+  const memoryPreview = memorySummary.replace(/\s+/g, ' ').slice(0, 160);
   const narrativeFontStyle = {
     '--eldred-narrative-font-size': `${(1.02 * narrativeFontScale).toFixed(3)}rem`,
     '--eldred-dialogue-font-size': `${(0.98 * narrativeFontScale).toFixed(3)}rem`,
@@ -174,11 +191,23 @@ export function OverviewPanel({
     window.localStorage.setItem(NARRATIVE_FONT_SCALE_KEY, String(narrativeFontScale));
   }, [narrativeFontScale]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setDraft(window.localStorage.getItem(draftStorageKey) || '');
+  }, [draftStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (draft) window.localStorage.setItem(draftStorageKey, draft);
+    else window.localStorage.removeItem(draftStorageKey);
+  }, [draft, draftStorageKey]);
+
   const submitDraft = async () => {
     const text = draft.trim();
     if (!text || isGenerating) return;
-    setDraft('');
     await onSubmitFreeInput?.(text);
+    setDraft('');
+    if (typeof window !== 'undefined') window.localStorage.removeItem(draftStorageKey);
   };
 
   const rerollLatest = async () => {
@@ -195,6 +224,13 @@ export function OverviewPanel({
   const commitNarrativePageInput = () => {
     const parsed = Number.parseInt(narrativePageInput, 10);
     jumpNarrativePage(Number.isFinite(parsed) ? parsed : normalizedNarrativePage);
+  };
+
+  const selectVariant = async (index: number) => {
+    if (!currentNarrativeEntry || !onSelectNarrationVariant || !canSwitchVariant) return;
+    const normalizedIndex = Math.min(Math.max(0, index), currentVariants.length - 1);
+    if (normalizedIndex === activeVariantIndex) return;
+    await onSelectNarrationVariant(currentNarrativeEntry.id, normalizedIndex);
   };
 
   return (
@@ -254,6 +290,29 @@ export function OverviewPanel({
             />
             <span>页 / 共 {totalNarrativePages || 1} 页</span>
           </div>
+          {currentNarrativeEntry && currentVariants.length > 0 && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void selectVariant(activeVariantIndex - 1)}
+                disabled={!canSwitchVariant || activeVariantIndex <= 0}
+                className="rounded border border-[#8b4513]/30 bg-[#5c3a21]/10 px-2 py-1 disabled:opacity-35"
+                title="上一版备选"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+              <span>备选 {activeVariantIndex + 1}/{currentVariants.length}</span>
+              <button
+                type="button"
+                onClick={() => void selectVariant(activeVariantIndex + 1)}
+                disabled={!canSwitchVariant || activeVariantIndex >= currentVariants.length - 1}
+                className="rounded border border-[#8b4513]/30 bg-[#5c3a21]/10 px-2 py-1 disabled:opacity-35"
+                title="下一版备选"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
         </div>
 
         <div
@@ -345,6 +404,18 @@ export function OverviewPanel({
           <InfoLine label="风险" value={riskText} tone={riskText.includes('高') ? 'red' : 'gold'} />
           <InfoLine label="旅行" value={travelText} tone="green" />
           <InfoLine label="在场" value={presentCharacters} tone="gold" />
+        </div>
+
+        <div className="glass-panel p-5 rounded-lg flex flex-col gap-3">
+          <div className="text-fantasy-gold font-serif text-sm border-b border-fantasy-gold/20 pb-2">内置札记</div>
+          <div className="overview-state-row">
+            <ScrollText className="w-4 h-4 text-fantasy-gold" />
+            <span>小结</span>
+            <strong>{memoryBatchCount}批</strong>
+          </div>
+          <div className="text-xs leading-5 text-amber-100/70">
+            {memoryPreview || '尚未达到自动总结阈值'}
+          </div>
         </div>
 
         <div className="glass-panel p-5 rounded-lg min-h-48 xl:flex-1 flex flex-col gap-3">

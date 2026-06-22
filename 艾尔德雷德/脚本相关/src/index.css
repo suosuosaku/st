@@ -17,6 +17,195 @@
   --color-fantasy-silver: #C0C0C0;
 }
 
+/* Eldred integrated v3.5.26 dark reading surface overrides */
+:root {
+  --eldred-bg-deep: #08090c;
+  --eldred-bg-panel: rgba(10, 12, 18, 0.94);
+  --eldred-bg-panel-soft: rgba(16, 16, 24, 0.9);
+  --eldred-text-main: #f2e8cf;
+  --eldred-text-soft: #b9a98a;
+  --eldred-line-gold: rgba(185, 137, 57, 0.62);
+  --eldred-line-red: rgba(120, 38, 34, 0.6);
+}
+
+body,
+[data-eldred-playing="true"] {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(48, 35, 28, 0.35) 0%, transparent 36rem),
+    linear-gradient(180deg, #101018, var(--eldred-bg-deep));
+}
+
+[data-eldred-main="true"],
+[data-eldred-overview="true"],
+[data-eldred-overview-main="true"] {
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.parchment-panel {
+  background:
+    linear-gradient(180deg, rgba(18, 16, 18, 0.96), rgba(8, 9, 12, 0.98)),
+    repeating-linear-gradient(0deg, rgba(206, 160, 72, 0.035) 0 2px, transparent 2px 10px) !important;
+  border: 1px solid var(--eldred-line-gold) !important;
+  color: var(--eldred-text-main) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 224, 128, 0.05),
+    0 12px 28px rgba(0, 0, 0, 0.46) !important;
+}
+
+.parchment-panel::after {
+  opacity: 0.12;
+}
+
+.eldred-narrative-scroll {
+  color: var(--eldred-text-main) !important;
+}
+
+.eldred-story-card {
+  width: min(100%, 86rem);
+  border: 1px solid rgba(180, 129, 54, 0.58);
+  background:
+    linear-gradient(180deg, var(--eldred-bg-panel), rgba(10, 10, 14, 0.96)),
+    repeating-linear-gradient(0deg, rgba(214, 168, 82, 0.028) 0 2px, transparent 2px 10px);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 222, 145, 0.055),
+    0 10px 24px rgba(0, 0, 0, 0.34);
+  padding: 0.92rem 1rem 1.08rem;
+}
+
+.eldred-story-head {
+  border-bottom: 1px solid rgba(185, 137, 57, 0.34);
+}
+
+.eldred-story-title,
+.eldred-drop-cap {
+  color: #e5c07b;
+  text-shadow: none;
+}
+
+.eldred-story-time,
+.eldred-narrative-paragraph {
+  color: var(--eldred-text-main);
+}
+
+.eldred-story-body {
+  max-width: 78rem;
+}
+
+.eldred-narrative-paragraph {
+  line-height: 1.78;
+}
+
+[data-eldred-overview-main="true"] input,
+[data-eldred-overview-main="true"] textarea,
+[data-eldred-overview-main="true"] label,
+[data-eldred-overview-main="true"] .bg-white\/25,
+[data-eldred-overview-main="true"] .bg-white\/30,
+[data-eldred-overview-main="true"] .bg-white\/40,
+[data-eldred-overview-main="true"] .bg-white\/45 {
+  border-color: rgba(185, 137, 57, 0.42) !important;
+  background-color: rgba(8, 10, 14, 0.72) !important;
+  color: var(--eldred-text-main) !important;
+}
+
+[data-eldred-overview-main="true"] input::placeholder,
+[data-eldred-overview-main="true"] textarea::placeholder {
+  color: rgba(185, 169, 138, 0.72);
+}
+
+.eldred-notice-frame {
+  border-width: 1px;
+  border-color: rgba(185, 137, 57, 0.72);
+  background:
+    linear-gradient(180deg, rgba(17, 14, 15, 0.98), rgba(7, 8, 11, 0.99)),
+    repeating-linear-gradient(90deg, rgba(212, 175, 55, 0.03) 0 3px, transparent 3px 12px);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 231, 151, 0.08),
+    0 10px 24px rgba(0, 0, 0, 0.3);
+  padding: 0.85rem;
+}
+
+.eldred-notice-kicker {
+  border-width: 1px;
+  min-width: 8rem;
+  margin-bottom: 0.72rem;
+  background: linear-gradient(180deg, rgba(83, 48, 19, 0.92), rgba(26, 18, 14, 0.98));
+}
+
+.eldred-notice-primary {
+  min-height: 0;
+  border-width: 1px;
+  background: rgba(255, 231, 151, 0.055);
+}
+
+.eldred-notice-detail,
+.eldred-notice-meta,
+.eldred-npc-detail {
+  border-left-width: 2px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.eldred-combat-frame {
+  min-height: 0;
+  border-width: 1px;
+  border-color: rgba(156, 63, 48, 0.86);
+  background:
+    linear-gradient(180deg, rgba(34, 10, 10, 0.98), rgba(7, 8, 11, 0.99)),
+    repeating-linear-gradient(0deg, rgba(255, 91, 64, 0.035) 0 2px, transparent 2px 8px);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 205, 151, 0.07),
+    0 12px 24px rgba(0, 0, 0, 0.32);
+  padding: 0.85rem;
+}
+
+.eldred-combat-head {
+  min-height: 0;
+  border-width: 1px;
+  padding: 0.72rem;
+}
+
+.glass-panel-light,
+.pixel-data-tile,
+.dossier-hero,
+.dossier-attribute,
+.dossier-meter,
+.eldred-clue-row,
+.eldred-clue-token,
+.eldred-clue-event,
+.eldred-clue-page-row,
+.eldred-clue-detail-panel {
+  background-color: var(--eldred-bg-panel-soft) !important;
+  color: var(--eldred-text-main);
+}
+
+.eldred-clue-row,
+.eldred-clue-page-row,
+.eldred-clue-detail-panel {
+  border-color: rgba(185, 137, 57, 0.45);
+}
+
+@media (max-width: 640px) {
+  [data-eldred-playing="true"] {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+
+  .eldred-story-card,
+  .eldred-notice-frame,
+  .eldred-combat-frame {
+    border-width: 1px;
+  }
+
+  .eldred-dialogue-line {
+    grid-template-columns: 1fr;
+  }
+
+  .eldred-dialogue-avatar {
+    width: 2.55rem;
+    height: 2.55rem;
+  }
+}
+
 html {
   font-size: 15px;
 }
@@ -2158,4 +2347,151 @@ button.eldred-clue-page-token:disabled {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(212, 175, 55, 0.8);
+}
+
+/* Final dark-surface pass: keep this after legacy panel rules. */
+body,
+[data-eldred-playing="true"] {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(48, 35, 28, 0.35) 0%, transparent 36rem),
+    linear-gradient(180deg, #101018, #08090c) !important;
+}
+
+[data-eldred-main="true"],
+[data-eldred-overview="true"],
+[data-eldred-overview-main="true"] {
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.parchment-panel {
+  background:
+    linear-gradient(180deg, rgba(18, 16, 18, 0.96), rgba(8, 9, 12, 0.98)),
+    repeating-linear-gradient(0deg, rgba(206, 160, 72, 0.035) 0 2px, transparent 2px 10px) !important;
+  border: 1px solid rgba(185, 137, 57, 0.62) !important;
+  color: #f2e8cf !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 224, 128, 0.05), 0 12px 28px rgba(0, 0, 0, 0.46) !important;
+}
+
+.eldred-narrative-scroll,
+.eldred-story-time,
+.eldred-narrative-paragraph {
+  color: #f2e8cf !important;
+}
+
+.eldred-story-card {
+  width: min(100%, 86rem) !important;
+  border: 1px solid rgba(180, 129, 54, 0.58) !important;
+  background:
+    linear-gradient(180deg, rgba(10, 12, 18, 0.94), rgba(10, 10, 14, 0.96)),
+    repeating-linear-gradient(0deg, rgba(214, 168, 82, 0.028) 0 2px, transparent 2px 10px) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 222, 145, 0.055), 0 10px 24px rgba(0, 0, 0, 0.34) !important;
+  padding: 0.92rem 1rem 1.08rem !important;
+}
+
+.eldred-story-head {
+  border-bottom: 1px solid rgba(185, 137, 57, 0.34) !important;
+}
+
+.eldred-story-title,
+.eldred-drop-cap {
+  color: #e5c07b !important;
+  text-shadow: none !important;
+}
+
+.eldred-story-body {
+  max-width: 78rem !important;
+}
+
+.eldred-narrative-paragraph {
+  line-height: 1.78 !important;
+}
+
+[data-eldred-overview-main="true"] input,
+[data-eldred-overview-main="true"] textarea,
+[data-eldred-overview-main="true"] label,
+[data-eldred-overview-main="true"] .bg-white\/25,
+[data-eldred-overview-main="true"] .bg-white\/30,
+[data-eldred-overview-main="true"] .bg-white\/40,
+[data-eldred-overview-main="true"] .bg-white\/45 {
+  border-color: rgba(185, 137, 57, 0.42) !important;
+  background-color: rgba(8, 10, 14, 0.72) !important;
+  color: #f2e8cf !important;
+}
+
+[data-eldred-overview-main="true"] input::placeholder,
+[data-eldred-overview-main="true"] textarea::placeholder {
+  color: rgba(185, 169, 138, 0.72) !important;
+}
+
+.eldred-notice-frame {
+  border-width: 1px !important;
+  border-color: rgba(185, 137, 57, 0.72) !important;
+  background:
+    linear-gradient(180deg, rgba(17, 14, 15, 0.98), rgba(7, 8, 11, 0.99)),
+    repeating-linear-gradient(90deg, rgba(212, 175, 55, 0.03) 0 3px, transparent 3px 12px) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 231, 151, 0.08), 0 10px 24px rgba(0, 0, 0, 0.3) !important;
+  padding: 0.85rem !important;
+}
+
+.eldred-notice-kicker {
+  border-width: 1px !important;
+  min-width: 8rem !important;
+  margin-bottom: 0.72rem !important;
+}
+
+.eldred-notice-primary {
+  min-height: 0 !important;
+  border-width: 1px !important;
+  background: rgba(255, 231, 151, 0.055) !important;
+}
+
+.eldred-notice-detail,
+.eldred-notice-meta,
+.eldred-npc-detail {
+  border-left-width: 2px !important;
+  background: rgba(255, 255, 255, 0.045) !important;
+}
+
+.eldred-combat-frame {
+  min-height: 0 !important;
+  border-width: 1px !important;
+  border-color: rgba(156, 63, 48, 0.86) !important;
+  background:
+    linear-gradient(180deg, rgba(34, 10, 10, 0.98), rgba(7, 8, 11, 0.99)),
+    repeating-linear-gradient(0deg, rgba(255, 91, 64, 0.035) 0 2px, transparent 2px 8px) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 205, 151, 0.07), 0 12px 24px rgba(0, 0, 0, 0.32) !important;
+  padding: 0.85rem !important;
+}
+
+.eldred-combat-head {
+  min-height: 0 !important;
+  border-width: 1px !important;
+  padding: 0.72rem !important;
+}
+
+.glass-panel-light,
+.pixel-data-tile,
+.dossier-hero,
+.dossier-attribute,
+.dossier-meter,
+.eldred-clue-row,
+.eldred-clue-token,
+.eldred-clue-event,
+.eldred-clue-page-row,
+.eldred-clue-detail-panel {
+  background-color: rgba(16, 16, 24, 0.9) !important;
+  color: #f2e8cf !important;
+}
+
+@media (max-width: 640px) {
+  .eldred-dialogue-line {
+    grid-template-columns: 1fr !important;
+  }
+
+  .eldred-story-card,
+  .eldred-notice-frame,
+  .eldred-combat-frame {
+    border-width: 1px !important;
+  }
 }

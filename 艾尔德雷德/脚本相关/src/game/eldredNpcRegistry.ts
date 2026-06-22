@@ -1,4 +1,4 @@
-import type { Character, CharacterClassId, EquipmentLoadout, Skill, SkillActionType, SkillRank } from '../types';
+import type { AttributeKey, Character, CharacterClassId, CharacterRaceId, EquipmentLoadout, Skill, SkillActionType, SkillRank } from '../types';
 
 export const eldredFixedNpcNames = [
   "绯欧菈",
@@ -2295,6 +2295,87 @@ const classEquipmentLoadouts: Record<CharacterClassId, EquipmentLoadout> = {
   artificer: { weapon: 'npc-rivet-hammer', upper: 'npc-work-coat', tool: 'npc-rivet-kit' },
   priest: { weapon: 'npc-prayer-rod', upper: 'npc-prayer-robe', tool: 'npc-reliquary' },
   summoner: { weapon: 'npc-contract-rod', ring: 'npc-contract-ring', tool: 'npc-circle-chalk' },
+};
+
+const npcClassPrimaryAttributes: Record<CharacterClassId, AttributeKey[]> = {
+  paladin: ['str', 'vit', 'spr'],
+  sage: ['int', 'spr', 'dex'],
+  ranger: ['dex', 'vit', 'spr'],
+  'battle-master': ['str', 'vit', 'dex'],
+  alchemist: ['int', 'vit', 'dex'],
+  artificer: ['int', 'str', 'vit'],
+  priest: ['spr', 'int', 'vit'],
+  summoner: ['spr', 'int', 'dex'],
+};
+
+const npcRaceAttributeBonus: Record<CharacterRaceId, Partial<Record<AttributeKey, number>>> = {
+  human: { vit: 1 },
+  elf: { dex: 1, spr: 1, str: -1 },
+  'half-elf': { dex: 1, int: 1, vit: -1 },
+  dwarf: { str: 1, vit: 1, dex: -1 },
+  halfling: { dex: 1, spr: 1, str: -1 },
+  gnome: { int: 1, dex: 1, vit: -1 },
+  mirrorborn: { int: 1, spr: 1, str: -1 },
+  tideborn: { vit: 1, dex: 1, int: -1 },
+  fae: { dex: 1, spr: 1, vit: -1 },
+  'fae-blood': { dex: 1, int: 1, str: -1 },
+  beastkin: { str: 1, dex: 1, int: -1 },
+  orc: { str: 1, vit: 1, int: -1 },
+  goblin: { dex: 1, int: 1, spr: -1 },
+  dragonborn: { str: 1, spr: 1, dex: -1 },
+  tiefling: { int: 1, spr: 1, vit: -1 },
+  aasimar: { spr: 1, vit: 1, dex: -1 },
+  treeborn: { vit: 1, spr: 1, dex: -1 },
+  wingborn: { dex: 1, spr: 1, str: -1 },
+  frostborn: { vit: 1, spr: 1, dex: -1 },
+  'record-spirit': { int: 1, spr: 1, vit: -1 },
+};
+
+const attributeKeys: AttributeKey[] = ['str', 'dex', 'vit', 'int', 'spr'];
+
+const stableNumberFromText = (text: string) => {
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+};
+
+export const generateNpcAttributes = (
+  level: number,
+  classId: CharacterClassId,
+  raceId: CharacterRaceId = 'human',
+  roleProfile = '',
+): Record<AttributeKey, number> => {
+  const safeLevel = Math.max(1, Math.min(20, Math.floor(Number(level) || 1)));
+  const budget = 15 + (safeLevel - 1) * 2;
+  const maxValue = 6 + Math.floor(Math.max(0, safeLevel - 1) / 3);
+  const primary = npcClassPrimaryAttributes[classId] || npcClassPrimaryAttributes.ranger;
+  const attrs = attributeKeys.reduce((acc, key) => {
+    acc[key] = 1;
+    return acc;
+  }, {} as Record<AttributeKey, number>);
+  let remaining = Math.max(0, budget - attributeKeys.length);
+  const seed = stableNumberFromText(`${classId}|${raceId}|${roleProfile}|${safeLevel}`);
+  const weighted = [
+    ...primary,
+    ...primary,
+    ...attributeKeys.filter(key => !primary.includes(key)),
+  ];
+  let cursor = seed % weighted.length;
+  while (remaining > 0) {
+    const key = weighted[cursor % weighted.length];
+    const bonus = npcRaceAttributeBonus[raceId]?.[key] || 0;
+    const adjustedMax = Math.max(1, maxValue - Math.max(0, bonus));
+    if (attrs[key] < adjustedMax) {
+      attrs[key] += 1;
+      remaining -= 1;
+    }
+    cursor += 1;
+    if (cursor > weighted.length * 80 && attributeKeys.every(item => attrs[item] >= maxValue)) break;
+  }
+  return attrs;
 };
 
 const raceFlavor = (race: string) => {

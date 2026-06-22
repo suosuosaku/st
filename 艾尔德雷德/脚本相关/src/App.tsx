@@ -28,6 +28,7 @@ import {
   generateEldredNarrationFromInput,
   generateEldredNarrationFromOpening,
   rerollLatestEldredNarration,
+  selectEldredNarrationVariant,
 } from './game/eldredNarration';
 import {
   dispatchEldredD20Check,
@@ -138,6 +139,7 @@ export default function App() {
         quests: runtime.quests,
         combat: runtime.combat,
         world: runtime.world,
+        memory: runtime.memory,
       };
       const generatedRuntime = await generateEldredNarrationFromEvent(sourceRuntime, {
         ...event,
@@ -169,6 +171,7 @@ export default function App() {
         quests: runtime.quests,
         combat: runtime.combat,
         world: runtime.world,
+        memory: runtime.memory,
       };
       const checkResult = dispatchEldredD20Check(sourceRuntime, text);
       if (checkResult?.event) {
@@ -216,6 +219,7 @@ export default function App() {
         combat: runtime.combat,
         world: runtime.world,
         narration: runtime.narration,
+        memory: runtime.memory,
         messages: runtime.messages,
       };
       const generatedRuntime = await rerollLatestEldredNarration(sourceRuntime);
@@ -238,6 +242,31 @@ export default function App() {
       setRuntime(current => persistRuntimePlayer(current, nextPlayer));
       return nextPlayer;
     });
+  };
+
+  const selectNarrationVariant = async (entryId: string, variantIndex: number) => {
+    if (!playerState || isGeneratingNarration) return;
+    setInteractionStatus('切换备选中');
+    try {
+      const sourceRuntime = {
+        ...loadEldredRuntimeSave(),
+        player: playerState,
+        npcs: runtime.npcs,
+        quests: runtime.quests,
+        cluePhases: runtime.cluePhases,
+        combat: runtime.combat,
+        world: runtime.world,
+        narration: runtime.narration,
+        memory: runtime.memory,
+        messages: runtime.messages,
+      };
+      const nextRuntime = await selectEldredNarrationVariant(sourceRuntime, entryId, variantIndex);
+      setRuntime(nextRuntime);
+      setPlayerState(nextRuntime.player || playerState);
+      setInteractionStatus(`已切换到备选 ${variantIndex + 1}`);
+    } catch (error) {
+      setInteractionStatus(error instanceof Error ? error.message : '备选切换失败');
+    }
   };
 
   const updateNpcs = (updater: Character[] | ((prev: Character[]) => Character[])) => {
@@ -319,7 +348,7 @@ export default function App() {
   const renderActivePanel = () => {
     if (!playerState) return <EmptyPanel title="等待入局" message="尚未读取到角色变量" />;
     switch (activeTab) {
-      case 'overview': return <OverviewPanel player={playerState} interactionStatus={interactionStatus} isGenerating={isGeneratingNarration} runtime={runtime} onSubmitFreeInput={submitFreeInput} onRerollLatest={rerollCurrentNarration} canReroll={runtime.narration.entries.length > 0} />;
+      case 'overview': return <OverviewPanel player={playerState} interactionStatus={interactionStatus} isGenerating={isGeneratingNarration} runtime={runtime} onSubmitFreeInput={submitFreeInput} onRerollLatest={rerollCurrentNarration} onSelectNarrationVariant={selectNarrationVariant} canReroll={runtime.narration.entries.length > 0} />;
       case 'map': return <MapPanel player={playerState} runtime={runtime} />;
       case 'party': return <PartyPanel player={playerState} onUpdatePlayer={updatePlayerPreview} onUpdateNpcs={updateNpcs} npcs={runtime.npcs} onSubmitEvent={submitRuntimeEvent} />;
       case 'npc': return <NpcPanel npcs={runtime.npcs} />;

@@ -72,6 +72,11 @@ export function CreationFlow({ onComplete }: { onComplete: (state: PlayerState) 
   const selectedClass = getClassById(classId);
   const selectedRace = getRaceById(raceId);
   const selectedOrigin = originLocations.find(origin => origin.id === originId) || randomizableOrigins[0];
+  const raceBonus = selectedRace.attributeBonus;
+  const finalStats = ATTRIBUTE_KEYS.reduce((acc, key) => {
+    acc[key] = Math.max(0, Math.min(20, stats[key] + (raceBonus[key] || 0)));
+    return acc;
+  }, {} as Record<AttributeKey, number>);
   const pointTotal = ATTRIBUTE_KEYS.reduce((sum, key) => sum + stats[key], 0);
   const derived = calculateDerivedStats(1, classId, stats, selectedClass.startingEquipmentIds, raceId);
   const classSkills = getOpeningSkillsByClass(classId);
@@ -295,20 +300,33 @@ export function CreationFlow({ onComplete }: { onComplete: (state: PlayerState) 
         {setupStep === 4 && (
           <div className="grid lg:grid-cols-[1fr_260px] gap-4 mb-6 md:mb-8">
             <div className="grid gap-3">
-              {ATTRIBUTE_KEYS.map(key => (
+              {ATTRIBUTE_KEYS.map(key => {
+                const bonus = raceBonus[key] || 0;
+                const bonusText = bonus > 0 ? `+${bonus}` : String(bonus);
+                return (
                 <div key={key} className="bg-black/30 border border-fantasy-gold/20 rounded p-3 flex items-center gap-3">
                   <div className="w-14 font-serif text-fantasy-gold text-sm">{ATTRIBUTE_LABELS[key]}</div>
                   <button className="btn-rpg w-8 h-8 md:w-9 md:h-9 rounded flex items-center justify-center" onClick={() => adjustStat(key, -1)} disabled={stats[key] <= 0}><Minus className="w-4 h-4" /></button>
                   <div className="flex-1 h-2 bg-black/60 rounded overflow-hidden">
-                    <div className="h-full bg-fantasy-gold/70" style={{ width: `${(stats[key] / 8) * 100}%` }} />
+                    <div className="h-full bg-fantasy-gold/70" style={{ width: `${(finalStats[key] / 10) * 100}%` }} />
                   </div>
-                  <div className="w-8 text-right font-mono text-gray-100">{stats[key]}</div>
+                  <div className="grid w-28 grid-cols-3 gap-1 text-right font-mono text-[11px] md:text-xs">
+                    <span className="text-gray-300" title="基础点">{stats[key]}</span>
+                    <span className={bonus > 0 ? 'text-green-300' : bonus < 0 ? 'text-red-300' : 'text-gray-500'} title="种族修正">{bonusText}</span>
+                    <span className="text-fantasy-gold" title="最终值">{finalStats[key]}</span>
+                  </div>
                   <button className="btn-rpg w-8 h-8 md:w-9 md:h-9 rounded flex items-center justify-center" onClick={() => adjustStat(key, 1)} disabled={pointTotal >= OPENING_ATTRIBUTE_POINTS || stats[key] >= 8}><Plus className="w-4 h-4" /></button>
                 </div>
-              ))}
+              );
+              })}
             </div>
             <div className="bg-black/30 border border-fantasy-gold/20 rounded p-4 space-y-3">
               <div className="text-fantasy-gold font-serif">登记数值</div>
+              <div className="grid grid-cols-3 gap-1 text-[10px] text-gray-400">
+                <span>基础点</span>
+                <span className="text-right">种族修正</span>
+                <span className="text-right text-fantasy-gold">最终值</span>
+              </div>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="bg-white/5 rounded p-2">生命 <span className="float-right font-mono">{derived.maxHp}</span></div>
                 <div className="bg-white/5 rounded p-2">法力 <span className="float-right font-mono">{derived.maxMp}</span></div>

@@ -8,21 +8,60 @@ export const characterImage = (name: string, type: '头像' | '立绘') =>
 
 export const fixedNpcImageNames = new Set<string>(eldredFixedNpcNames);
 
+export const genericNpcImages = {
+  male: {
+    头像: characterImage('托比', '头像'),
+    立绘: characterImage('托比', '立绘'),
+  },
+  female: {
+    头像: characterImage('玛洛', '头像'),
+    立绘: characterImage('玛洛', '立绘'),
+  },
+  neutral: {
+    头像: characterImage('帕琪', '头像'),
+    立绘: characterImage('帕琪', '立绘'),
+  },
+} as const;
+
+const genericNpcFileNames = new Map<string, string>([
+  ['路人男头像', genericNpcImages.male.头像],
+  ['路人男立绘', genericNpcImages.male.立绘],
+  ['路人男性头像', genericNpcImages.male.头像],
+  ['路人男性立绘', genericNpcImages.male.立绘],
+  ['路人女头像', genericNpcImages.female.头像],
+  ['路人女立绘', genericNpcImages.female.立绘],
+  ['路人女性头像', genericNpcImages.female.头像],
+  ['路人女性立绘', genericNpcImages.female.立绘],
+  ['路人中性头像', genericNpcImages.neutral.头像],
+  ['路人中性立绘', genericNpcImages.neutral.立绘],
+  ['路人头像', genericNpcImages.neutral.头像],
+  ['路人立绘', genericNpcImages.neutral.立绘],
+]);
+
+const genericImageFor = (type: '头像' | '立绘', gender?: unknown) => {
+  const text = String(gender ?? '').trim();
+  if (/男/.test(text) && !/女/.test(text)) return genericNpcImages.male[type];
+  if (/女/.test(text)) return genericNpcImages.female[type];
+  return genericNpcImages.neutral[type];
+};
+
 export const resolveCharacterImage = (
   name: string,
   type: '头像' | '立绘',
-  options: { fixed?: boolean; raw?: unknown } = {},
+  options: { fixed?: boolean; raw?: unknown; gender?: unknown; generic?: boolean } = {},
 ) => {
   const raw = String(options.raw ?? '').trim();
   if (/^(https?:|data:|blob:|\/)/i.test(raw)) return raw;
   if (raw) {
     const baseName = raw.replace(/\.(png|jpg|jpeg|webp)$/i, '').replace(/头像$|立绘$/g, '') || name;
+    const genericByRaw = genericNpcFileNames.get(raw.replace(/\.(png|jpg|jpeg|webp)$/i, ''));
+    if (genericByRaw) return genericByRaw;
     if (fixedNpcImageNames.has(baseName)) return characterImage(baseName, type);
     if (options.fixed || fixedNpcImageNames.has(name)) return characterImage(baseName, type);
-    return '';
+    return options.generic ? genericImageFor(type, options.gender) : '';
   }
   if (options.fixed || fixedNpcImageNames.has(name)) return characterImage(name, type);
-  return '';
+  return options.generic ? genericImageFor(type, options.gender) : '';
 };
 
 export const eldredNPCs: Character[] = eldredFixedNpcRegistry;

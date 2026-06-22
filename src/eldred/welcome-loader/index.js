@@ -1,12 +1,12 @@
 (() => {
-  const BUILD_ID = 'eldred-welcome-loader-v3.5.25';
-  const VERSION_REF = 'eldred-integrated-v3.5.25';
+  const BUILD_ID = 'eldred-welcome-loader-v3.5.26';
+  const VERSION_REF = 'eldred-integrated-v3.5.26';
   const GLOBAL_KEY = '__eldredWelcomeLoader';
   const FRAME_SELECTOR = '[data-eldred-welcome-console="true"]';
   const FULL_UI_BASE = detectFullUiBase();
   const FULL_UI_ASSETS = {
-    script: 'assets/index-ChutwXHr.js',
-    style: 'assets/index-0cVZw24m.css',
+    script: 'assets/index-7l-iU0mz.js',
+    style: 'assets/index-CzaEaJCR.css',
   };
   let iframeEl = null;
   let exitButtonEl = null;
@@ -302,6 +302,24 @@
   function mountEscapeControls() {
     if (exitButtonEl) return;
     const doc = hostDocument();
+    if (!doc.getElementById('eldred-welcome-exit-style')) {
+      const style = doc.createElement('style');
+      style.id = 'eldred-welcome-exit-style';
+      style.textContent = [
+        '@media (max-width: 640px) {',
+        '  [data-eldred-welcome-exit="true"] {',
+        '    top: auto !important;',
+        '    bottom: calc(env(safe-area-inset-bottom, 0px) + 12px) !important;',
+        '    right: 12px !important;',
+        '    height: 28px !important;',
+        '    padding: 0 8px !important;',
+        '    font-size: 11px !important;',
+        '    opacity: .82 !important;',
+        '  }',
+        '}',
+      ].join('\n');
+      doc.head?.appendChild(style);
+    }
     const button = doc.createElement('button');
     button.type = 'button';
     button.dataset.eldredWelcomeExit = 'true';

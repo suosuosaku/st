@@ -1,8 +1,10 @@
-import { Character, CombatUnit, DynamicBoardItem, PlayerState } from '../types';
+import { AttributeKey, Character, CharacterClassId, CharacterRaceId, CombatUnit, DynamicBoardItem, PlayerState } from '../types';
 import { ELDRED_CHAT_BEAUTIFY_RULES, ELDRED_COMBAT_INTERNAL_CHECKLIST, ELDRED_WORLD_ENGINE_PATCH } from './aiIntegration';
 import { buildEldredFrontendEventPayload, EldredFrontendEventInput } from './eldredEvents';
 import {
   ATTRIBUTE_LABELS,
+  ATTRIBUTE_KEYS,
+  calculateDerivedStats,
   getClassById,
   getEquipmentById,
   getRaceById,
@@ -10,8 +12,10 @@ import {
   getTalentById,
 } from './rules';
 import {
+  EldredMemorySummaryBatch,
   EldredNarrationEntry,
   EldredNarrationKind,
+  EldredNarrationVariant,
   EldredRuntimeMessage,
   EldredRuntimeSave,
   extractEldredStatData,
@@ -21,8 +25,9 @@ import {
   runtimeFromStatData,
 } from './eldredSave';
 import { formatEldredLocation } from './locationFormat';
-import { eldredFixedNpcRegistry } from './eldredNpcRegistry';
+import { eldredFixedNpcRegistry, generateNpcAttributes } from './eldredNpcRegistry';
 import { eldredCanonicalCluePhases, findCanonicalClueSlot, resolveCanonicalPhaseName } from './mainClues';
+import { ELDRED_NOTICE_TAGS, NarrativeTagLine, parseNarrativeTags } from './narrativeTags';
 
 type AnyRecord = Record<string, any>;
 type StoryPrompt = { role: 'system' | 'assistant' | 'user'; content: string };
@@ -366,13 +371,6 @@ const appendFrontendNotice = (statData: AnyRecord, title: string, body: string) 
   system.前端提示 = notices.slice(-16);
 };
 
-type NarrativeTagLine = {
-  title: string;
-  body: string;
-  fields: string[];
-  named: Record<string, string>;
-};
-
 const cleanText = (value: unknown) => String(value ?? '').trim();
 
 const numberFromText = (value: unknown, fallback = 0) => {
@@ -380,25 +378,7 @@ const numberFromText = (value: unknown, fallback = 0) => {
   return match ? Number(match[0]) : fallback;
 };
 
-const extractNarrativeTagLines = (rawText: string): NarrativeTagLine[] =>
-  String(rawText || '')
-    .split(/\r?\n/)
-    .map(line => line.trim())
-    .map(line => line.match(/^【([^】]{1,32})】(?:[：:]\s*(.*))?$/))
-    .filter((match): match is RegExpMatchArray => Boolean(match && ELDRED_NOTICE_TAGS.includes(match[1])))
-    .map(match => {
-      const body = match[2] || '';
-      const fields = body
-        .split(/[｜|]/)
-        .map(field => field.trim())
-        .filter(Boolean);
-      const named: Record<string, string> = {};
-      fields.forEach(field => {
-        const namedMatch = field.match(/^([^：:]{1,12})[：:]\s*(.+)$/);
-        if (namedMatch) named[namedMatch[1].trim()] = namedMatch[2].trim();
-      });
-      return { title: match[1], body: body.trim(), fields, named };
-    });
+const extractNarrativeTagLines = (rawText: string): NarrativeTagLine[] => parseNarrativeTags(rawText);
 
 const tagValue = (tag: NarrativeTagLine, keys: string[]) => {
   for (const key of keys) {
@@ -477,7 +457,7 @@ const parseQuestTag = (tag: NarrativeTagLine, status: string) => {
   const title = tagValue(tag, ['标题', '名称', '委托']) || tagPrimary(tag, 0, '未命名委托');
   const source = tagValue(tag, ['来源', '发布者', '委托人']) || tagPrimary(tag, 1);
   const risk = normalizeRiskText(tagValue(tag, ['风险', '危险等级']) || tag.fields.find(field => /^风险/.test(field)));
-  const recLevel = numberFromText(tagValue(tag, ['建议等级', '等级']) || tag.fields.find(field => /建议等级|等级/.test(field)), 1);
+  const recLevelText = tagValue(tag, ['建议等级', '等级']) || tag.fields.find(field => /建议等级|等级/.test(field));
   const reward = tagValue(tag, ['奖励', '报酬']);
   const timeLimit = tagValue(tag, ['时限', '截止']);
   const task = tagValue(tag, ['任务详情', '内容', '目标', '说明', '事项'])
@@ -487,12 +467,38 @@ const parseQuestTag = (tag: NarrativeTagLine, status: string) => {
     名称: title,
     来源: source,
     任务详情: task,
-    建议等级: recLevel,
-    风险: risk || '中',
+    建议等级: recLevelText ? numberFromText(recLevelText, 1) : undefined,
+    风险: risk || undefined,
     奖励: reward,
     时限: timeLimit,
     状态: status,
   };
+};
+
+const usefulQuestValue = (value: unknown) => {
+  if (value === undefined || value === null) return false;
+  if (typeof value === 'number') return Number.isFinite(value);
+  const text = cleanText(value);
+  return Boolean(text && !/^(未登记|未记录|待登记|待补充|无)$/.test(text));
+};
+
+const mergeQuestRecords = (...records: AnyRecord[]) =>
+  records.reduce<AnyRecord>((result, record) => {
+    Object.entries(asRecord(record)).forEach(([key, value]) => {
+      if (usefulQuestValue(value)) result[key] = value;
+    });
+    return result;
+  }, {});
+
+const boardQuestRecordFor = (statData: AnyRecord, title: string) => {
+  const boardQuests = asRecord(asRecord(asRecord(statData.世界).动态看板).委托);
+  if (boardQuests[title]) return asRecord(boardQuests[title]);
+  const normalizedTitle = title.replace(/\s+/g, '');
+  const matched = Object.entries(boardQuests).find(([key, value]) => {
+    const record = asRecord(value);
+    return [key, record.标题, record.名称, record.委托].map(cleanText).some(candidate => candidate.replace(/\s+/g, '') === normalizedTitle);
+  });
+  return matched ? asRecord(matched[1]) : {};
 };
 
 const syncQuestTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
@@ -501,7 +507,8 @@ const syncQuestTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
   const title = cleanText(quest.标题);
   const questList = ensureRecordAt(statData, ['主角', '任务列表']);
   const existingQuest = asRecord(questList[title]);
-  const mergedQuest = { ...existingQuest, ...quest };
+  const boardQuest = boardQuestRecordFor(statData, title);
+  const mergedQuest = mergeQuestRecords(boardQuest, existingQuest, quest);
   const normalizedStatus = cleanText(status);
 
   if (/已结算|结算完成|奖励已结算|已领取|已发放/.test(normalizedStatus)) {
@@ -596,6 +603,80 @@ const fixedNpcVariableRecord = (name: string) => {
   };
 };
 
+const classAliasMap: Record<string, CharacterClassId> = {
+  圣骑士: 'paladin',
+  贤者: 'sage',
+  游侠: 'ranger',
+  战斗大师: 'battle-master',
+  炼金术士: 'alchemist',
+  魔导工匠: 'artificer',
+  祭司: 'priest',
+  召唤师: 'summoner',
+};
+
+const raceAliasMap: Record<string, CharacterRaceId> = {
+  人类: 'human',
+  精灵: 'elf',
+  半精灵: 'half-elf',
+  矮人: 'dwarf',
+  半身人: 'halfling',
+  侏儒: 'gnome',
+  镜裔: 'mirrorborn',
+  潮裔: 'tideborn',
+  妖精: 'fae',
+  妖精混血: 'fae-blood',
+  半妖精: 'fae-blood',
+  兽裔: 'beastkin',
+  兽人: 'orc',
+  地精: 'goblin',
+  龙裔: 'dragonborn',
+  魔裔: 'tiefling',
+  提夫林: 'tiefling',
+  天裔: 'aasimar',
+  神裔: 'aasimar',
+  树裔: 'treeborn',
+  羽裔: 'wingborn',
+  雪裔: 'frostborn',
+  记录灵: 'record-spirit',
+  构装体: 'record-spirit',
+};
+
+const resolveNpcClassId = (value: unknown, roleText: string): CharacterClassId => {
+  const raw = cleanText(value);
+  if (raw) {
+    const byName = Object.entries(classAliasMap).find(([name, id]) => raw === name || raw === id || raw.includes(name));
+    if (byName) return byName[1];
+  }
+  if (/骑士|卫兵|守门|护卫|巡逻|盾|秩序/.test(roleText)) return 'paladin';
+  if (/老板|掌柜|佣兵|教头|打手|矿工|搬运|前排/.test(roleText)) return 'battle-master';
+  if (/医|祭|教会|祈|病棚|救济|修道/.test(roleText)) return 'priest';
+  if (/药|炼金|毒|草药|药剂|瓶/.test(roleText)) return 'alchemist';
+  if (/工匠|修理|机关|铆|锻|矿轨|魔导/.test(roleText)) return 'artificer';
+  if (/记录|学徒|书记|档案|账本|观星|教师|贤者/.test(roleText)) return 'sage';
+  if (/契约|召唤|使魔|圆阵/.test(roleText)) return 'summoner';
+  return 'ranger';
+};
+
+const resolveNpcRaceId = (value: unknown, name: string): CharacterRaceId => {
+  const raw = cleanText(value);
+  if (raw) {
+    const byName = Object.entries(raceAliasMap).find(([raceName, id]) => raw === raceName || raw === id || raw.includes(raceName));
+    if (byName) return byName[1];
+  }
+  const pool: CharacterRaceId[] = ['human', 'half-elf', 'halfling', 'dwarf', 'elf', 'beastkin', 'gnome', 'fae-blood'];
+  let hash = 0;
+  for (let index = 0; index < name.length; index += 1) hash = (hash * 31 + name.charCodeAt(index)) >>> 0;
+  return pool[hash % pool.length];
+};
+
+const attributeRecordFromBase = (attrs: Record<AttributeKey, number>) => ({
+  力量: attrs.str,
+  敏捷: attrs.dex,
+  体质: attrs.vit,
+  智力: attrs.int,
+  精神: attrs.spr,
+});
+
 const syncNpcTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
   const name = tagValue(tag, ['姓名', '名称', '角色']) || tagPrimary(tag, 0);
   if (!name) return;
@@ -604,23 +685,59 @@ const syncNpcTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
   const groupName = /主要|主线|固定/.test(kindText) || Object.keys(fixedBase).length ? '主要NPC' : '其他NPC';
   const group = ensureRecordAt(statData, ['主角', '角色收集', groupName]);
   const existing = asRecord(group[name]);
-  const base = { ...fixedBase, ...existing };
+  const base: AnyRecord = { ...asRecord(fixedBase), ...existing };
+  const roleText = [
+    name,
+    tagValue(tag, ['身份', '职责']) || tagPrimary(tag, 1),
+    tagValue(tag, ['职业']),
+    tagValue(tag, ['所属', '所属地区', '所属地标', '势力']),
+    tag.body,
+  ].filter(Boolean).join('｜');
+  const gender = tagValue(tag, ['性别']) || base.性别 || (/姐|娘|女|姨|婆|娜|娅|莉|妮|莎|薇|拉|雅|琳|菈|姬/.test(name) ? '女' : /哥|叔|伯|爷|男|骑士|矿工|卫兵|队长|老板/.test(name) ? '男' : '中性');
+  const raceId = resolveNpcRaceId(tagValue(tag, ['种族']) || base.种族, name);
+  const race = getRaceById(raceId);
+  const classId = resolveNpcClassId(tagValue(tag, ['职业']) || base.职业, roleText);
+  const cls = getClassById(classId);
+  const level = numberFromText(tagValue(tag, ['等级', 'Lv', 'LV']) || tag.fields.find(field => /^等级|^Lv|^LV/.test(field)), numberFromText(base.等级, 1));
+  const generatedAttrs = generateNpcAttributes(level, classId, raceId, roleText);
   const attrs = {
-    力量: numberFromText(tagValue(tag, ['力量']), numberFromText(base.五维?.力量, 0)),
-    敏捷: numberFromText(tagValue(tag, ['敏捷']), numberFromText(base.五维?.敏捷, 0)),
-    体质: numberFromText(tagValue(tag, ['体质']), numberFromText(base.五维?.体质, 0)),
-    智力: numberFromText(tagValue(tag, ['智力']), numberFromText(base.五维?.智力, 0)),
-    精神: numberFromText(tagValue(tag, ['精神']), numberFromText(base.五维?.精神, 0)),
+    力量: numberFromText(tagValue(tag, ['力量']), numberFromText(base.五维?.力量, generatedAttrs.str)),
+    敏捷: numberFromText(tagValue(tag, ['敏捷']), numberFromText(base.五维?.敏捷, generatedAttrs.dex)),
+    体质: numberFromText(tagValue(tag, ['体质']), numberFromText(base.五维?.体质, generatedAttrs.vit)),
+    智力: numberFromText(tagValue(tag, ['智力']), numberFromText(base.五维?.智力, generatedAttrs.int)),
+    精神: numberFromText(tagValue(tag, ['精神']), numberFromText(base.五维?.精神, generatedAttrs.spr)),
   };
+  const baseAttrs = {
+    str: attrs.力量,
+    dex: attrs.敏捷,
+    vit: attrs.体质,
+    int: attrs.智力,
+    spr: attrs.精神,
+  };
+  const derived = calculateDerivedStats(level, classId, baseAttrs, [], raceId);
+  const equipmentText = tagValue(tag, ['装备', '装备栏']) || base.装备 || base.装备栏 || `${cls.name}随身装备`;
+  const skillText = tagValue(tag, ['已知技能', '激活技能', '技能']) || base.已知技能 || base.技能 || `${cls.name}S1战斗技能×2`;
   group[name] = {
     ...base,
+    姓名: name,
+    性别: gender,
+    年龄: tagValue(tag, ['年龄']) || base.年龄 || (['elf', 'fae', 'treeborn', 'aasimar', 'tiefling', 'record-spirit'].includes(raceId) ? '外貌成年，实际年龄较高' : '成年'),
+    种族: tagValue(tag, ['种族']) || base.种族 || race.name,
+    所属: tagValue(tag, ['所属', '所属地区', '所属地标', '势力']) || base.所属 || base.所属地区 || '当前地标临时登记',
     身份: tagValue(tag, ['身份', '职责']) || tagPrimary(tag, 1, base.身份),
-    职业: tagValue(tag, ['职业']) || base.职业,
-    等级: numberFromText(tagValue(tag, ['等级', 'Lv', 'LV']) || tag.fields.find(field => /^等级|^Lv|^LV/.test(field)), numberFromText(base.等级, 1)),
-    生命: tagValue(tag, ['HP', '生命', '生命值']) || base.生命,
-    法力: tagValue(tag, ['MP', '法力', '法力值']) || base.法力,
-    护甲: numberFromText(tagValue(tag, ['AC', '护甲', '护甲等级']), numberFromText(base.护甲, 10)),
+    职业: tagValue(tag, ['职业']) || base.职业 || cls.name,
+    等级: level,
+    生命: tagValue(tag, ['HP', '生命', '生命值']) || base.生命 || `${derived.hp}/${derived.maxHp}`,
+    法力: tagValue(tag, ['MP', '法力', '法力值']) || base.法力 || `${derived.mp}/${derived.maxMp}`,
+    护甲: numberFromText(tagValue(tag, ['AC', '护甲', '护甲等级']), numberFromText(base.护甲, derived.ac)),
+    熟练: derived.proficiency,
     五维: attrs,
+    属性: attributeRecordFromBase(baseAttrs),
+    装备: equipmentText,
+    装备栏: base.装备栏 || equipmentText,
+    已知技能: skillText,
+    激活技能: tagValue(tag, ['激活技能']) || base.激活技能 || skillText,
+    特质: tagValue(tag, ['特质']) || base.特质 || `${race.name}；${cls.name}；${tagPrimary(tag, 1, '可回访人物')}`,
   };
 };
 
@@ -629,15 +746,32 @@ const syncClueTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
   const phase = resolveCanonicalPhaseName(phaseText);
   const phaseDef = eldredCanonicalCluePhases.find(item => item.phase === phase);
   if (!phaseDef) return;
+  const phaseIndex = eldredCanonicalCluePhases.findIndex(item => item.phase === phaseDef.phase);
+  const currentUnlockedPhaseIndex = eldredCanonicalCluePhases.findIndex(item => {
+    const row = asRecord(asRecord(asRecord(statData.主线).阶段钥匙册)[item.phase]);
+    const clues = asRecord(row.线索);
+    const count = item.clues.filter((clue, index) => {
+      const record = asRecord(clues[`线索${index + 1}`] ?? clues[clue.id]);
+      return cleanText(record.状态 ?? record.status) && cleanText(record.状态 ?? record.status) !== '未解锁';
+    }).length;
+    return count < 3;
+  });
+  const allowedPhaseIndex = currentUnlockedPhaseIndex < 0 ? eldredCanonicalCluePhases.length - 1 : currentUnlockedPhaseIndex;
+  if (phaseIndex > allowedPhaseIndex) {
+    appendFrontendNotice(statData, '线索未成立', `${phaseDef.phase}尚未解锁，已忽略越阶段线索收录。`);
+    return;
+  }
   const explicitSlotText = tagValue(tag, ['线索位', '槽位']);
   const explicitClueName = tagValue(tag, ['线索', '名称', '标题']);
   const detail = tagValue(tag, ['指向', '详情', '内容']);
   const row = ensureRecordAt(statData, ['主线', '阶段钥匙册', phase]);
   const clues = ensureRecordAt(row, ['线索']);
+  let unlockedAny = false;
 
   const unlockCanonical = (slot: number, overrideDetail = '') => {
     const clue = phaseDef.clues[slot];
     if (!clue) return;
+    unlockedAny = true;
     clues[`线索${slot + 1}`] = {
       id: clue.id,
       名称: clue.display,
@@ -664,6 +798,10 @@ const syncClueTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
     if (matched) unlockCanonical(matched.slot, detail);
   });
 
+  if (!unlockedAny) {
+    appendFrontendNotice(statData, '线索未成立', '本轮线索未匹配固定主线线索表，已作为普通事件处理。');
+    return;
+  }
   row.状态 = '记录中';
   row.完成度 = `${Math.min(3, Object.keys(clues).length)}/3`;
   if (!row.阶段完成显示) row.阶段完成显示 = phaseDef.eventName;
@@ -949,6 +1087,7 @@ const mergeSyncedRuntime = (previous: EldredRuntimeSave, statData?: AnyRecord | 
       presentCharacters: synced.world.presentCharacters.length ? synced.world.presentCharacters : previous.world.presentCharacters,
       dynamicBoard: synced.world.dynamicBoard.length ? synced.world.dynamicBoard : previous.world.dynamicBoard,
     },
+    memory: previous.memory,
     narration: previous.narration,
     messages: previous.messages,
   };
@@ -1139,51 +1278,6 @@ const requestGenerateThroughLoader = (config: AnyRecord) => {
 export const hasEldredGenerationBridge = () =>
   Boolean(getHostFunction('generate')) || Boolean(safeScope(() => window.parent) && window.parent !== window);
 
-const ELDRED_NOTICE_TAGS = [
-  '获得物品',
-  '获得一次翻牌次数',
-  '获得技能',
-  '技能入库',
-  '装备变更',
-  '购买结算',
-  '新闻',
-  '新闻更新',
-  '见闻',
-  '见闻更新',
-  '看板更新',
-  '委托更新',
-  '委托接取',
-  '委托生成',
-  '委托完成',
-  '委托结算',
-  '奖励结算',
-  'NPC收录',
-  '线索收录',
-  '线索更新',
-  '线索进展',
-  '地点解锁',
-  '地图加载',
-  '路径行动',
-  '事件推进',
-  '事件进展',
-  '奇遇事件',
-  '翻牌结果',
-  '主线进展',
-  '好感变化',
-  '声望变化',
-  '角色升级',
-  '升级提示',
-  '队伍编成',
-  '行动判定',
-  '战斗开始',
-  '先攻判定',
-  '战斗行动',
-  '战斗回合',
-  '战斗结算',
-  '战斗实况',
-  '技能演出',
-];
-
 const noticeTagPattern = new RegExp(`<(${ELDRED_NOTICE_TAGS.join('|')})[^>]*>([\\s\\S]*?)(?:<\\/\\1>|$)`, 'g');
 
 const normalizeNoticeAngleTags = (text: string) =>
@@ -1296,7 +1390,13 @@ const formatEnemyFacts = (enemies: CombatUnit[] = []) => {
 export const buildEldredOpeningFacts = (player: PlayerState) => {
   const cls = getClassById(player.classId);
   const race = getRaceById(player.raceId);
-  const stats = (['str', 'dex', 'vit', 'int', 'spr'] as const)
+  const baseStats = ATTRIBUTE_KEYS
+    .map(key => `${ATTRIBUTE_LABELS[key]}${player.baseAttributes[key]}`)
+    .join(' / ');
+  const raceBonus = ATTRIBUTE_KEYS
+    .map(key => `${ATTRIBUTE_LABELS[key]}${(race.attributeBonus[key] || 0) >= 0 ? '+' : ''}${race.attributeBonus[key] || 0}`)
+    .join(' / ');
+  const finalStats = ATTRIBUTE_KEYS
     .map(key => `${ATTRIBUTE_LABELS[key]}${player.stats[key]}`)
     .join(' / ');
   const skillNames = player.activeSkillIds.map(id => getSkillById(id)?.name).filter(Boolean).join('、') || '无';
@@ -1317,7 +1417,9 @@ export const buildEldredOpeningFacts = (player: PlayerState) => {
     `职业：${cls.name}｜${cls.classAuraName}｜${cls.classAuraEffect}`,
     `伴生天赋：${talentNames}`,
     `出生点：${location.fullName}`,
-    `五维：${stats}`,
+    `五维基础点：${baseStats}`,
+    `种族修正：${raceBonus}`,
+    `五维最终值：${finalStats}`,
     '等级：1',
     `战斗底值：生命${player.stats.maxHp}｜法力${player.stats.maxMp}｜护甲${player.stats.ac}｜熟练+${player.stats.proficiency}`,
     `已选开局技能：${skillNames}`,
@@ -1328,9 +1430,111 @@ export const buildEldredOpeningFacts = (player: PlayerState) => {
   ].join('\n');
 };
 
+const ELDRED_MEMORY_BATCH_SIZE = 8;
+
+export const getUnsummarizedEldredEntries = (runtime: EldredRuntimeSave): EldredNarrationEntry[] =>
+  [...(runtime.narration.entries || [])]
+    .reverse()
+    .filter(entry => Boolean(entry.text?.trim()) && !entry.summaryBatchId);
+
+const summarizeEntryLine = (entry: EldredNarrationEntry, index: number) => {
+  const text = entry.text.replace(/\s+/g, ' ').trim();
+  return `${index + 1}. ${entry.title}｜玩家行动：${entry.userInput || '无'}｜正文：${text.slice(0, 220)}`;
+};
+
+const summarizeKnownNpcs = (runtime: EldredRuntimeSave) =>
+  runtime.npcs
+    .slice(0, 8)
+    .map(npc => `${npc.name}（${npc.profession || npc.identity}，${npc.affiliation || '未知地点'}，${npc.stats.hp}/${npc.stats.maxHp}HP）`)
+    .join('；') || '暂无关键 NPC 记录';
+
+const summarizeKnownQuests = (runtime: EldredRuntimeSave) =>
+  runtime.quests
+    .slice(0, 8)
+    .map(quest => `${quest.title}（${quest.status}，Lv.${quest.recLevel}，${quest.risk}风险）`)
+    .join('；') || '暂无已接/看板委托记录';
+
+const summarizeKnownClues = (runtime: EldredRuntimeSave) =>
+  runtime.cluePhases
+    .flatMap(phase => phase.clues.filter(clue => clue.status === '已收录').map(clue => `${phase.phase}:${clue.display}`))
+    .slice(0, 12)
+    .join('；') || '暂无已解锁主线线索';
+
+export const generateEldredStorySummary = (runtime: EldredRuntimeSave): EldredMemorySummaryBatch | null => {
+  const pendingEntries = getUnsummarizedEldredEntries(runtime).slice(0, 12);
+  if (!pendingEntries.length) return null;
+  const world = runtime.world;
+  const location = formatEldredLocation(world, runtime.player?.location);
+  const createdAtIso = nowIso();
+  const summary = [
+    `当前地点/时间：${location.fullName}｜${world.currentTime || '未登记'}｜天气${world.weather || '未登记'}｜风险${world.risk || '未登记'}`,
+    `已发生事件：\n${pendingEntries.map(summarizeEntryLine).join('\n')}`,
+    `已知 NPC 状态和关系：${summarizeKnownNpcs(runtime)}`,
+    `已接/已完成委托：${summarizeKnownQuests(runtime)}`,
+    `已解锁线索：${summarizeKnownClues(runtime)}`,
+    `未解决伏笔：${pendingEntries.map(entry => entry.characterTags?.join('、')).filter(Boolean).slice(-4).join('；') || '等待后续正文确认'}`,
+  ].join('\n');
+  return {
+    id: createId('summary'),
+    entryIds: pendingEntries.map(entry => entry.id),
+    summary,
+    createdAtIso,
+  };
+};
+
+export const persistEldredMemory = (
+  runtime: EldredRuntimeSave,
+  batch: EldredMemorySummaryBatch | null,
+): EldredRuntimeSave => {
+  if (!batch) return runtime;
+  const summarizedIds = new Set(batch.entryIds);
+  const timestamp = batch.createdAtIso || nowIso();
+  const batches = [...(runtime.memory.summary.batches || []), batch].slice(-24);
+  const current = batches
+    .slice(-3)
+    .map((item, index) => `## 内置小结 ${batches.length - Math.min(3, batches.length) + index + 1}\n${item.summary}`)
+    .join('\n\n');
+  return {
+    ...runtime,
+    narration: {
+      ...runtime.narration,
+      entries: runtime.narration.entries.map(entry =>
+        summarizedIds.has(entry.id)
+          ? { ...entry, summaryBatchId: batch.id, summarizedAtIso: timestamp }
+          : entry,
+      ),
+    },
+    memory: {
+      summary: {
+        current,
+        batches,
+        lastGeneratedAtIso: timestamp,
+        lastError: undefined,
+      },
+      records: [
+        {
+          type: 'story_summary',
+          id: batch.id,
+          entryIds: batch.entryIds,
+          summary: batch.summary,
+          createdAtIso: timestamp,
+        },
+        ...(runtime.memory.records || []),
+      ].slice(0, 80),
+    },
+    updatedAt: timestamp,
+  };
+};
+
+const autoPersistEldredMemory = (runtime: EldredRuntimeSave): EldredRuntimeSave => {
+  if (getUnsummarizedEldredEntries(runtime).length < ELDRED_MEMORY_BATCH_SIZE) return runtime;
+  return persistEldredMemory(runtime, generateEldredStorySummary(runtime));
+};
+
 const buildRuntimeSummary = (runtime: EldredRuntimeSave, party: Character[] = [], enemies: CombatUnit[] = []) => {
   const world = runtime.world;
   const location = formatEldredLocation(world, runtime.player?.location);
+  const memorySummary = runtime.memory.summary.current.trim();
   const recent = runtime.narration.entries
     .slice(0, 4)
     .reverse()
@@ -1346,6 +1550,7 @@ const buildRuntimeSummary = (runtime: EldredRuntimeSave, party: Character[] = []
     formatPlayerFacts(runtime.player),
     formatPartyFacts(party),
     formatEnemyFacts(enemies),
+    memorySummary ? `内置剧情总结：\n${memorySummary}` : '内置剧情总结：暂无',
     `近期正文：\n${recent}`,
   ].join('\n');
 };
@@ -1364,11 +1569,21 @@ const buildWorldbookScanText = (runtime: EldredRuntimeSave, input: string, event
   input,
 ].filter(Boolean).join('\n');
 
-const buildHistoryPrompts = (runtime: EldredRuntimeSave): StoryPrompt[] =>
-  runtime.messages.slice(-12).map(message => ({
+const buildHistoryPrompts = (runtime: EldredRuntimeSave): StoryPrompt[] => {
+  const prompts: StoryPrompt[] = [];
+  const memorySummary = runtime.memory.summary.current.trim();
+  if (memorySummary) {
+    prompts.push({
+      role: 'system',
+      content: `<additional_settings>\n【艾尔德雷德内置剧情总结】\n${memorySummary}\n</additional_settings>`,
+    });
+  }
+  runtime.messages.slice(-12).forEach(message => prompts.push({
     role: message.role === 'system' ? 'system' : message.role === 'assistant' ? 'assistant' : 'user',
     content: message.role === 'assistant' ? `<content>\n${message.text}\n</content>` : message.text,
   }));
+  return prompts;
+};
 
 const buildBaseSystemPrompt = (runtime: EldredRuntimeSave, userInput: string, kind: EldredNarrationKind, party: Character[] = [], enemies: CombatUnit[] = []) => [
   '艾尔德雷德脚本控制台事实输入。',
@@ -1421,40 +1636,92 @@ const generateWithEldredPreset = async ({
 const extractCharacterTags = (text: string) =>
   Array.from(new Set(Array.from(text.matchAll(/【([^】]{1,32})】[：:]/g)).map(match => match[1]))).slice(0, 12);
 
-const appendGeneratedEntry = (
-  runtime: EldredRuntimeSave,
-  entry: Omit<EldredNarrationEntry, 'id' | 'createdAt'>,
+type GeneratedEntryDraft = Omit<EldredNarrationEntry, 'id' | 'createdAt' | 'variants' | 'activeVariantIndex'> & {
+  rawText?: string;
+};
+
+const createNarrationVariant = (
+  text: string,
+  rawText: string | undefined,
+  rawStatDataAfter: AnyRecord | undefined,
+  sourceEventType: string | undefined,
+  createdAtIso: string,
+): EldredNarrationVariant => ({
+  id: createId('nar-var'),
+  text,
+  rawText,
+  rawStatDataAfter: cloneRecord(rawStatDataAfter || {}),
+  createdAtIso,
+  sourceEventType,
+});
+
+const variantsForEntry = (entry: EldredNarrationEntry): EldredNarrationVariant[] =>
+  entry.variants?.length
+    ? entry.variants
+    : [{
+      id: `${entry.id || createId('nar')}-var-0`,
+      text: entry.text,
+      rawText: '',
+      rawStatDataAfter: cloneRecord(entry.rawStatDataAfter || {}),
+      createdAtIso: entry.createdAt,
+      sourceEventType: entry.sourceEventType,
+    }];
+
+const appendNarrationMessagePair = (
+  messages: EldredRuntimeMessage[],
+  userInput: string,
+  assistantText: string,
+  timestamp: string,
 ) => {
-  const timestamp = nowIso();
   const nextUserMessage: EldredRuntimeMessage = {
     id: createId('msg'),
     role: 'user',
-    text: entry.userInput,
+    text: userInput,
     createdAt: timestamp,
   };
   const nextAssistantMessage: EldredRuntimeMessage = {
     id: createId('msg'),
     role: 'assistant',
-    text: entry.text,
+    text: assistantText,
     createdAt: timestamp,
   };
-  return persistEldredRuntimeCache({
+  return [...messages, nextUserMessage, nextAssistantMessage].slice(-40);
+};
+
+const appendGeneratedEntry = (
+  runtime: EldredRuntimeSave,
+  entry: GeneratedEntryDraft,
+) => {
+  const timestamp = nowIso();
+  const { rawText, ...entryData } = entry;
+  const nextId = createId('nar');
+  const variant = createNarrationVariant(
+    entry.text,
+    rawText,
+    entry.rawStatDataAfter,
+    entry.sourceEventType,
+    timestamp,
+  );
+  const nextEntry: EldredNarrationEntry = {
+    ...entryData,
+    id: nextId,
+    createdAt: timestamp,
+    variants: [variant],
+    activeVariantIndex: 0,
+  };
+  return persistEldredRuntimeCache(autoPersistEldredMemory({
     ...runtime,
     narration: {
       entries: [
-        {
-          ...entry,
-          id: createId('nar'),
-          createdAt: timestamp,
-        },
+        nextEntry,
         ...runtime.narration.entries,
       ].slice(0, 80),
       lastGeneratedAt: timestamp,
       lastError: undefined,
     },
-    messages: [...runtime.messages, nextUserMessage, nextAssistantMessage].slice(-40),
+    messages: appendNarrationMessagePair(runtime.messages, entry.userInput, entry.text, timestamp),
     updatedAt: timestamp,
-  });
+  }));
 };
 
 const stripNarrationMessagePair = (
@@ -1478,17 +1745,6 @@ const stripNarrationMessagePair = (
   }
   return messages;
 };
-
-const runtimeWithoutLatestNarration = (runtime: EldredRuntimeSave, latest: EldredNarrationEntry): EldredRuntimeSave => ({
-  ...runtime,
-  narration: {
-    ...runtime.narration,
-    entries: runtime.narration.entries.filter(entry => entry.id !== latest.id),
-    lastError: undefined,
-  },
-  messages: stripNarrationMessagePair(runtime.messages, latest),
-  updatedAt: nowIso(),
-});
 
 const persistGenerationError = (runtime: EldredRuntimeSave, error: unknown) => {
   const text = error instanceof Error ? error.message : String(error);
@@ -1525,6 +1781,7 @@ export const generateEldredNarrationFromInput = async (
       title: kind === 'combat' ? '战斗回合' : '玩家行动',
       userInput: trimmedInput,
       text: content,
+      rawText,
       characterTags: extractCharacterTags(content),
       rawStatDataBefore,
       rawStatDataAfter: cloneRecord(statData || syncedRuntime.rawStatData || rawStatDataBefore),
@@ -1560,6 +1817,7 @@ export const generateEldredNarrationFromOpening = async (runtime: EldredRuntimeS
       title: '第一幕',
       userInput: openingFacts,
       text: content,
+      rawText,
       sourceEventType: 'opening_setup',
       characterTags: extractCharacterTags(content),
       rawStatDataBefore,
@@ -1602,6 +1860,7 @@ export const generateEldredNarrationFromEvent = async (
       title: input.title || '事件推进',
       userInput,
       text: content,
+      rawText,
       sourceEventType: input.eventType,
       characterTags: extractCharacterTags(content),
       rawStatDataBefore,
@@ -1617,7 +1876,17 @@ export const rerollLatestEldredNarration = async (runtime: EldredRuntimeSave) =>
   if (!latest) return runtime;
   const restoredStatData = cloneRecord(latest.rawStatDataBefore || {});
   if (Object.keys(restoredStatData).length) await writeStatDataToHost(restoredStatData);
-  const sourceRuntimeBase = runtimeWithoutLatestNarration(runtime, latest);
+  const sourceRuntimeBase: EldredRuntimeSave = {
+    ...runtime,
+    rawStatData: Object.keys(restoredStatData).length ? restoredStatData : runtime.rawStatData,
+    narration: {
+      ...runtime.narration,
+      entries: runtime.narration.entries.filter(entry => entry.id !== latest.id),
+      lastError: undefined,
+    },
+    messages: stripNarrationMessagePair(runtime.messages, latest),
+    updatedAt: nowIso(),
+  };
   const sourceRuntime = Object.keys(restoredStatData).length
     ? mergeSyncedRuntime({ ...sourceRuntimeBase, rawStatData: restoredStatData }, restoredStatData)
     : sourceRuntimeBase;
@@ -1634,19 +1903,70 @@ export const rerollLatestEldredNarration = async (runtime: EldredRuntimeSave) =>
       worldbookScanText: buildWorldbookScanText(sourceRuntime, latest.userInput, latest.sourceEventType || latest.kind),
     });
     const statData = await syncGeneratedMvuVariables(rawText, sourceRuntime);
-    const syncedRuntime = mergeSyncedRuntime(sourceRuntime, statData);
+    const syncedRuntime = mergeSyncedRuntime(runtime, statData);
     const content = extractEldredContentBlock(rawText);
-    return appendGeneratedEntry(syncedRuntime, {
-      kind: latest.kind,
-      title: latest.title,
-      userInput: latest.userInput,
+    const timestamp = nowIso();
+    const rawStatDataAfter = cloneRecord(statData || syncedRuntime.rawStatData || rawStatDataBefore);
+    const variants = variantsForEntry(latest);
+    const nextVariant = createNarrationVariant(content, rawText, rawStatDataAfter, latest.sourceEventType, timestamp);
+    const nextEntry: EldredNarrationEntry = {
+      ...latest,
       text: content,
-      sourceEventType: latest.sourceEventType,
       characterTags: extractCharacterTags(content),
-      rawStatDataBefore,
-      rawStatDataAfter: cloneRecord(statData || syncedRuntime.rawStatData || rawStatDataBefore),
-    });
+      rawStatDataAfter,
+      variants: [...variants, nextVariant],
+      activeVariantIndex: variants.length,
+    };
+    return persistEldredRuntimeCache(autoPersistEldredMemory({
+      ...syncedRuntime,
+      narration: {
+        ...syncedRuntime.narration,
+        entries: syncedRuntime.narration.entries.map(entry => (entry.id === latest.id ? nextEntry : entry)),
+        lastGeneratedAt: timestamp,
+        lastError: undefined,
+      },
+      messages: appendNarrationMessagePair(stripNarrationMessagePair(runtime.messages, latest), latest.userInput, content, timestamp),
+      updatedAt: timestamp,
+    }));
   } catch (error) {
     return persistGenerationError(runtime, error);
   }
+};
+
+export const selectEldredNarrationVariant = async (
+  runtime: EldredRuntimeSave,
+  entryId: string,
+  variantIndex: number,
+) => {
+  const target = runtime.narration.entries.find(entry => entry.id === entryId);
+  if (!target) return runtime;
+  const variants = variantsForEntry(target);
+  const normalizedIndex = Math.min(Math.max(0, variantIndex), variants.length - 1);
+  const selected = variants[normalizedIndex];
+  if (!selected) return runtime;
+
+  const restoredStatData = cloneRecord(selected.rawStatDataAfter || target.rawStatDataAfter || {});
+  if (Object.keys(restoredStatData).length) await writeStatDataToHost(restoredStatData);
+  const syncedRuntime = Object.keys(restoredStatData).length
+    ? mergeSyncedRuntime({ ...runtime, rawStatData: restoredStatData }, restoredStatData)
+    : runtime;
+  const updatedEntry: EldredNarrationEntry = {
+    ...target,
+    text: selected.text,
+    rawStatDataAfter: restoredStatData,
+    activeVariantIndex: normalizedIndex,
+    variants,
+    sourceEventType: selected.sourceEventType || target.sourceEventType,
+  };
+  const timestamp = nowIso();
+  return persistEldredRuntimeCache({
+    ...syncedRuntime,
+    narration: {
+      ...syncedRuntime.narration,
+      entries: syncedRuntime.narration.entries.map(entry => (entry.id === entryId ? updatedEntry : entry)),
+      lastError: undefined,
+    },
+    messages: appendNarrationMessagePair(stripNarrationMessagePair(runtime.messages, target), target.userInput, selected.text, timestamp),
+    updatedAt: timestamp,
+  });
 };
