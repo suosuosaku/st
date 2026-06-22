@@ -2522,21 +2522,21 @@ body,
 
 /* Light theme pass: this intentionally sits after the dark pass so users can switch freely. */
 html[data-eldred-theme="light"] {
-  --eldred-bg-deep: #efe2c8;
-  --eldred-bg-panel: rgba(255, 248, 232, 0.96);
-  --eldred-bg-panel-soft: rgba(246, 235, 211, 0.92);
-  --eldred-text-main: #2e2116;
-  --eldred-text-soft: #6e5b3e;
-  --eldred-line-gold: rgba(142, 96, 31, 0.44);
-  --eldred-line-red: rgba(141, 54, 43, 0.42);
+  --eldred-bg-deep: #d6bd8d;
+  --eldred-bg-panel: rgba(234, 219, 187, 0.96);
+  --eldred-bg-panel-soft: rgba(222, 200, 158, 0.92);
+  --eldred-text-main: #3a2c1d;
+  --eldred-text-soft: #6b5432;
+  --eldred-line-gold: rgba(132, 90, 29, 0.5);
+  --eldred-line-red: rgba(123, 51, 39, 0.42);
 }
 
 html[data-eldred-theme="light"] body,
 html[data-eldred-theme="light"] [data-eldred-playing="true"] {
   background:
-    radial-gradient(circle at 50% 0%, rgba(255, 244, 211, 0.92) 0%, transparent 34rem),
-    linear-gradient(180deg, #f8efd8, #e8d5ae) !important;
-  color: #2e2116 !important;
+    radial-gradient(circle at 50% 0%, rgba(239, 219, 178, 0.62) 0%, transparent 34rem),
+    linear-gradient(180deg, #e5d2a9, #c9ac72) !important;
+  color: #3a2c1d !important;
 }
 
 html[data-eldred-theme="light"] .glass-panel,
@@ -2552,36 +2552,36 @@ html[data-eldred-theme="light"] .eldred-clue-event,
 html[data-eldred-theme="light"] .eldred-clue-page-row,
 html[data-eldred-theme="light"] .eldred-clue-detail-panel {
   background:
-    linear-gradient(180deg, rgba(255, 248, 232, 0.96), rgba(240, 224, 190, 0.94)),
-    repeating-linear-gradient(0deg, rgba(142, 96, 31, 0.045) 0 2px, transparent 2px 10px) !important;
-  border-color: rgba(142, 96, 31, 0.44) !important;
-  color: #2e2116 !important;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.42), 0 10px 22px rgba(98, 65, 22, 0.16) !important;
+    linear-gradient(180deg, rgba(234, 219, 187, 0.97), rgba(216, 192, 147, 0.95)),
+    repeating-linear-gradient(0deg, rgba(132, 90, 29, 0.055) 0 2px, transparent 2px 10px) !important;
+  border-color: rgba(132, 90, 29, 0.5) !important;
+  color: #3a2c1d !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 244, 210, 0.22), 0 10px 22px rgba(98, 65, 22, 0.16) !important;
 }
 
 html[data-eldred-theme="light"] [data-eldred-hud="tabs"] {
-  background: rgba(255, 248, 232, 0.94) !important;
-  color: #2e2116 !important;
-  box-shadow: 0 10px 30px rgba(98, 65, 22, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.44) !important;
+  background: rgba(232, 215, 181, 0.96) !important;
+  color: #3a2c1d !important;
+  box-shadow: 0 10px 30px rgba(98, 65, 22, 0.22), inset 0 0 0 1px rgba(255, 244, 210, 0.28) !important;
 }
 
 html[data-eldred-theme="light"] .eldred-story-card,
 html[data-eldred-theme="light"] .eldred-notice-frame {
   border-color: rgba(142, 96, 31, 0.48) !important;
   background:
-    linear-gradient(180deg, rgba(255, 249, 235, 0.98), rgba(240, 224, 190, 0.96)),
-    repeating-linear-gradient(0deg, rgba(142, 96, 31, 0.04) 0 2px, transparent 2px 10px) !important;
-  color: #2e2116 !important;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.48), 0 10px 22px rgba(98, 65, 22, 0.16) !important;
+    linear-gradient(180deg, rgba(235, 220, 190, 0.98), rgba(216, 192, 147, 0.96)),
+    repeating-linear-gradient(0deg, rgba(132, 90, 29, 0.05) 0 2px, transparent 2px 10px) !important;
+  color: #3a2c1d !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 244, 210, 0.24), 0 10px 22px rgba(98, 65, 22, 0.16) !important;
 }
 
 html[data-eldred-theme="light"] .eldred-combat-frame {
   border-color: rgba(141, 54, 43, 0.48) !important;
   background:
-    linear-gradient(180deg, rgba(255, 240, 226, 0.98), rgba(237, 211, 189, 0.96)),
-    repeating-linear-gradient(0deg, rgba(141, 54, 43, 0.04) 0 2px, transparent 2px 8px) !important;
-  color: #2e2116 !important;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.46), 0 10px 22px rgba(98, 65, 22, 0.14) !important;
+    linear-gradient(180deg, rgba(235, 210, 187, 0.98), rgba(210, 180, 151, 0.96)),
+    repeating-linear-gradient(0deg, rgba(123, 51, 39, 0.05) 0 2px, transparent 2px 8px) !important;
+  color: #3a2c1d !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 232, 205, 0.24), 0 10px 22px rgba(98, 65, 22, 0.14) !important;
 }
 
 html[data-eldred-theme="light"] .eldred-narrative-scroll,
@@ -2654,10 +2654,10 @@ html[data-eldred-theme="light"] .eldred-theme-button.is-active {
 
 html[data-eldred-theme="light"] [data-eldred-overview-side="true"] .glass-panel {
   background:
-    linear-gradient(180deg, rgba(255, 249, 235, 0.98), rgba(239, 223, 190, 0.96)),
-    repeating-linear-gradient(0deg, rgba(142, 96, 31, 0.055) 0 2px, transparent 2px 10px) !important;
+    linear-gradient(180deg, rgba(234, 219, 187, 0.98), rgba(211, 186, 139, 0.96)),
+    repeating-linear-gradient(0deg, rgba(132, 90, 29, 0.06) 0 2px, transparent 2px 10px) !important;
   border-color: rgba(151, 104, 39, 0.58) !important;
-  color: #2e2116 !important;
+  color: #3a2c1d !important;
 }
 
 html[data-eldred-theme="light"] [data-eldred-overview-side="true"] .border-fantasy-gold\/20 {
@@ -2681,13 +2681,13 @@ html[data-eldred-theme="light"] .overview-state-row,
 html[data-eldred-theme="light"] .overview-state-line,
 html[data-eldred-theme="light"] .overview-record,
 html[data-eldred-theme="light"] .overview-record-detail {
-  color: #2e2116 !important;
+  color: #3a2c1d !important;
 }
 
 html[data-eldred-theme="light"] .overview-state-row,
 html[data-eldred-theme="light"] .overview-state-line {
   border-color: rgba(142, 96, 31, 0.2) !important;
-  background: rgba(255, 252, 244, 0.58) !important;
+  background: rgba(240, 224, 190, 0.42) !important;
 }
 
 html[data-eldred-theme="light"] .overview-state-row span,
@@ -2699,7 +2699,7 @@ html[data-eldred-theme="light"] .overview-record-head span {
 html[data-eldred-theme="light"] .overview-state-row strong,
 html[data-eldred-theme="light"] .overview-state-line strong,
 html[data-eldred-theme="light"] .overview-record-head strong {
-  color: #3a2716 !important;
+  color: #3a2c1d !important;
 }
 
 html[data-eldred-theme="light"] .overview-state-line-blue strong {
@@ -2717,9 +2717,9 @@ html[data-eldred-theme="light"] .overview-state-line-red strong {
 html[data-eldred-theme="light"] .overview-record {
   border-color: rgba(142, 96, 31, 0.32) !important;
   background:
-    linear-gradient(135deg, rgba(255, 252, 244, 0.84), rgba(229, 209, 172, 0.58)),
-    rgba(255, 246, 226, 0.7) !important;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.34) !important;
+    linear-gradient(135deg, rgba(236, 220, 189, 0.72), rgba(203, 176, 127, 0.58)),
+    rgba(232, 211, 174, 0.58) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 241, 202, 0.18) !important;
 }
 
 html[data-eldred-theme="light"] .overview-record-detail {
