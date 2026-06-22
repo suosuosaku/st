@@ -234,7 +234,7 @@ export const characterClasses: CharacterClass[] = [
     primaryAttributes: ['spr', 'int', 'vit'],
     presetStats: { str: 1, dex: 2, vit: 3, int: 4, spr: 5 },
     companionTalentIds: ['talent-priest-case', 'talent-priest-ritual'],
-    startingCombatSkillIds: ['priest-calm-prayer', 'priest-clean-light', 'priest-case-note', 'priest-bell-charm'],
+    startingCombatSkillIds: ['priest-clean-light', 'priest-calm-prayer', 'priest-case-note', 'priest-bell-charm'],
     startingEquipmentIds: ['plain-holy-bell', 'field-robe', 'casebook'],
   },
   {
@@ -250,7 +250,7 @@ export const characterClasses: CharacterClass[] = [
     primaryAttributes: ['spr', 'int', 'dex'],
     presetStats: { str: 1, dex: 3, vit: 2, int: 4, spr: 5 },
     companionTalentIds: ['talent-summoner-contract', 'talent-summoner-tether'],
-    startingCombatSkillIds: ['summoner-small-familiar', 'summoner-circle-fix', 'summoner-contract-mark', 'summoner-slime-tether'],
+    startingCombatSkillIds: ['summoner-familiar-pounce', 'summoner-contract-mark', 'summoner-slime-tether', 'summoner-small-familiar'],
     startingEquipmentIds: ['chalk-contract-ring', 'student-robe', 'summon-string'],
   },
 ];
@@ -313,11 +313,12 @@ export const skills: Skill[] = [
   s({ id: 'artificer-lock-machine', name: '锁机停摆', rank: 'S1', sourceClasses: ['artificer'], source: '铜壳机关街', actionType: 'control', attribute: 'int', hitType: 'vsDC', target: '构装体或机关', range: '中距', mpCost: 2, cooldown: 1, dc: 11, effects: ['失败则目标速度-1或机关暂停1轮'], desc: '智力对抗目标值11；失败则目标速度-1或机关暂停1轮。' }),
 
   s({ id: 'priest-calm-prayer', name: '安抚祷词', rank: 'S1', sourceClasses: ['priest'], source: '病房与救济厅', actionType: 'support', attribute: 'spr', hitType: 'auto', target: '单体友方或平民', range: '近身', mpCost: 2, cooldown: 1, effects: ['移除惊慌', '社交冲突目标值-1'], desc: '消耗2法力；移除惊慌；本次社交冲突目标值-1。' }),
-  s({ id: 'priest-clean-light', name: '净化微光', rank: 'S1', sourceClasses: ['priest'], source: '圣辉仪式', actionType: 'control', attribute: 'spr', hitType: 'vsDC', target: '轻微污染/瘴气残留', range: '近身', mpCost: 3, cooldown: 1, dc: 11, effects: ['压制轻微瘴气或污染1轮'], desc: '精神对抗目标值11；压制轻微瘴气或污染1轮。' }),
+  s({ id: 'priest-clean-light', name: '净化微光', rank: 'S1', sourceClasses: ['priest'], source: '圣辉仪式', actionType: 'attack', attribute: 'spr', hitType: 'vsAC', target: '单体敌人或轻微污染', range: '中距', mpCost: 2, cooldown: 0, damageDice: '1d6', effects: ['污染或亡灵目标伤害+1'], desc: '命中：1d6+精神加值光辉伤害；污染或亡灵目标伤害+1。' }),
   s({ id: 'priest-case-note', name: '病历问诊', rank: 'S1', sourceClasses: ['priest'], source: '晨曦病房', actionType: 'utility', attribute: 'int', hitType: 'auto', target: '伤者/病历', range: '近身', mpCost: 0, cooldown: 0, effects: ['治疗或病历调查目标值-1'], desc: '治疗或病历调查目标值-1。' }),
   s({ id: 'priest-bell-charm', name: '圣铃护符', rank: 'S1', sourceClasses: ['priest'], source: '修道院护符课', actionType: 'support', attribute: 'spr', hitType: 'auto', target: '单体友方', range: '中距', mpCost: 2, cooldown: 1, effects: ['目标精神豁免+1至下回合'], desc: '消耗2法力；目标精神豁免+1至下回合。' }),
 
-  s({ id: 'summoner-small-familiar', name: '临时使魔', rank: 'S1', sourceClasses: ['summoner'], source: '召唤试验场', actionType: 'support', attribute: 'spr', hitType: 'auto', target: '一格战术位置', range: '中距', mpCost: 3, cooldown: 2, effects: ['生成小使魔提供掩护或搬运1轮'], desc: '消耗3法力；生成小使魔提供掩护或搬运1轮。' }),
+  s({ id: 'summoner-familiar-pounce', name: '使魔扑击', rank: 'S1', sourceClasses: ['summoner'], source: '召唤试验场', actionType: 'attack', attribute: 'spr', hitType: 'vsAC', target: '单体敌人', range: '中距', mpCost: 2, cooldown: 0, damageDice: '1d6', effects: ['目标被契约标记时伤害+1'], desc: '命中：1d6+精神加值伤害；目标被契约标记时伤害+1。' }),
+  s({ id: 'summoner-small-familiar', name: '临时使魔', rank: 'S1', sourceClasses: ['summoner'], source: '召唤试验场', actionType: 'support', attribute: 'spr', hitType: 'auto', target: '一格战术位置', range: '中距', mpCost: 3, cooldown: 2, effects: ['生成小使魔牵制或搬运1轮'], desc: '消耗3法力；生成小使魔牵制或搬运1轮。' }),
   s({ id: 'summoner-circle-fix', name: '召唤圈修补', rank: 'S1', sourceClasses: ['summoner'], source: '契约桌训练', actionType: 'utility', attribute: 'int', hitType: 'auto', target: '召唤圈/契约', range: '近身', mpCost: 1, cooldown: 0, effects: ['召唤或契约事故目标值-1'], desc: '消耗1法力；召唤或契约事故目标值-1。' }),
   s({ id: 'summoner-contract-mark', name: '契约标记', rank: 'S1', sourceClasses: ['summoner'], source: '学院契约检查', actionType: 'control', attribute: 'spr', hitType: 'vsDC', target: '单体敌人或使魔', range: '中距', mpCost: 2, cooldown: 1, dc: 11, effects: ['失败则目标被标记，友方对其命中+1'], desc: '精神对抗目标值11；失败则标记目标，友方对其命中+1至下回合。' }),
   s({ id: 'summoner-slime-tether', name: '软泥牵制', rank: 'S1', sourceClasses: ['summoner'], source: '清理棚事故记录', actionType: 'control', attribute: 'spr', hitType: 'vsDC', target: '单体敌人', range: '中距', mpCost: 3, cooldown: 1, dc: 11, effects: ['失败则速度-1', '对史莱姆类额外持续1轮'], desc: '精神对抗目标值11；失败则速度-1；史莱姆类额外持续1轮。' }),

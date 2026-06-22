@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Info, Play, RefreshCcw, Shield as ShieldIcon, Sword } from 'lucide-react';
 import { motion } from 'motion/react';
-import { Character, CombatUnit, PlayerState, Skill } from '../../types';
-import { equippedIdsFromLoadout, getClassById, getEquipmentById, getSkillById, playerToCombatUnit } from '../../game/rules';
+import { AttributeKey, Character, CombatUnit, PlayerState, Skill } from '../../types';
+import { ATTRIBUTE_LABELS, attributeModifier, equippedIdsFromLoadout, getClassById, getEquipmentById, getSkillById, playerToCombatUnit, proficiencyBonus } from '../../game/rules';
 import { EldredFrontendEventInput } from '../../game/eldredEvents';
 import { EldredRuntimeSave } from '../../game/eldredSave';
 import { formatEldredLocation } from '../../game/locationFormat';
@@ -15,7 +15,7 @@ type CombatLog = {
   color?: string;
 };
 
-type CombatCommandKind = 'attack' | 'guard' | 'escape' | 'skill';
+type CombatCommandKind = 'attack' | 'escape' | 'skill';
 
 type PendingCombatCommand = {
   id: string;
@@ -32,7 +32,6 @@ type PendingCombatCommand = {
 
 const commandLabel: Record<CombatCommandKind, string> = {
   attack: '普通攻击',
-  guard: '防御',
   escape: '撤离',
   skill: '技能',
 };
@@ -96,6 +95,35 @@ const normalizeUnitName = (name: string) =>
     .replace(/[（）()].*?[）)]/g, '')
     .replace(/\s+/g, '')
     .toLowerCase();
+
+const equipmentTags = (unit: CombatUnit) =>
+  (unit.equipmentIds || []).flatMap(id => getEquipmentById(id)?.tags || []);
+
+const chooseBasicAttackAttribute = (unit: CombatUnit): AttributeKey => {
+  const tags = equipmentTags(unit);
+  if (tags.some(tag => ['弓', '远程', '短刀', '短镖'].includes(tag))) return 'dex';
+  if (tags.some(tag => ['法杖', '导魔', '圣铃', '召唤', '契约'].includes(tag))) {
+    return unit.stats.int >= unit.stats.spr ? 'int' : 'spr';
+  }
+  return 'str';
+};
+
+const equipmentHitBonus = (unit: CombatUnit) =>
+  (unit.equipmentIds || []).reduce((sum, id) => sum + (getEquipmentById(id)?.hitBonus || 0), 0);
+
+const equipmentDamageBonus = (unit: CombatUnit) =>
+  (unit.equipmentIds || []).reduce((sum, id) => sum + (getEquipmentById(id)?.damageBonus || 0), 0);
+
+const basicAttackFormula = (actor: CombatUnit, target?: CombatUnit) => {
+  const attribute = chooseBasicAttackAttribute(actor);
+  const attrBonus = attributeModifier(actor.stats[attribute]);
+  const prof = proficiencyBonus(actor.level);
+  const hitBonus = equipmentHitBonus(actor);
+  const damageBonus = equipmentDamageBonus(actor);
+  const dice = actor.level >= 11 ? '1d8' : '1d6';
+  const targetAc = target ? `；目标护甲${target.ac}` : '';
+  return `普通攻击：命中=d20+${ATTRIBUTE_LABELS[attribute]}加值${attrBonus}+熟练${prof}+装备命中${hitBonus}${targetAc}；伤害=${dice}+${ATTRIBUTE_LABELS[attribute]}加值${attrBonus}+装备伤害${damageBonus}，最低1点，护盾先吸收。`;
+};
 
 export function CombatPanel({
   player,
@@ -209,6 +237,9 @@ export function CombatPanel({
     if (kind === 'skill' && selectedSkill) {
       facts.push(`技能：${selectedSkill.name}｜${selectedSkill.rank}｜消耗${selectedSkill.mpCost}法力｜属性${selectedSkill.attribute}｜目标${selectedSkill.target}｜效果${selectedSkill.desc}`);
     }
+    if (kind === 'attack' && selectedActor) {
+      facts.push(basicAttackFormula(selectedActor, selectedTarget));
+    }
     return facts;
   };
 
@@ -227,7 +258,7 @@ export function CombatPanel({
       return;
     }
     if (kind === 'escape' && selectedActor.id !== 'player') {
-      addLog({ actor: '[战斗台]', action: '撤离受限', result: '撤离指令只由主角发起；同伴可选择防御或技能支援。', color: 'text-fantasy-red' });
+      addLog({ actor: '[战斗台]', action: '撤离受限', result: '撤离指令只由主角发起；同伴需提交普通攻击或技能行动。', color: 'text-fantasy-red' });
       return;
     }
 
@@ -376,9 +407,8 @@ export function CombatPanel({
         <div className="combat-command-column w-full 2xl:w-[42rem] flex flex-col gap-4 min-h-[720px] 2xl:min-h-0">
           <div className="glass-panel rounded-xl p-4 shrink-0">
             <h3 className="text-xs text-fantasy-gold mb-3 font-serif border-b border-fantasy-gold/20 pb-2">行动指令</h3>
-            <div className="grid grid-cols-3 gap-2 mb-3">
+            <div className="grid grid-cols-2 gap-2 mb-3">
               <button onClick={() => queueCommand('attack')} disabled={enemies.length === 0} className="btn-rpg px-3 py-2 rounded text-xs disabled:opacity-30">暂存攻击</button>
-              <button onClick={() => queueCommand('guard')} className="btn-rpg px-3 py-2 rounded text-xs">暂存防御</button>
               <button onClick={() => queueCommand('escape')} className="btn-rpg px-3 py-2 rounded text-xs">暂存撤离</button>
             </div>
             <div className="grid gap-2">

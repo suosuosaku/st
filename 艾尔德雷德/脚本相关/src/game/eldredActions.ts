@@ -28,7 +28,7 @@ import {
 import { EldredFrontendEventInput } from './eldredEvents';
 import { EldredD20CheckResult, parseD20CheckIntent, resolveD20Check } from './eldredDice';
 
-export type EldredCombatCommandKind = 'attack' | 'guard' | 'escape' | 'skill';
+export type EldredCombatCommandKind = 'attack' | 'escape' | 'skill';
 
 export type EldredCombatCommand = {
   kind: EldredCombatCommandKind;
@@ -233,6 +233,17 @@ const resolveBasicAttack = (actor: CombatUnit, target: CombatUnit) => {
   };
 };
 
+const describeBasicAttackFormula = (actor: CombatUnit, target?: CombatUnit) => {
+  const attr = chooseAttackAttribute(actor);
+  const attrBonus = attributeModifier(actor.stats[attr]);
+  const prof = proficiencyBonus(actor.level);
+  const equipmentHit = equipmentHitBonus(actor);
+  const equipmentDamage = equipmentDamageBonus(actor);
+  const dice = actor.level >= 11 ? '1d8' : '1d6';
+  const targetAc = target ? `；目标护甲${target.ac}` : '';
+  return `普通攻击公式：命中=d20+${ATTRIBUTE_LABELS[attr]}加值${attrBonus}+熟练${prof}+装备命中${equipmentHit}${targetAc}；伤害=${dice}+${ATTRIBUTE_LABELS[attr]}加值${attrBonus}+装备伤害${equipmentDamage}，最低1点，护盾先吸收。`;
+};
+
 const syncPlayerFromUnit = (player: PlayerState, unit: CombatUnit): PlayerState => ({
   ...player,
   stats: {
@@ -360,7 +371,7 @@ const makeCombatEvent = (
     skillId: command.skillId,
     extraFacts: [
       `行动者：${actor}`,
-      `行动类型：${command.kind === 'skill' ? `技能 ${skill?.name || command.skillId}` : command.kind}`,
+      `行动类型：${command.kind === 'skill' ? `技能 ${skill?.name || command.skillId}` : command.kind === 'attack' ? '普通攻击' : '撤离'}`,
       ...logs,
     ],
   };
@@ -383,7 +394,7 @@ export const dispatchEldredCombatCommand = (
     return { runtime, notice: '行动者不存在或无法行动。' };
   }
 
-  if (command.kind !== 'guard' && command.kind !== 'escape' && !target) {
+  if (command.kind !== 'escape' && !target) {
     return { runtime, notice: '缺少有效目标。' };
   }
 
@@ -402,11 +413,7 @@ export const dispatchEldredCombatCommand = (
   }
 
   if (command.kind === 'attack') {
-    logs.push(`${actor.name}准备普通攻击。`, `行动意图：普通攻击；目标：${target?.name || '待正文裁决'}；命中、伤害与反击由正文裁决。`);
-  }
-
-  if (command.kind === 'guard') {
-    logs.push(`${actor.name}准备防御或护送。`, '行动意图：防御；护甲、减伤、保护目标和持续时间由正文裁决。');
+    logs.push(`${actor.name}准备普通攻击。`, `行动意图：普通攻击；目标：${target?.name || '待正文裁决'}；${describeBasicAttackFormula(actor, target)}`);
   }
 
   if (command.kind === 'escape') {

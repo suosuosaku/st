@@ -75,7 +75,11 @@ export function CreationFlow({ onComplete }: { onComplete: (state: PlayerState) 
   const pointTotal = ATTRIBUTE_KEYS.reduce((sum, key) => sum + stats[key], 0);
   const derived = calculateDerivedStats(1, classId, stats, selectedClass.startingEquipmentIds, raceId);
   const classSkills = getOpeningSkillsByClass(classId);
-  const talentNames = selectedClass.companionTalentIds.map(id => getTalentById(id)?.name).filter(Boolean);
+  const selectedTalents = selectedClass.companionTalentIds.flatMap(id => {
+    const talent = getTalentById(id);
+    return talent ? [talent] : [];
+  });
+  const talentNames = selectedTalents.map(talent => talent.name);
 
   const canContinue = useMemo(() => {
     if (setupStep === 0) return identity.name.trim().length > 0;
@@ -321,6 +325,17 @@ export function CreationFlow({ onComplete }: { onComplete: (state: PlayerState) 
         {setupStep === 5 && (
           <div className="max-h-[min(52vh,34rem)] overflow-y-auto pr-1 sm:pr-2 mb-6 md:mb-8">
           <div className="grid md:grid-cols-2 gap-3 md:gap-4">
+            <div className="md:col-span-2 grid sm:grid-cols-2 gap-3">
+              {selectedTalents.map(talent => (
+                <div key={talent.id} className="rounded-md border border-fantasy-gold/25 bg-black/30 p-4 text-left">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-serif text-sm md:text-base text-gray-100">{talent.name}</span>
+                    <span className="text-[10px] text-fantasy-gold border border-fantasy-gold/30 rounded px-2 py-0.5">{talent.rank}</span>
+                  </div>
+                  <div className="mt-2 text-xs leading-5 text-gray-400">{talent.effect}</div>
+                </div>
+              ))}
+            </div>
             {classSkills.map(skill => {
               const active = selectedSkillIds.includes(skill.id);
               return (
