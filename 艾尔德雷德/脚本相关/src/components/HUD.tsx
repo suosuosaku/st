@@ -1,7 +1,7 @@
 import { motion } from 'motion/react';
 import { useEffect, useState } from 'react';
 import { TabState } from '../types';
-import { LayoutDashboard, Map as MapIcon, Users, Contact, ClipboardList, Package, Sword, Settings, SearchCheck, Sparkles } from 'lucide-react';
+import { LayoutDashboard, Map as MapIcon, Users, Contact, ClipboardList, Package, Sword, Settings, SearchCheck, Sparkles, Moon, Sun } from 'lucide-react';
 
 const TABS: { id: TabState; label: string; icon: any }[] = [
   { id: 'overview', label: '总览', icon: LayoutDashboard },
@@ -21,9 +21,11 @@ interface HUDProps {
   onTabChange: (tab: TabState) => void;
   isExpanded: boolean;
   onToggleExpand: () => void;
+  theme: 'dark' | 'light';
+  onThemeChange: (theme: 'dark' | 'light') => void;
 }
 
-export function HUD({ activeTab, onTabChange, isExpanded, onToggleExpand }: HUDProps) {
+export function HUD({ activeTab, onTabChange, isExpanded, onToggleExpand, theme, onThemeChange }: HUDProps) {
   const [isCompact, setIsCompact] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia('(max-width: 1439px)').matches : false,
   );
@@ -84,6 +86,27 @@ export function HUD({ activeTab, onTabChange, isExpanded, onToggleExpand }: HUDP
             </button>
           )
         })}
+      </div>
+
+      <div className="eldred-theme-switch flex flex-row lg:flex-col gap-1 lg:pt-2 lg:mt-2 lg:border-t lg:border-fantasy-gold/20">
+        <button
+          type="button"
+          onClick={() => onThemeChange('light')}
+          className={`eldred-theme-button ${theme === 'light' ? 'is-active' : ''}`}
+          title="明色界面"
+          aria-label="切换到明色界面"
+        >
+          <Sun className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onThemeChange('dark')}
+          className={`eldred-theme-button ${theme === 'dark' ? 'is-active' : ''}`}
+          title="暗色界面"
+          aria-label="切换到暗色界面"
+        >
+          <Moon className="w-4 h-4" />
+        </button>
       </div>
     </motion.div>
   );

@@ -45,6 +45,13 @@ import {
   triggerEldredDailyEncounter,
 } from './game/eldredFortune';
 
+type EldredTheme = 'dark' | 'light';
+
+const loadEldredTheme = (): EldredTheme => {
+  if (typeof window === 'undefined') return 'dark';
+  return window.localStorage.getItem('eldred:ui-theme') === 'light' ? 'light' : 'dark';
+};
+
 export default function App() {
   const [initialRuntime] = useState<EldredRuntimeSave>(() => loadEldredRuntimeSave());
   const [runtime, setRuntime] = useState<EldredRuntimeSave>(initialRuntime);
@@ -52,6 +59,7 @@ export default function App() {
   const [playerState, setPlayerState] = useState<PlayerState | null>(() => initialRuntime.player);
   const [activeTab, setActiveTab] = useState<TabState>('overview');
   const [hudExpanded, setHudExpanded] = useState(true);
+  const [eldredTheme, setEldredTheme] = useState<EldredTheme>(loadEldredTheme);
   const [interactionStatus, setInteractionStatus] = useState('待生成');
   const [isGeneratingNarration, setIsGeneratingNarration] = useState(false);
 
@@ -107,6 +115,11 @@ export default function App() {
       window.clearInterval(timer);
     };
   }, [refreshRuntime]);
+
+  useEffect(() => {
+    document.documentElement.dataset.eldredTheme = eldredTheme;
+    window.localStorage.setItem('eldred:ui-theme', eldredTheme);
+  }, [eldredTheme]);
 
   const handleCreationComplete = (state: PlayerState) => {
     setPlayerState(state);
@@ -363,7 +376,7 @@ export default function App() {
   };
 
   return (
-    <div className="w-screen h-screen overflow-hidden flex font-sans text-gray-200">
+    <div className={`w-screen h-screen overflow-hidden flex font-sans ${eldredTheme === 'dark' ? 'text-gray-200' : 'text-stone-900'}`}>
       <AnimatePresence mode="wait">
         {gameState === 'creation' ? (
           <motion.div
@@ -380,6 +393,7 @@ export default function App() {
           <motion.div
             key="playing"
             data-eldred-playing="true"
+            data-eldred-theme={eldredTheme}
             className="w-full h-full p-3 pt-16 lg:pl-24 lg:pr-8 lg:py-8 relative flex"
             initial={{ opacity: 0, backdropFilter: 'blur(10px)' }}
             animate={{ opacity: 1, backdropFilter: 'blur(0px)' }}
@@ -390,6 +404,8 @@ export default function App() {
               onTabChange={setActiveTab}
               isExpanded={hudExpanded}
               onToggleExpand={() => setHudExpanded(!hudExpanded)}
+              theme={eldredTheme}
+              onThemeChange={setEldredTheme}
             />
 
             <div data-eldred-main="true" className="flex-1 ml-0 lg:ml-4 relative min-w-0">

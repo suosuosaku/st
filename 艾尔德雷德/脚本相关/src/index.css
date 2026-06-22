@@ -2495,3 +2495,154 @@ body,
     border-width: 1px !important;
   }
 }
+
+.eldred-theme-switch {
+  flex-shrink: 0;
+}
+
+.eldred-theme-button {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(212, 175, 55, 0.26);
+  border-radius: 0.5rem;
+  color: rgba(229, 192, 123, 0.72);
+  background: rgba(255, 255, 255, 0.04);
+  transition: color 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.eldred-theme-button:hover,
+.eldred-theme-button.is-active {
+  color: #e5c07b;
+  border-color: rgba(212, 175, 55, 0.72);
+  background: rgba(212, 175, 55, 0.16);
+}
+
+/* Light theme pass: this intentionally sits after the dark pass so users can switch freely. */
+html[data-eldred-theme="light"] {
+  --eldred-bg-deep: #efe2c8;
+  --eldred-bg-panel: rgba(255, 248, 232, 0.96);
+  --eldred-bg-panel-soft: rgba(246, 235, 211, 0.92);
+  --eldred-text-main: #2e2116;
+  --eldred-text-soft: #6e5b3e;
+  --eldred-line-gold: rgba(142, 96, 31, 0.44);
+  --eldred-line-red: rgba(141, 54, 43, 0.42);
+}
+
+html[data-eldred-theme="light"] body,
+html[data-eldred-theme="light"] [data-eldred-playing="true"] {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 244, 211, 0.92) 0%, transparent 34rem),
+    linear-gradient(180deg, #f8efd8, #e8d5ae) !important;
+  color: #2e2116 !important;
+}
+
+html[data-eldred-theme="light"] .glass-panel,
+html[data-eldred-theme="light"] .glass-panel-light,
+html[data-eldred-theme="light"] .parchment-panel,
+html[data-eldred-theme="light"] .pixel-data-tile,
+html[data-eldred-theme="light"] .dossier-hero,
+html[data-eldred-theme="light"] .dossier-attribute,
+html[data-eldred-theme="light"] .dossier-meter,
+html[data-eldred-theme="light"] .eldred-clue-row,
+html[data-eldred-theme="light"] .eldred-clue-token,
+html[data-eldred-theme="light"] .eldred-clue-event,
+html[data-eldred-theme="light"] .eldred-clue-page-row,
+html[data-eldred-theme="light"] .eldred-clue-detail-panel {
+  background:
+    linear-gradient(180deg, rgba(255, 248, 232, 0.96), rgba(240, 224, 190, 0.94)),
+    repeating-linear-gradient(0deg, rgba(142, 96, 31, 0.045) 0 2px, transparent 2px 10px) !important;
+  border-color: rgba(142, 96, 31, 0.44) !important;
+  color: #2e2116 !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.42), 0 10px 22px rgba(98, 65, 22, 0.16) !important;
+}
+
+html[data-eldred-theme="light"] [data-eldred-hud="tabs"] {
+  background: rgba(255, 248, 232, 0.94) !important;
+  color: #2e2116 !important;
+  box-shadow: 0 10px 30px rgba(98, 65, 22, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.44) !important;
+}
+
+html[data-eldred-theme="light"] .eldred-story-card,
+html[data-eldred-theme="light"] .eldred-notice-frame {
+  border-color: rgba(142, 96, 31, 0.48) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 249, 235, 0.98), rgba(240, 224, 190, 0.96)),
+    repeating-linear-gradient(0deg, rgba(142, 96, 31, 0.04) 0 2px, transparent 2px 10px) !important;
+  color: #2e2116 !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.48), 0 10px 22px rgba(98, 65, 22, 0.16) !important;
+}
+
+html[data-eldred-theme="light"] .eldred-combat-frame {
+  border-color: rgba(141, 54, 43, 0.48) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 240, 226, 0.98), rgba(237, 211, 189, 0.96)),
+    repeating-linear-gradient(0deg, rgba(141, 54, 43, 0.04) 0 2px, transparent 2px 8px) !important;
+  color: #2e2116 !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.46), 0 10px 22px rgba(98, 65, 22, 0.14) !important;
+}
+
+html[data-eldred-theme="light"] .eldred-narrative-scroll,
+html[data-eldred-theme="light"] .eldred-story-time,
+html[data-eldred-theme="light"] .eldred-narrative-paragraph,
+html[data-eldred-theme="light"] .eldred-notice-detail,
+html[data-eldred-theme="light"] .eldred-notice-meta,
+html[data-eldred-theme="light"] .eldred-npc-detail,
+html[data-eldred-theme="light"] .text-gray-100,
+html[data-eldred-theme="light"] .text-gray-200,
+html[data-eldred-theme="light"] .text-gray-300,
+html[data-eldred-theme="light"] .text-gray-400,
+html[data-eldred-theme="light"] .text-white {
+  color: #2e2116 !important;
+}
+
+html[data-eldred-theme="light"] .text-gray-500,
+html[data-eldred-theme="light"] .text-gray-600,
+html[data-eldred-theme="light"] .text-gray-700 {
+  color: #6e5b3e !important;
+}
+
+html[data-eldred-theme="light"] .eldred-story-title,
+html[data-eldred-theme="light"] .eldred-drop-cap,
+html[data-eldred-theme="light"] .text-fantasy-gold {
+  color: #8b651f !important;
+}
+
+html[data-eldred-theme="light"] [data-eldred-overview-main="true"] input,
+html[data-eldred-theme="light"] [data-eldred-overview-main="true"] textarea,
+html[data-eldred-theme="light"] [data-eldred-overview-main="true"] label,
+html[data-eldred-theme="light"] [data-eldred-overview-main="true"] .bg-white\/25,
+html[data-eldred-theme="light"] [data-eldred-overview-main="true"] .bg-white\/30,
+html[data-eldred-theme="light"] [data-eldred-overview-main="true"] .bg-white\/40,
+html[data-eldred-theme="light"] [data-eldred-overview-main="true"] .bg-white\/45 {
+  border-color: rgba(142, 96, 31, 0.36) !important;
+  background-color: rgba(255, 250, 238, 0.78) !important;
+  color: #2e2116 !important;
+}
+
+html[data-eldred-theme="light"] [data-eldred-overview-main="true"] input::placeholder,
+html[data-eldred-theme="light"] [data-eldred-overview-main="true"] textarea::placeholder {
+  color: rgba(110, 91, 62, 0.72) !important;
+}
+
+html[data-eldred-theme="light"] .eldred-notice-primary,
+html[data-eldred-theme="light"] .eldred-notice-detail,
+html[data-eldred-theme="light"] .eldred-notice-meta,
+html[data-eldred-theme="light"] .eldred-npc-detail {
+  background: rgba(142, 96, 31, 0.08) !important;
+}
+
+html[data-eldred-theme="light"] .eldred-theme-button {
+  color: #6e5b3e;
+  border-color: rgba(142, 96, 31, 0.28);
+  background: rgba(142, 96, 31, 0.06);
+}
+
+html[data-eldred-theme="light"] .eldred-theme-button:hover,
+html[data-eldred-theme="light"] .eldred-theme-button.is-active {
+  color: #8b651f;
+  border-color: rgba(142, 96, 31, 0.64);
+  background: rgba(142, 96, 31, 0.14);
+}

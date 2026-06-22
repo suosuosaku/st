@@ -677,15 +677,35 @@ const attributeRecordFromBase = (attrs: Record<AttributeKey, number>) => ({
   精神: attrs.spr,
 });
 
+const findCollectedNpcRecord = (statData: AnyRecord, name: string) => {
+  const collection = asRecord(asRecord(asRecord(statData.主角).角色收集));
+  const main = asRecord(collection.主要NPC);
+  const other = asRecord(collection.其他NPC);
+  if (isRecord(main[name])) return { groupName: '主要NPC', record: asRecord(main[name]) };
+  if (isRecord(other[name])) return { groupName: '其他NPC', record: asRecord(other[name]) };
+  return null;
+};
+
 const syncNpcTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
   const name = tagValue(tag, ['姓名', '名称', '角色']) || tagPrimary(tag, 0);
-  if (!name) return;
+  if (!name) return { isFirstEncounter: false, name: '' };
   const kindText = tag.fields.join('｜');
   const fixedBase = fixedNpcVariableRecord(name);
-  const groupName = /主要|主线|固定/.test(kindText) || Object.keys(fixedBase).length ? '主要NPC' : '其他NPC';
+  const collected = findCollectedNpcRecord(statData, name);
+  const groupName = collected?.groupName || (/主要|主线|固定/.test(kindText) || Object.keys(fixedBase).length ? '主要NPC' : '其他NPC');
   const group = ensureRecordAt(statData, ['主角', '角色收集', groupName]);
-  const existing = asRecord(group[name]);
+  const existing = collected?.record || asRecord(group[name]);
+  const isFirstEncounter = Object.keys(existing).length === 0;
   const base: AnyRecord = { ...asRecord(fixedBase), ...existing };
+  const world = asRecord(statData.世界);
+  const currentLocation = tagValue(tag, ['地点', '地区', '所属地标'])
+    || cleanText(world.当前地点)
+    || cleanText(world.具体地标)
+    || cleanText(world.大区域)
+    || '当前地标';
+  const currentTime = tagValue(tag, ['时间'])
+    || cleanText(world.当前时间)
+    || new Date().toISOString();
   const roleText = [
     name,
     tagValue(tag, ['身份', '职责']) || tagPrimary(tag, 1),
@@ -738,7 +758,14 @@ const syncNpcTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
     已知技能: skillText,
     激活技能: tagValue(tag, ['激活技能']) || base.激活技能 || skillText,
     特质: tagValue(tag, ['特质']) || base.特质 || `${race.name}；${cls.name}；${tagPrimary(tag, 1, '可回访人物')}`,
+    初见时间: base.初见时间 || currentTime,
+    初见地点: base.初见地点 || currentLocation,
+    初见标签: base.初见标签 || tag.body,
+    收录状态: base.收录状态 || '已收录',
+    最近接触: isFirstEncounter ? (base.最近接触 || '初见收录') : (tagValue(tag, ['最近接触', '进展', '状态']) || '再次接触'),
+    最近更新时间: currentTime,
   };
+  return { isFirstEncounter, name };
 };
 
 const syncClueTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
@@ -952,13 +979,19 @@ const syncNarrativeTagsToStatData = (rawText: string, previousStatData: unknown,
   const flipBaseCount = flipCountFromStatData(referenceStatData ?? previousStatData);
   let fortuneFlipGranted = false;
   tags.forEach(tag => {
+    if (tag.title === 'NPC收录') {
+      const result = syncNpcTag(nextStatData, tag);
+      if (result.isFirstEncounter) {
+        appendFrontendNotice(nextStatData, tag.title, tag.body);
+      }
+      return;
+    }
     appendFrontendNotice(nextStatData, tag.title, tag.body);
     if (tag.title === '新闻' || tag.title === '新闻更新') updateBoardRecord(nextStatData, '新闻', boardNewsFromTag(tag, '新闻').标题, boardNewsFromTag(tag, '新闻'));
     if (tag.title === '见闻' || tag.title === '见闻更新') updateBoardRecord(nextStatData, '见闻', boardNewsFromTag(tag, '见闻').标题, boardNewsFromTag(tag, '见闻'));
     if (tag.title === '委托接取' || tag.title === '委托生成' || tag.title === '委托更新') syncQuestTag(nextStatData, tag);
     if (tag.title === '委托完成') completeQuestTag(nextStatData, tag);
     if (tag.title === '委托结算' || tag.title === '奖励结算') settleQuestTag(nextStatData, tag);
-    if (tag.title === 'NPC收录') syncNpcTag(nextStatData, tag);
     if (tag.title === '线索收录' || tag.title === '线索更新' || tag.title === '线索进展') syncClueTag(nextStatData, tag);
     if (tag.title === '战斗实况' || tag.title === '战斗回合' || tag.title === '战斗行动' || tag.title === '战斗开始' || tag.title === '战斗结算') syncCombatTag(nextStatData, tag);
     if (tag.title === '获得物品') syncItemTag(nextStatData, tag);
