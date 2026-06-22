@@ -208,6 +208,46 @@ export type ImmersiveNotice = {
   meta?: string;
 };
 
+export type FortuneRarity = 'common' | 'uncommon' | 'rare' | 'epic';
+
+export type FortuneRewardKind =
+  | 'item'
+  | 'experience'
+  | 'attribute'
+  | 'skill'
+  | 'reputation'
+  | 'favor'
+  | 'effect'
+  | 'encounter';
+
+export type FortuneLog = {
+  id: string;
+  title: string;
+  detail: string;
+  rarity: FortuneRarity;
+  kind: FortuneRewardKind;
+  createdAt: string;
+  slot?: number;
+  synced?: boolean;
+  narrativeQueued?: boolean;
+};
+
+export type FortuneEncounterEffect = {
+  id: string;
+  title: string;
+  detail: string;
+  source: string;
+  createdAt: string;
+  expiresAt?: string;
+};
+
+export type EldredFortuneState = {
+  flipCount: number;
+  dailyKey: string;
+  logs: FortuneLog[];
+  activeEncounters: FortuneEncounterEffect[];
+};
+
 export type ClueRecord = {
   id: string;
   label: string;
@@ -308,4 +348,4 @@ export type CombatUnit = {
   cooldowns?: Record<string, number>;
 };
 
-export type TabState = 'overview' | 'map' | 'party' | 'npc' | 'quests' | 'clues' | 'inventory' | 'combat' | 'system';
+export type TabState = 'overview' | 'map' | 'party' | 'npc' | 'quests' | 'clues' | 'inventory' | 'combat' | 'fortune' | 'system';

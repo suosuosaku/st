@@ -7,8 +7,11 @@ import {
   CombatUnit,
   DynamicBoardItem,
   DynamicBoardItemType,
+  EldredFortuneState,
   EquipmentLoadout,
   EquipmentSlot,
+  FortuneEncounterEffect,
+  FortuneLog,
   ImmersiveNotice,
   ImmersiveNoticeType,
   OriginLocation,
@@ -103,6 +106,7 @@ export type EldredRuntimeSave = {
     dynamicBoard: DynamicBoardItem[];
   };
   rawStatData?: AnyRecord;
+  fortune: EldredFortuneState;
   narration: EldredNarrationState;
   messages: EldredRuntimeMessage[];
   updatedAt: string;
@@ -124,6 +128,13 @@ const emptyWorld = (): EldredRuntimeSave['world'] => ({
   dynamicBoard: [],
 });
 
+export const createEmptyFortuneState = (): EldredFortuneState => ({
+  flipCount: 0,
+  dailyKey: '',
+  logs: [],
+  activeEncounters: [],
+});
+
 export const createEmptyNarrationState = (): EldredNarrationState => ({
   entries: [],
 });
@@ -141,6 +152,7 @@ export const createEmptyEldredRuntimeSave = (): EldredRuntimeSave => ({
     logs: [],
   },
   world: emptyWorld(),
+  fortune: createEmptyFortuneState(),
   narration: createEmptyNarrationState(),
   messages: [],
   updatedAt: new Date().toISOString(),
@@ -1568,6 +1580,71 @@ const worldFromStatData = (statData: AnyRecord): EldredRuntimeSave['world'] => {
   };
 };
 
+const logFromFortuneEntry = (value: unknown, index: number): FortuneLog | null => {
+  const source = asRecord(value);
+  const title = textOf(source.标题 ?? source.title ?? source.名称 ?? source.name);
+  if (!title) return null;
+  const slot = numberOf(source.卡位 ?? source.slot, 0);
+  return {
+    id: textOf(source.id ?? source.ID, `fortune-log-${index}`),
+    title,
+    detail: textOf(source.内容 ?? source.detail ?? source.说明 ?? source.body),
+    rarity: (['common', 'uncommon', 'rare', 'epic'].includes(textOf(source.稀有度 ?? source.rarity))
+      ? textOf(source.稀有度 ?? source.rarity)
+      : 'common') as FortuneLog['rarity'],
+    kind: (['item', 'experience', 'attribute', 'skill', 'reputation', 'favor', 'effect', 'encounter'].includes(textOf(source.类型 ?? source.kind))
+      ? textOf(source.类型 ?? source.kind)
+      : 'item') as FortuneLog['kind'],
+    createdAt: textOf(source.时间 ?? source.createdAt, new Date().toISOString()),
+    slot: slot > 0 ? slot : undefined,
+    synced: source.已同步 === true || source.synced === true,
+    narrativeQueued: source.已发送正文 === true || source.narrativeQueued === true,
+  };
+};
+
+const effectFromFortuneEntry = (value: unknown, index: number): FortuneEncounterEffect | null => {
+  const source = asRecord(value);
+  const title = textOf(source.标题 ?? source.title ?? source.名称 ?? source.name);
+  if (!title) return null;
+  return {
+    id: textOf(source.id ?? source.ID, `fortune-effect-${index}`),
+    title,
+    detail: textOf(source.内容 ?? source.detail ?? source.效果 ?? source.body),
+    source: textOf(source.来源 ?? source.source, '奇遇'),
+    createdAt: textOf(source.时间 ?? source.createdAt, new Date().toISOString()),
+    expiresAt: textOf(source.到期 ?? source.expiresAt),
+  };
+};
+
+const arrayOrObjectValues = (value: unknown) =>
+  Array.isArray(value)
+    ? value
+    : value && typeof value === 'object'
+      ? Object.values(value as AnyRecord)
+      : [];
+
+const fortuneFromStatData = (statData: AnyRecord): EldredFortuneState => {
+  const system = asRecord(statData.系统);
+  const fortune = asRecord(system.翻牌 ?? system.抽卡 ?? system.翻牌系统);
+  const encounter = asRecord(system.奇遇 ?? system.奇遇系统);
+  const logs = arrayOrObjectValues(fortune.日志 ?? fortune.logs)
+    .map(logFromFortuneEntry)
+    .filter((entry): entry is FortuneLog => Boolean(entry))
+    .slice(-30)
+    .reverse();
+  const activeEncounters = arrayOrObjectValues(encounter.常驻效果 ?? encounter.效果 ?? encounter.activeEncounters)
+    .map(effectFromFortuneEntry)
+    .filter((entry): entry is FortuneEncounterEffect => Boolean(entry))
+    .slice(-12)
+    .reverse();
+  return {
+    flipCount: Math.max(0, numberOf(fortune.次数 ?? fortune.翻牌次数 ?? fortune.count, 0)),
+    dailyKey: textOf(encounter.今日标识 ?? encounter.dailyKey),
+    logs,
+    activeEncounters,
+  };
+};
+
 const normalizeRuntime = (raw: Partial<EldredRuntimeSave>, source: EldredRuntimeSource): EldredRuntimeSave => {
   const entries = Array.isArray(raw.narration?.entries) ? raw.narration.entries : [];
   const messages = Array.isArray(raw.messages) ? raw.messages : [];
@@ -1586,6 +1663,12 @@ const normalizeRuntime = (raw: Partial<EldredRuntimeSave>, source: EldredRuntime
       dynamicBoard: raw.world?.dynamicBoard || [],
     },
     rawStatData: raw.rawStatData,
+    fortune: {
+      ...createEmptyFortuneState(),
+      ...raw.fortune,
+      logs: Array.isArray(raw.fortune?.logs) ? raw.fortune.logs.slice(0, 30) : [],
+      activeEncounters: Array.isArray(raw.fortune?.activeEncounters) ? raw.fortune.activeEncounters.slice(0, 12) : [],
+    },
     narration: {
       entries: entries
         .filter(entry => entry && typeof entry === 'object')
@@ -1627,6 +1710,7 @@ export const runtimeFromStatData = (statData: AnyRecord): EldredRuntimeSave => (
   combat: combatFromStatData(statData),
   world: worldFromStatData(statData),
   rawStatData: statData,
+  fortune: fortuneFromStatData(statData),
   narration: createEmptyNarrationState(),
   messages: [],
   updatedAt: new Date().toISOString(),
@@ -1663,6 +1747,7 @@ export const loadEldredRuntimeSave = (): EldredRuntimeSave => {
       const canUseCachedRuntime = sameRuntimeIdentity(cachedRuntime, runtime);
       const canMergeCachedOpening = canUseCachedRuntime || playerNeedsCachedOpening(runtime.player, cachedRuntime?.player);
       const cachedWorld = canUseCachedRuntime ? cachedRuntime?.world : undefined;
+      const cachedFortune = canUseCachedRuntime ? cachedRuntime?.fortune : undefined;
       const world = {
         ...runtime.world,
         currentTime: runtime.world.currentTime || cachedWorld?.currentTime || '',
@@ -1690,6 +1775,9 @@ export const loadEldredRuntimeSave = (): EldredRuntimeSave => {
         world,
         narration: canUseCachedRuntime ? cachedRuntime?.narration || runtime.narration : runtime.narration,
         messages: canUseCachedRuntime ? cachedRuntime?.messages || runtime.messages : runtime.messages,
+        fortune: runtime.fortune.flipCount || runtime.fortune.logs.length || runtime.fortune.activeEncounters.length || runtime.fortune.dailyKey
+          ? runtime.fortune
+          : cachedFortune || runtime.fortune,
       };
     }
   }

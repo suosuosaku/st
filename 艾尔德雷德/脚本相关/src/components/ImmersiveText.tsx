@@ -6,6 +6,7 @@ type NoticeKind = 'item' | 'skill' | 'quest' | 'npc' | 'clue' | 'relation' | 'co
 
 const noticeKindMap: Record<string, NoticeKind> = {
   获得物品: 'item',
+  获得一次翻牌次数: 'event',
   获得技能: 'skill',
   技能入库: 'skill',
   装备变更: 'item',
@@ -579,9 +580,9 @@ export function RichNarrative({ text }: { text: string }) {
   return (
     <>
       {lines.map((line, index) => {
-        const notice = line.match(/^【([^】]{1,32})】[：:]\s*(.+)$/);
+        const notice = line.match(/^【([^】]{1,32})】(?:[：:]\s*(.*))?$/);
         if (notice && noticeKindMap[notice[1]]) {
-          return <InlineNotice key={`notice-${index}`} title={notice[1]} body={notice[2]} />;
+          return <InlineNotice key={`notice-${index}`} title={notice[1]} body={notice[2] || ''} />;
         }
 
         const dialogue = line.match(/^【([^】]{1,32})】[：:]\s*[“"](.+?)[”"]?$/);
@@ -590,7 +591,7 @@ export function RichNarrative({ text }: { text: string }) {
         }
 
         if (notice) {
-          return <TaggedLine key={`tagged-${index}`} title={notice[1]} body={notice[2]} />;
+          return <TaggedLine key={`tagged-${index}`} title={notice[1]} body={notice[2] || ''} />;
         }
 
         return (

@@ -384,10 +384,11 @@ const extractNarrativeTagLines = (rawText: string): NarrativeTagLine[] =>
   String(rawText || '')
     .split(/\r?\n/)
     .map(line => line.trim())
-    .map(line => line.match(/^【([^】]{1,32})】[：:]\s*(.+)$/))
+    .map(line => line.match(/^【([^】]{1,32})】(?:[：:]\s*(.*))?$/))
     .filter((match): match is RegExpMatchArray => Boolean(match && ELDRED_NOTICE_TAGS.includes(match[1])))
     .map(match => {
-      const fields = match[2]
+      const body = match[2] || '';
+      const fields = body
         .split(/[｜|]/)
         .map(field => field.trim())
         .filter(Boolean);
@@ -396,7 +397,7 @@ const extractNarrativeTagLines = (rawText: string): NarrativeTagLine[] =>
         const namedMatch = field.match(/^([^：:]{1,12})[：:]\s*(.+)$/);
         if (namedMatch) named[namedMatch[1].trim()] = namedMatch[2].trim();
       });
-      return { title: match[1], body: match[2].trim(), fields, named };
+      return { title: match[1], body: body.trim(), fields, named };
     });
 
 const tagValue = (tag: NarrativeTagLine, keys: string[]) => {
@@ -766,6 +767,17 @@ const syncFavorOrReputation = (statData: AnyRecord, tag: NarrativeTagLine) => {
   };
 };
 
+const syncFortuneFlipTag = (statData: AnyRecord, tag: NarrativeTagLine) => {
+  const fortune = ensureRecordAt(statData, ['系统', '翻牌']);
+  const amount = Math.max(1, numberFromText(tag.body || tagPrimary(tag, 0), 1));
+  fortune.次数 = numberFromText(fortune.次数, 0) + amount;
+  fortune.最近获得 = {
+    类型: '翻牌次数',
+    数量: amount,
+    时间: new Date().toISOString(),
+  };
+};
+
 const syncNarrativeTagsToStatData = (rawText: string, previousStatData: unknown) => {
   const tags = extractNarrativeTagLines(rawText);
   if (!tags.length) return null;
@@ -781,6 +793,7 @@ const syncNarrativeTagsToStatData = (rawText: string, previousStatData: unknown)
     if (tag.title === '线索收录' || tag.title === '线索更新' || tag.title === '线索进展') syncClueTag(nextStatData, tag);
     if (tag.title === '战斗实况' || tag.title === '战斗回合' || tag.title === '战斗行动' || tag.title === '战斗开始') syncCombatTag(nextStatData, tag);
     if (tag.title === '获得物品') syncItemTag(nextStatData, tag);
+    if (tag.title === '获得一次翻牌次数') syncFortuneFlipTag(nextStatData, tag);
     if (tag.title === '好感变化' || tag.title === '声望变化') syncFavorOrReputation(nextStatData, tag);
   });
   return nextStatData;
@@ -1092,6 +1105,7 @@ export const hasEldredGenerationBridge = () =>
 
 const ELDRED_NOTICE_TAGS = [
   '获得物品',
+  '获得一次翻牌次数',
   '获得技能',
   '技能入库',
   '装备变更',

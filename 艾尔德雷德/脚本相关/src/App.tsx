@@ -13,6 +13,7 @@ import { NpcPanel } from './components/panels/NpcPanel';
 import { EmptyPanel } from './components/panels/EmptyPanel';
 import { SystemPanel } from './components/panels/SystemPanel';
 import { InventoryPanel } from './components/panels/InventoryPanel';
+import { FortunePanel } from './components/panels/FortunePanel';
 import {
   EldredRuntimeSave,
   loadEldredRuntimeSave,
@@ -38,6 +39,10 @@ import {
   processEldredVariablesWithAsyncApi,
   saveEldredAsyncVariableApiSettings,
 } from './game/asyncVariableApi';
+import {
+  drawEldredFortuneCard,
+  triggerEldredDailyEncounter,
+} from './game/eldredFortune';
 
 export default function App() {
   const [initialRuntime] = useState<EldredRuntimeSave>(() => loadEldredRuntimeSave());
@@ -255,6 +260,56 @@ export default function App() {
     setInteractionStatus(`已丢弃：${item.name}`);
   };
 
+  const queueFortuneNarration = (
+    sourceRuntime: EldredRuntimeSave,
+    event: Omit<EldredFrontendEventInput, 'player' | 'party' | 'enemies'>,
+  ) => {
+    if (!sourceRuntime.player) return;
+    setActiveTab('overview');
+    setInteractionStatus('奇遇正文生成中');
+    setIsGeneratingNarration(true);
+    void generateEldredNarrationFromEvent(sourceRuntime, {
+      ...event,
+      player: sourceRuntime.player,
+      party: sourceRuntime.npcs.filter(npc => sourceRuntime.player?.partyMemberIds.includes(npc.id) || sourceRuntime.player?.partyMemberIds.includes(npc.name)),
+      enemies: sourceRuntime.combat.enemyUnits,
+    }).then(async generatedRuntime => {
+      const processed = await applyVariableApiAfterNarration(generatedRuntime);
+      setRuntime(processed.runtime);
+      setPlayerState(processed.runtime.player || sourceRuntime.player);
+      const status = processed.runtime.narration.lastError ? processed.runtime.narration.lastError : '奇遇正文已生成';
+      setInteractionStatus(processed.message ? `${status} / ${processed.message}` : status);
+    }).catch(error => {
+      setInteractionStatus(error instanceof Error ? error.message : '奇遇正文生成失败');
+    }).finally(() => setIsGeneratingNarration(false));
+  };
+
+  const drawFortuneCard = async (slot: number) => {
+    const result = await drawEldredFortuneCard(loadEldredRuntimeSave(), slot);
+    if (!result) {
+      setInteractionStatus('没有可用翻牌次数');
+      return null;
+    }
+    setRuntime(result.runtime);
+    if (result.runtime.player) setPlayerState(result.runtime.player);
+    setInteractionStatus(result.message);
+    if (result.event) queueFortuneNarration(result.runtime, result.event);
+    return result;
+  };
+
+  const triggerDailyEncounter = async () => {
+    const result = await triggerEldredDailyEncounter(loadEldredRuntimeSave());
+    if (!result) {
+      setInteractionStatus('今日奇遇已触发');
+      return null;
+    }
+    setRuntime(result.runtime);
+    if (result.runtime.player) setPlayerState(result.runtime.player);
+    setInteractionStatus(result.message);
+    if (result.event) queueFortuneNarration(result.runtime, result.event);
+    return result;
+  };
+
   const handleRuntimeProcessed = (nextRuntime: EldredRuntimeSave, message: string) => {
     setRuntime(nextRuntime);
     if (nextRuntime.player) setPlayerState(nextRuntime.player);
@@ -272,6 +327,7 @@ export default function App() {
       case 'clues': return <CluePanel cluePhases={runtime.cluePhases} />;
       case 'combat': return <CombatPanel player={playerState} partyNpcs={runtime.npcs.filter(npc => playerState.partyMemberIds.includes(npc.id) || playerState.partyMemberIds.includes(npc.name))} enemyUnits={runtime.combat.enemyUnits} initialTurn={runtime.combat.turn} initialLogs={runtime.combat.logs} runtime={runtime} onSubmitEvent={submitRuntimeEvent} />;
       case 'inventory': return <InventoryPanel player={playerState} runtime={runtime} onSubmitEvent={submitRuntimeEvent} onDiscardItem={discardInventoryItem} onOpenOverview={() => setActiveTab('overview')} />;
+      case 'fortune': return <FortunePanel runtime={runtime} isBusy={isGeneratingNarration} onDrawCard={drawFortuneCard} onTriggerDaily={triggerDailyEncounter} />;
       case 'system': return <SystemPanel runtime={runtime} player={playerState} onRuntimeProcessed={handleRuntimeProcessed} />;
       default: return <EmptyPanel title="未知区域" />;
     }

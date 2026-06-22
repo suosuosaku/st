@@ -14,6 +14,7 @@ export type EldredFrontendEventType =
   | 'attribute_allocate'
   | 'action_check'
   | 'combat_command'
+  | 'fortune_encounter'
   | 'free_intent';
 
 export type EldredFrontendEventInput = {
