@@ -1,0 +1,29 @@
+{
+  "id": "my-first-pack",
+  "title": "我的第一个资源包",
+  "description": "这里写资源包简介。",
+  "author": "投稿人名称",
+  "version": "1.0.0",
+  "worldbookName": "苍玄界创意工坊",
+  "entries": [
+    {
+      "id": 1,
+      "entry_type": "worldbook",
+      "name": "世界书条目名",
+      "enabled": true,
+      "strategy_type": "constant",
+      "keys": [],
+      "keys_secondary": [],
+      "keys_secondary_logic": "and_any",
+      "scan_depth": "same_as_global",
+      "position_type": "after_character_definition",
+      "position_role": "system",
+      "position_depth": 4,
+      "position_order": 100,
+      "probability": 100,
+      "recursion_prevent_incoming": false,
+      "recursion_prevent_outgoing": false,
+      "content": "这里写世界书内容。"
+    }
+  ]
+}

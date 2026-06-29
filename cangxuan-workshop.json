@@ -1,0 +1,36 @@
+{
+  "title": "苍玄界创意工坊",
+  "source": "github",
+  "schema_version": 1,
+  "packs": [
+    {
+      "id": "starter-example",
+      "title": "入门示例包",
+      "description": "用于验证创意工坊订阅流程的示例资源包。确认流程正常后，可以替换或删除。",
+      "author": "suosuosaku",
+      "version": "1.0.0",
+      "worldbookName": "苍玄界创意工坊",
+      "entries": [
+        {
+          "id": 1,
+          "entry_type": "worldbook",
+          "name": "创意工坊测试条目",
+          "enabled": true,
+          "strategy_type": "constant",
+          "keys": [],
+          "keys_secondary": [],
+          "keys_secondary_logic": "and_any",
+          "scan_depth": "same_as_global",
+          "position_type": "after_character_definition",
+          "position_role": "system",
+          "position_depth": 4,
+          "position_order": 100,
+          "probability": 100,
+          "recursion_prevent_incoming": false,
+          "recursion_prevent_outgoing": false,
+          "content": "【苍玄界创意工坊测试条目】如果你看到这条世界书内容，说明 GitHub 目录读取与订阅写入流程已经打通。正式使用前可以删除或替换此条目。"
+        }
+      ]
+    }
+  ]
+}

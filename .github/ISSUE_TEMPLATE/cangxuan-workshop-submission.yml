@@ -1,0 +1,66 @@
+name: 苍玄界创意工坊投稿
+description: 提交世界书、正则或开场白资源包，审核后加入 cangxuan-workshop.json
+title: "创意工坊投稿："
+labels:
+  - cangxuan-workshop
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请按表单提交。不要在投稿里放 GitHub token、账号密码或私人信息。
+  - type: input
+    id: author
+    attributes:
+      label: 投稿人
+      description: 你希望显示在创意工坊中的名字
+      placeholder: 例如：三明月
+    validations:
+      required: true
+  - type: input
+    id: pack_id
+    attributes:
+      label: 资源包 ID
+      description: 只使用英文、数字、短横线或下划线；发布后尽量不要改
+      placeholder: my-first-pack
+    validations:
+      required: true
+  - type: input
+    id: title
+    attributes:
+      label: 资源包标题
+      placeholder: 例如：小寒山扩展包
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: 资源包简介
+      description: 简要说明资源用途
+    validations:
+      required: true
+  - type: dropdown
+    id: entry_type
+    attributes:
+      label: 投稿类型
+      options:
+        - worldbook
+        - regex
+        - greeting
+    validations:
+      required: true
+  - type: textarea
+    id: content
+    attributes:
+      label: 投稿内容
+      description: 世界书正文、正则替换内容，或开场白正文
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    id: json
+    attributes:
+      label: 可选：完整 JSON
+      description: 如果你已经用角色卡内工坊生成了投稿 JSON，可以粘贴在这里
+      render: json
+    validations:
+      required: false
