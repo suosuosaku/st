@@ -17,7 +17,7 @@ const MAIN_DAOIST_NAMES = [
   '药芷若', '叶段英', '慕海棠', '颂长风', '印唯心',
   '妖九烟', '阎冥', '冷小凝', '姜昭昭', '苏酒儿',
   '姜澄鸢', '红', '雪照宁', '潮听澜', '小索',
-  '慕泽', '凌长霜', '沧无涯', '裴不归', '银摇枝',
+  '凌长霜', '银摇枝',
 ];
 
 const NON_MAIN_DAOIST_NAMES = [
@@ -25,7 +25,7 @@ const NON_MAIN_DAOIST_NAMES = [
   '范达克', '苟活', '骨小宝', '归尘', '花怜', '贾道学', '金不换',
   '陆潮生', '毛绒绒', '苗小青', '师长夷', '宋听雪', '太白', '铁娇娇',
   '挽歌', '王阿牛', '线头', '依依兮', '幽魂子', '玉斫璜', '云鹤',
-  '运蔚', '张铁柱', '祝雨晴', '乌滴墨', '沙知返', '蓝甜药',
+  '运蔚', '张铁柱', '祝雨晴', '慕泽', '沧无涯', '裴不归', '乌滴墨', '沙知返', '蓝甜药',
 ];
 
 const PACKAGED_BEAUTIFY_REGEX_NAMES = new Set([
@@ -43,34 +43,13 @@ const PLACEHOLDER_IMAGE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAA
 const OPENING_EXTRA_CHARACTERS = [
   {
     id: 17,
-    name: '慕泽',
-    sect: '阵道阁',
-    title: '把人生画成阵图的阁主',
-    desc: '阵道阁阁主，讲话三句内必然开始画线，关心弟子的方式是默默把阵图修到能用。',
-  },
-  {
-    id: 18,
     name: '凌长霜',
     sect: '玄霜宫',
     title: '把关心写进附录的宫主',
     desc: '玄霜宫宫主，外表冰雪条例，内里八卦情报库，照顾人时会先翻规章再递热汤。',
   },
   {
-    id: 19,
-    name: '沧无涯',
-    sect: '沧溟海阙',
-    title: '听潮判事的豪阔阙主',
-    desc: '沧溟海阙阙主，听潮声断局势，做饭像布阵，最擅长把严肃会议开出海鲜摊气质。',
-  },
-  {
-    id: 20,
-    name: '裴不归',
-    sect: '散修联盟',
-    title: '驳回也要写回执的总会长',
-    desc: '散修联盟总会长，铁面审核、追账执拗，公平到连自己迟到都要给自己贴罚单。',
-  },
-  {
-    id: 21,
+    id: 18,
     name: '银摇枝',
     sect: '百蛊绿洲',
     title: '蛊铃一响账也要清的寨主',
@@ -1560,7 +1539,7 @@ function patchStatusbar(script) {
 function patchOpening(script) {
   if (!script || typeof script.replaceString !== 'string') return;
   let html = script.replaceString;
-  if (!html.includes('name: "慕泽"')) {
+  if (!html.includes('name: "凌长霜"')) {
     const extraCharacters = OPENING_EXTRA_CHARACTERS.map(character => (
       `            { id: ${character.id}, name: "${character.name}", sect: "${character.sect}", title: "${character.title}", front: "${PLACEHOLDER_IMAGE}", avatar: "${PLACEHOLDER_IMAGE}", desc: "${character.desc}" }`
     )).join(',\n');
@@ -1589,7 +1568,7 @@ function patchVariableStructureScript(script) {
 }
 
 function patchCgManagerScript(script) {
-  if (!script || typeof script.content !== 'string' || script.content.includes('"慕泽-占位"')) return;
+  if (!script || typeof script.content !== 'string' || script.content.includes('"凌长霜-占位"')) return;
   const placeholderEntries = OPENING_EXTRA_CHARACTERS.map(character => (
     `\n    // ${character.name}\n    "${character.name}-占位": false,`
   )).join('\n');
