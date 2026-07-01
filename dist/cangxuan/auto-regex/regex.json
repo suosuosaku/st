@@ -1,0 +1,124 @@
+[
+  {
+    "id": "ad0d36be-66d4-4531-ab53-0fb7ee9725ad",
+    "scriptName": "悬赏接取美化",
+    "disabled": false,
+    "runOnEdit": true,
+    "findRegex": "/<赏令接取>(?=(?:(?!<\\/赏令接取>)[\\s\\S])*?标题[:：]\\s*([^\\r\\n]+))(?=(?:(?!<\\/赏令接取>)[\\s\\S])*?地点[:：]\\s*([^\\r\\n]+))(?=(?:(?!<\\/赏令接取>)[\\s\\S])*?委托人[:：]\\s*([^\\r\\n]+))(?=(?:(?!<\\/赏令接取>)[\\s\\S])*?目标[:：]\\s*([^\\r\\n]+))(?=(?:(?!<\\/赏令接取>)[\\s\\S])*?报酬[:：]\\s*([^\\r\\n]+))(?=(?:(?!<\\/赏令接取>)[\\s\\S])*?备注[:：]\\s*([^\\r\\n]+))[\\s\\S]*?<\\/赏令接取>/gm",
+    "trimStrings": [],
+    "replaceString": "<style>\n.cx-event-card{position:relative;overflow:hidden;margin:16px 0;padding:15px 16px 16px;border-radius:10px;background:linear-gradient(135deg,#090705 0%,#17110a 46%,#050505 100%);border:1px solid rgba(245,188,84,.48);box-shadow:0 14px 34px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.06);color:#f8f5ea;font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",\"Microsoft YaHei\",sans-serif}\n.cx-event-card:before{content:\"\";position:absolute;inset:0;background:radial-gradient(circle at 12% 0%,rgba(255,220,132,.18),transparent 28%),linear-gradient(90deg,rgba(255,255,255,.05),transparent 18%,transparent 82%,rgba(255,255,255,.04));pointer-events:none}\n.cx-event-head{position:relative;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(245,188,84,.22)}\n.cx-event-kicker{font-size:.72rem;letter-spacing:.16em;color:#facc6b;text-transform:uppercase;white-space:nowrap}.cx-event-title{font-weight:800;color:#fff4cc;font-size:1.05rem;line-height:1.35;text-shadow:0 1px 10px rgba(245,188,84,.16)}\n.cx-event-grid{position:relative;display:grid;gap:8px;font-size:.94rem;line-height:1.55}.cx-event-row{display:grid;grid-template-columns:4.8em 1fr;gap:8px;padding:7px 9px;border-radius:7px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055)}\n.cx-event-row b{color:#f6d98b;font-weight:700}.cx-quest{border-color:rgba(250,204,21,.55)}.cx-auction{border-color:rgba(251,191,36,.58)}.cx-gacha{border-color:rgba(217,119,6,.62)}\n@media(max-width:640px){.cx-event-card{padding:13px 12px}.cx-event-head{align-items:flex-start;flex-direction:column}.cx-event-row{grid-template-columns:4.2em 1fr;font-size:.9rem}}\n</style><div class=\"cx-event-card cx-quest\"><div class=\"cx-event-head\"><div><div class=\"cx-event-kicker\">玄金赏令</div><div class=\"cx-event-title\">赏令接取 · $1</div></div></div><div class=\"cx-event-grid\"><div class=\"cx-event-row\"><b>地点</b><span>$2</span></div><div class=\"cx-event-row\"><b>委托人</b><span>$3</span></div><div class=\"cx-event-row\"><b>目标</b><span>$4</span></div><div class=\"cx-event-row\"><b>报酬</b><span>$5</span></div><div class=\"cx-event-row\"><b>备注</b><span>$6</span></div></div></div>",
+    "placement": [
+      1,
+      2
+    ],
+    "substituteRegex": 0,
+    "minDepth": null,
+    "maxDepth": 1,
+    "markdownOnly": true,
+    "promptOnly": false
+  },
+  {
+    "id": "aba56483-26db-4887-bd51-d3270933364e",
+    "scriptName": "拍卖购入美化",
+    "disabled": false,
+    "runOnEdit": true,
+    "findRegex": "/<拍卖购入>(?=(?:(?!<\\/拍卖购入>)[\\s\\S])*?物品[:：]\\s*([^\\r\\n]+))(?=(?:(?!<\\/拍卖购入>)[\\s\\S])*?价格[:：]\\s*([^\\r\\n]+))(?=(?:(?!<\\/拍卖购入>)[\\s\\S])*?来源[:：]\\s*([^\\r\\n]+))(?=(?:(?!<\\/拍卖购入>)[\\s\\S])*?入袋[:：]\\s*([^\\r\\n]+))(?=(?:(?!<\\/拍卖购入>)[\\s\\S])*?备注[:：]\\s*([^\\r\\n]+))[\\s\\S]*?<\\/拍卖购入>/gm",
+    "trimStrings": [],
+    "replaceString": "<style>\n.cx-event-card{position:relative;overflow:hidden;margin:16px 0;padding:15px 16px 16px;border-radius:10px;background:linear-gradient(135deg,#090705 0%,#17110a 46%,#050505 100%);border:1px solid rgba(245,188,84,.48);box-shadow:0 14px 34px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.06);color:#f8f5ea;font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",\"Microsoft YaHei\",sans-serif}\n.cx-event-card:before{content:\"\";position:absolute;inset:0;background:radial-gradient(circle at 12% 0%,rgba(255,220,132,.18),transparent 28%),linear-gradient(90deg,rgba(255,255,255,.05),transparent 18%,transparent 82%,rgba(255,255,255,.04));pointer-events:none}\n.cx-event-head{position:relative;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(245,188,84,.22)}\n.cx-event-kicker{font-size:.72rem;letter-spacing:.16em;color:#facc6b;text-transform:uppercase;white-space:nowrap}.cx-event-title{font-weight:800;color:#fff4cc;font-size:1.05rem;line-height:1.35;text-shadow:0 1px 10px rgba(245,188,84,.16)}\n.cx-event-grid{position:relative;display:grid;gap:8px;font-size:.94rem;line-height:1.55}.cx-event-row{display:grid;grid-template-columns:4.8em 1fr;gap:8px;padding:7px 9px;border-radius:7px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055)}\n.cx-event-row b{color:#f6d98b;font-weight:700}.cx-quest{border-color:rgba(250,204,21,.55)}.cx-auction{border-color:rgba(251,191,36,.58)}.cx-gacha{border-color:rgba(217,119,6,.62)}\n@media(max-width:640px){.cx-event-card{padding:13px 12px}.cx-event-head{align-items:flex-start;flex-direction:column}.cx-event-row{grid-template-columns:4.2em 1fr;font-size:.9rem}}\n</style><div class=\"cx-event-card cx-auction\"><div class=\"cx-event-head\"><div><div class=\"cx-event-kicker\">玄金拍印</div><div class=\"cx-event-title\">拍卖购入 · $1</div></div></div><div class=\"cx-event-grid\"><div class=\"cx-event-row\"><b>价格</b><span>$2</span></div><div class=\"cx-event-row\"><b>来源</b><span>$3</span></div><div class=\"cx-event-row\"><b>入袋</b><span>$4</span></div><div class=\"cx-event-row\"><b>备注</b><span>$5</span></div></div></div>",
+    "placement": [
+      1,
+      2
+    ],
+    "substituteRegex": 0,
+    "minDepth": null,
+    "maxDepth": 1,
+    "markdownOnly": true,
+    "promptOnly": false
+  },
+  {
+    "id": "887290d5-9ee6-4df0-8f71-dfc6a1c93725",
+    "scriptName": "盲盒开启美化",
+    "disabled": false,
+    "runOnEdit": true,
+    "findRegex": "/<盲盒开启>(?=(?:(?!<\\/盲盒开启>)[\\s\\S])*?等级[:：]\\s*([^\\r\\n]+))(?=(?:(?!<\\/盲盒开启>)[\\s\\S])*?花费[:：]\\s*([^\\r\\n]+))(?=(?:(?!<\\/盲盒开启>)[\\s\\S])*?开出[:：]\\s*([^\\r\\n]+))(?=(?:(?!<\\/盲盒开启>)[\\s\\S])*?效果[:：]\\s*([^\\r\\n]+))(?=(?:(?!<\\/盲盒开启>)[\\s\\S])*?备注[:：]\\s*([^\\r\\n]+))[\\s\\S]*?<\\/盲盒开启>/gm",
+    "trimStrings": [],
+    "replaceString": "<style>\n.cx-event-card{position:relative;overflow:hidden;margin:16px 0;padding:15px 16px 16px;border-radius:10px;background:linear-gradient(135deg,#090705 0%,#17110a 46%,#050505 100%);border:1px solid rgba(245,188,84,.48);box-shadow:0 14px 34px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.06);color:#f8f5ea;font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",\"Microsoft YaHei\",sans-serif}\n.cx-event-card:before{content:\"\";position:absolute;inset:0;background:radial-gradient(circle at 12% 0%,rgba(255,220,132,.18),transparent 28%),linear-gradient(90deg,rgba(255,255,255,.05),transparent 18%,transparent 82%,rgba(255,255,255,.04));pointer-events:none}\n.cx-event-head{position:relative;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(245,188,84,.22)}\n.cx-event-kicker{font-size:.72rem;letter-spacing:.16em;color:#facc6b;text-transform:uppercase;white-space:nowrap}.cx-event-title{font-weight:800;color:#fff4cc;font-size:1.05rem;line-height:1.35;text-shadow:0 1px 10px rgba(245,188,84,.16)}\n.cx-event-grid{position:relative;display:grid;gap:8px;font-size:.94rem;line-height:1.55}.cx-event-row{display:grid;grid-template-columns:4.8em 1fr;gap:8px;padding:7px 9px;border-radius:7px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055)}\n.cx-event-row b{color:#f6d98b;font-weight:700}.cx-quest{border-color:rgba(250,204,21,.55)}.cx-auction{border-color:rgba(251,191,36,.58)}.cx-gacha{border-color:rgba(217,119,6,.62)}\n@media(max-width:640px){.cx-event-card{padding:13px 12px}.cx-event-head{align-items:flex-start;flex-direction:column}.cx-event-row{grid-template-columns:4.2em 1fr;font-size:.9rem}}\n</style><div class=\"cx-event-card cx-gacha\"><div class=\"cx-event-head\"><div><div class=\"cx-event-kicker\">玄金盲盒</div><div class=\"cx-event-title\">盲盒开启 · $3</div></div></div><div class=\"cx-event-grid\"><div class=\"cx-event-row\"><b>等级</b><span>$1</span></div><div class=\"cx-event-row\"><b>花费</b><span>$2</span></div><div class=\"cx-event-row\"><b>效果</b><span>$4</span></div><div class=\"cx-event-row\"><b>备注</b><span>$5</span></div></div></div>",
+    "placement": [
+      1,
+      2
+    ],
+    "substituteRegex": 0,
+    "minDepth": null,
+    "maxDepth": 1,
+    "markdownOnly": true,
+    "promptOnly": false
+  },
+  {
+    "id": "478ab868-fd74-4ba0-8840-0d1b4894f0ab",
+    "scriptName": "道友收录美化",
+    "disabled": false,
+    "runOnEdit": true,
+    "findRegex": "/<道友收录>(?=(?:(?!<\\/道友收录>)[\\s\\S])*?姓名[:：]\\s*(白炉生|贝三娘|常笑|潮听澜|丹心火|地狱火|杜子成|贰叁捌|范达克|苟活|骨小宝|归尘|红|花怜|贾道学|江念|姜澄鸢|姜昭昭|金不换|冷小凝|陆潮生|毛绒绒|苗小青|慕海棠|欧阳诚|沈慕微|师长夷|宋听雪|颂长风|苏酒儿|太白|铁娇娇|挽歌|王阿牛|线头|萧天衍|小索|谢忘生|雪照宁|阎冥|妖九烟|药芷若|叶段英|依依兮|印唯心|幽魂子|玉斫璜|云鹤|运蔚|张铁柱|祝雨晴)\\s*(?:\\r?\\n|$))(?=(?:(?!<\\/道友收录>)[\\s\\S])*?身份[:：]\\s*([^\\r\\n]+))(?=(?:(?!<\\/道友收录>)[\\s\\S])*?境界[:：]\\s*([^\\r\\n]+))(?=(?:(?!<\\/道友收录>)[\\s\\S])*?关系[:：]\\s*([^\\r\\n]+))(?=(?:(?!<\\/道友收录>)[\\s\\S])*?备注[:：]\\s*([^\\r\\n]+))[\\s\\S]*?<\\/道友收录>/gm",
+    "trimStrings": [],
+    "replaceString": "<style>\n.cx-daoist-new-card{position:relative;margin:15px 0;padding:15px 16px;border-radius:12px;background:linear-gradient(135deg,#110b19 0%,#1c1530 55%,#07050c 100%);border:1px solid rgba(190,151,255,.5);box-shadow:0 14px 32px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.06);color:#fbf8ff;font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",\"Microsoft YaHei\",sans-serif;overflow:hidden}\n.cx-daoist-new-card:before{content:\"\";position:absolute;inset:0;background:radial-gradient(circle at 12% 0%,rgba(190,151,255,.24),transparent 34%);pointer-events:none}\n.cx-daoist-new-inner{position:relative;z-index:1}\n.cx-daoist-new-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}\n.cx-daoist-new-title{font-weight:900;color:#dbc5ff;letter-spacing:.08em}\n.cx-daoist-new-badge{font-size:12px;color:#12091d;background:#cdb2ff;border-radius:999px;padding:3px 9px;font-weight:900}\n.cx-daoist-new-name{font-size:18px;font-weight:900;color:#fff;margin-bottom:8px}\n.cx-daoist-new-grid{display:grid;gap:7px;font-size:13px;line-height:1.55}\n.cx-daoist-new-grid b{color:#cdb2ff;margin-right:6px}\n.cx-daoist-new-note{margin-top:10px;padding-top:9px;border-top:1px dashed rgba(205,178,255,.32);font-size:12px;color:#eee4ff}\n</style>\n<div class=\"cx-daoist-new-card\"><div class=\"cx-daoist-new-inner\">\n  <div class=\"cx-daoist-new-head\"><div class=\"cx-daoist-new-title\">道友录收录</div><div class=\"cx-daoist-new-badge\">新增</div></div>\n  <div class=\"cx-daoist-new-name\">$1</div>\n  <div class=\"cx-daoist-new-grid\">\n    <div><b>身份</b>$2</div><div><b>境界</b>$3</div><div><b>关系</b>$4</div>\n  </div>\n  <div class=\"cx-daoist-new-note\">$5</div>\n</div></div>",
+    "placement": [
+      2
+    ],
+    "substituteRegex": 0,
+    "minDepth": null,
+    "maxDepth": 1,
+    "markdownOnly": true,
+    "promptOnly": false
+  },
+  {
+    "id": "e53f18c5-e71d-4c38-a630-c0d45ff36af2",
+    "scriptName": "悬赏完成美化",
+    "disabled": false,
+    "runOnEdit": true,
+    "findRegex": "/<赏令完成>(?=(?:(?!<\\/赏令完成>)[\\s\\S])*?标题[:：]\\s*([^\\r\\n]+))(?=(?:(?!<\\/赏令完成>)[\\s\\S])*?地点[:：]\\s*([^\\r\\n]+))(?=(?:(?!<\\/赏令完成>)[\\s\\S])*?交付人[:：]\\s*([^\\r\\n]+))(?=(?:(?!<\\/赏令完成>)[\\s\\S])*?结果[:：]\\s*([^\\r\\n]+))(?=(?:(?!<\\/赏令完成>)[\\s\\S])*?奖励[:：]\\s*([^\\r\\n]+))(?=(?:(?!<\\/赏令完成>)[\\s\\S])*?备注[:：]\\s*([^\\r\\n]+))[\\s\\S]*?<\\/赏令完成>/gm",
+    "trimStrings": [],
+    "replaceString": "<style>\n.cx-complete-card{position:relative;overflow:hidden;margin:16px 0;padding:15px 16px;border-radius:10px;background:linear-gradient(135deg,#07110b 0%,#102015 52%,#050805 100%);border:1px solid rgba(91,214,142,.52);box-shadow:0 14px 34px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.06);color:#f3fff6;font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",\"Microsoft YaHei\",sans-serif}\n.cx-complete-card:before{content:\"\";position:absolute;inset:0;background:radial-gradient(circle at 12% 0%,rgba(91,214,142,.22),transparent 35%);pointer-events:none}\n.cx-complete-inner{position:relative;z-index:1}\n.cx-complete-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}\n.cx-complete-title{font-weight:900;color:#b8f5c9;letter-spacing:.08em}\n.cx-complete-seal{font-size:12px;background:#5bd68e;color:#061109;border-radius:999px;padding:3px 9px;font-weight:900}\n.cx-complete-name{font-size:17px;font-weight:900;margin-bottom:9px;color:#fff}\n.cx-complete-grid{display:grid;gap:7px;font-size:13px;line-height:1.55}\n.cx-complete-grid b{color:#8beca8;margin-right:6px}\n.cx-complete-note{margin-top:10px;padding-top:9px;border-top:1px dashed rgba(139,236,168,.32);font-size:12px;color:#d8ffe2}\n</style>\n<div class=\"cx-complete-card\"><div class=\"cx-complete-inner\">\n  <div class=\"cx-complete-head\"><div class=\"cx-complete-title\">赏令完成</div><div class=\"cx-complete-seal\">已交付</div></div>\n  <div class=\"cx-complete-name\">$1</div>\n  <div class=\"cx-complete-grid\">\n    <div><b>地点</b>$2</div><div><b>交付人</b>$3</div><div><b>结果</b>$4</div><div><b>奖励</b>$5</div>\n  </div>\n  <div class=\"cx-complete-note\">$6</div>\n</div></div>",
+    "placement": [
+      2
+    ],
+    "substituteRegex": 0,
+    "minDepth": null,
+    "maxDepth": 1,
+    "markdownOnly": true,
+    "promptOnly": false
+  },
+  {
+    "id": "615b035f-ce93-4ca7-b119-2ffe7d96bbdd",
+    "scriptName": "飞剑传书回信美化",
+    "disabled": false,
+    "runOnEdit": true,
+    "findRegex": "/<飞剑回信>(?=(?:(?!<\\/飞剑回信>)[\\s\\S])*?收信人[:：]\\s*([^\\r\\n]+))(?=(?:(?!<\\/飞剑回信>)[\\s\\S])*?方式[:：]\\s*([^\\r\\n]+))(?=(?:(?!<\\/飞剑回信>)[\\s\\S])*?内容[:：]\\s*([^\\r\\n]+))(?=(?:(?!<\\/飞剑回信>)[\\s\\S])*?备注[:：]\\s*([^\\r\\n]+))[\\s\\S]*?<\\/飞剑回信>/gm",
+    "trimStrings": [],
+    "replaceString": "<style>\n.cx-mail-reply-card{position:relative;margin:14px 0;padding:14px 15px;border-radius:12px;background:linear-gradient(135deg,#07131c 0%,#102638 55%,#05080d 100%);border:1px solid rgba(117,197,255,.45);box-shadow:0 14px 30px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.06);color:#edf8ff;font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",\"Microsoft YaHei\",sans-serif;overflow:hidden}\n.cx-mail-reply-card:before{content:\"\";position:absolute;inset:0;background:radial-gradient(circle at 10% 0%,rgba(117,197,255,.22),transparent 36%),linear-gradient(90deg,rgba(255,255,255,.08) 1px,transparent 1px);background-size:auto,26px 26px;opacity:.55;pointer-events:none}\n.cx-mail-reply-inner{position:relative;z-index:1}\n.cx-mail-reply-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}\n.cx-mail-reply-title{font-weight:800;letter-spacing:.08em;color:#bfe8ff}\n.cx-mail-reply-badge{font-size:12px;color:#07131c;background:#9fdcff;border-radius:999px;padding:3px 9px;font-weight:800}\n.cx-mail-reply-grid{display:grid;gap:7px;font-size:13px;line-height:1.55}\n.cx-mail-reply-row b{color:#8fd6ff;margin-right:6px}\n.cx-mail-reply-note{margin-top:10px;padding-top:9px;border-top:1px dashed rgba(159,220,255,.32);font-size:12px;color:#cfefff}\n</style>\n<div class=\"cx-mail-reply-card\"><div class=\"cx-mail-reply-inner\">\n  <div class=\"cx-mail-reply-head\"><div class=\"cx-mail-reply-title\">飞剑传书 · 回信已发</div><div class=\"cx-mail-reply-badge\">$2</div></div>\n  <div class=\"cx-mail-reply-grid\">\n    <div class=\"cx-mail-reply-row\"><b>收信人</b>$1</div>\n    <div class=\"cx-mail-reply-row\"><b>内容</b>$3</div>\n  </div>\n  <div class=\"cx-mail-reply-note\">$4</div>\n</div></div>",
+    "placement": [
+      2
+    ],
+    "substituteRegex": 0,
+    "minDepth": null,
+    "maxDepth": 1,
+    "markdownOnly": true,
+    "promptOnly": false
+  },
+  {
+    "id": "18597078-0a11-4880-9ba4-007ac4e91c35",
+    "scriptName": "自由开局美化",
+    "disabled": false,
+    "runOnEdit": true,
+    "findRegex": "/<自由开局>(?:\\s|\\\\n)*姓名[:：]\\s*([\\s\\S]*?)(?:\\\\n|\\r?\\n)性别[:：]\\s*([\\s\\S]*?)(?:\\\\n|\\r?\\n)初始境界[:：]\\s*([\\s\\S]*?)(?:\\\\n|\\r?\\n)出生地[:：]\\s*([\\s\\S]*?)(?:\\\\n|\\r?\\n)(?:初始灵石[:：]\\s*(?:[\\s\\S]*?)(?:\\\\n|\\r?\\n))?随身信物[:：]\\s*([\\s\\S]*?)(?:\\\\n|\\r?\\n)信物描述[:：]\\s*([\\s\\S]*?)(?:\\\\n|\\r?\\n)过往经历[:：]\\s*([\\s\\S]*?)(?:\\\\n|\\r?\\n)携带物品[:：]\\s*([\\s\\S]*?)(?:\\\\n|\\r?\\n)同行道友[:：]\\s*([\\s\\S]*?)(?:\\\\n|\\r?\\n)系统指令[:：]\\s*([\\s\\S]*?)<\\/自由开局>/gm",
+    "trimStrings": [],
+    "replaceString": "<div class=\"cx-free-start-card\" style=\"max-width:760px;margin:22px auto;border:1px solid rgba(217,119,6,.62);border-radius:8px;overflow:hidden;background:linear-gradient(145deg,rgba(3,7,18,.96),rgba(17,24,39,.98));box-shadow:0 18px 44px rgba(0,0,0,.52),inset 0 0 0 1px rgba(250,204,21,.08);font-family:'Noto Serif SC','Microsoft YaHei',serif;color:#e5e7eb;\">\n  <div style=\"padding:18px 22px;border-bottom:1px solid rgba(217,119,6,.34);background:linear-gradient(90deg,rgba(120,53,15,.45),rgba(3,7,18,.2));\">\n    <div style=\"font-size:12px;letter-spacing:3px;color:#f5d58a;\">苍玄界 · 自由开局</div>\n    <div style=\"margin-top:6px;font-size:24px;font-weight:900;color:#fff7d6;\">天道已记录你的降临</div>\n  </div>\n  <div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;padding:18px 22px;\">\n    <div><span style=\"display:block;font-size:12px;color:#c9a24d;\">姓名</span><b style=\"color:#fff;\">$1</b></div>\n    <div><span style=\"display:block;font-size:12px;color:#c9a24d;\">性别</span><b style=\"color:#fff;\">$2</b></div>\n    <div><span style=\"display:block;font-size:12px;color:#c9a24d;\">初始境界</span><b style=\"color:#fff;\">$3</b></div>\n    <div><span style=\"display:block;font-size:12px;color:#c9a24d;\">出生地</span><b style=\"color:#fff;\">$4</b></div>\n  </div>\n  <div style=\"padding:0 22px 18px;\">\n    <div style=\"border:1px solid rgba(217,119,6,.24);border-radius:6px;padding:12px 14px;background:rgba(0,0,0,.24);\">\n      <div style=\"font-size:12px;color:#c9a24d;margin-bottom:4px;\">随身信物</div>\n      <div style=\"font-weight:900;color:#fef3c7;margin-bottom:6px;\">$5</div>\n      <div style=\"font-size:13px;line-height:1.7;color:#d1d5db;\">$6</div>\n    </div>\n  </div>\n  <div style=\"display:grid;grid-template-columns:1fr;gap:10px;padding:0 22px 18px;\">\n    <section style=\"border-left:3px solid #b7791f;padding-left:12px;\"><div style=\"font-size:12px;color:#c9a24d;margin-bottom:4px;\">过往经历</div><div style=\"white-space:pre-wrap;line-height:1.7;\">$7</div></section>\n    <section style=\"border-left:3px solid #b7791f;padding-left:12px;\"><div style=\"font-size:12px;color:#c9a24d;margin-bottom:4px;\">携带物品</div><div style=\"white-space:pre-wrap;line-height:1.7;\">$8</div></section>\n    <section style=\"border-left:3px solid #b7791f;padding-left:12px;\"><div style=\"font-size:12px;color:#c9a24d;margin-bottom:4px;\">同行道友</div><div style=\"white-space:pre-wrap;line-height:1.7;\">$9</div></section>\n  </div>\n  <details style=\"border-top:1px dashed rgba(217,119,6,.34);background:rgba(0,0,0,.22);\">\n    <summary style=\"cursor:pointer;padding:12px 22px;color:#f5d58a;font-weight:800;\">系统推演指令</summary>\n    <pre style=\"white-space:pre-wrap;margin:0;padding:0 22px 18px;color:#d1d5db;font:13px/1.7 'Microsoft YaHei',sans-serif;\">$10</pre>\n  </details>\n</div>",
+    "placement": [
+      2
+    ],
+    "substituteRegex": 0,
+    "minDepth": null,
+    "maxDepth": 1,
+    "markdownOnly": true,
+    "promptOnly": false
+  }
+]
