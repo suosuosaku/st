@@ -514,11 +514,11 @@ const CANGXUAN_LOCATION_SCENE_PACKS: Array<{ anchors: string[]; entries: string[
   },
   {
     anchors: ['后山试验药田', '清平镇', '玄清宗'],
-    entries: ['后山试验药田', '清平镇', '玄清宗', '谢忘生', '云鹤', '祝雨晴', '归尘'],
+    entries: ['后山试验药田', '清平镇', '玄清宗', '谢忘生', '云鹤', '祝雨晴'],
   },
   {
     anchors: ['落星坊市', '太虚观'],
-    entries: ['落星坊市', '太虚观', '玉斫璜', '萧天衍'],
+    entries: ['玉斫璜', '萧天衍', '归尘', '落星坊市', '太虚观'],
   },
   {
     anchors: ['百草城', '丹霞谷'],
@@ -526,11 +526,11 @@ const CANGXUAN_LOCATION_SCENE_PACKS: Array<{ anchors: string[]; entries: string[
   },
   {
     anchors: ['铁骨城', '万器山'],
-    entries: ['铁骨城', '铁娇娇', '万器山', '叶段英'],
+    entries: ['铁娇娇', '叶段英', '地狱火', '铁骨城', '万器山'],
   },
   {
     anchors: ['潮音港', '东海海域', '归墟潮眼', '鲛珠礁市', '迷阵海市', '阵道阁'],
-    entries: ['潮音港', '东海海域', '范达克', '归墟潮眼', '鲛珠礁市', '迷阵海市', '线头', '阵道阁', '慕海棠'],
+    entries: ['范达克', '线头', '慕海棠', '陆潮生', '贝三娘', '潮音港', '东海海域', '归墟潮眼', '鲛珠礁市', '迷阵海市', '阵道阁'],
   },
   {
     anchors: ['百兽镇', '御兽宗', '万兽堂', '育兽塔', '百兽斗场', '斗兽场', '化妖池'],
@@ -541,24 +541,24 @@ const CANGXUAN_LOCATION_SCENE_PACKS: Array<{ anchors: string[]; entries: string[
     entries: ['骨小宝', '花怜', '枯骨集市', '苗小青', '魔道六门', '血煞门', '合欢宗', '炼尸宗', '万魂谷', '五毒教', '极乐阁', '王阿牛', '幽魂子', '印唯心'],
   },
   {
-    anchors: ['散修联盟', '边界走私营地'],
-    entries: ['裴不归', '杜子成', '贾道学', '苟活', '太白', '散修联盟', '边界走私营地'],
+    anchors: ['散修联盟', '天渊城', '边界走私营地'],
+    entries: ['裴不归', '杜子成', '贾道学', '苟活', '散修联盟', '天渊城', '边界走私营地'],
   },
   {
-    anchors: ['妖族', '万妖王庭', '化形雷池', '先祖祭坛', '万兽集市'],
-    entries: ['妖族', '万妖王庭', '化形雷池', '先祖祭坛', '万兽集市', '妖九烟'],
+    anchors: ['妖族', '十万大山', '万妖王庭', '化形雷池', '先祖祭坛', '万兽集市'],
+    entries: ['妖九烟', '太白', '妖族', '十万大山', '万妖王庭', '化形雷池', '先祖祭坛', '万兽集市'],
   },
   {
     anchors: ['半阴客栈'],
-    entries: ['半阴客栈', '常笑'],
+    entries: ['半阴客栈'],
   },
   {
-    anchors: ['承安皇朝'],
-    entries: ['承安皇朝', '姜昭昭', '姜澄鸢', '苏酒儿'],
+    anchors: ['承安皇朝', '承安城'],
+    entries: ['姜昭昭', '姜澄鸢', '苏酒儿', '张铁柱', '承安皇朝', '承安城'],
   },
   {
     anchors: ['鬼域', '听风楼'],
-    entries: ['阎冥', '挽歌', '张铁柱', '鬼域', '听风楼'],
+    entries: ['阎冥', '挽歌', '常笑', '鬼域', '听风楼'],
   },
   {
     anchors: ['桃李书院'],
@@ -995,7 +995,7 @@ function isLowSignalUserInput(value: string): boolean {
 
 function isLocationLikeEntry(entry: CangxuanWorldbookEntryRef): boolean {
   if (CANGXUAN_CHARACTER_NAMES.includes(entry.name) || CANGXUAN_CHARACTER_NAMES.includes(entry.displayName)) return false;
-  return /城|镇|宗|山|谷|海|域|市|集|港|洲|驿|宫|堂|塔|池|禁|观|阁|门|朝|院|境|坊|店|铺|楼|府|庭|场|坞|圃|田/.test(entry.name);
+  return /城|镇|宗|山|谷|海|域|市|集|港|洲|驿|宫|堂|塔|池|禁|观|阁|门|朝|院|境|坊|店|铺|楼|府|庭|场|坞|圃|田|教|坛|栈|殿|司|馆|盟/.test(entry.name);
 }
 
 function isNpcSceneEntry(entry: CangxuanWorldbookEntryRef): boolean {
@@ -1215,7 +1215,8 @@ function extractNameHits(entries: CangxuanWorldbookEntryRef[], text: string): st
 }
 
 function entryReportName(entry: CangxuanWorldbookEntryRef): string {
-  return isCgEntry(entry) ? entry.name : entry.displayName;
+  if (isCgEntry(entry)) return entry.name;
+  return isNpcSceneEntry(entry) ? entry.displayName : entry.name;
 }
 
 export function buildCangxuanWorldbookInjection(
