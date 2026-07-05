@@ -522,8 +522,8 @@ export function buildCangxuanSchedulerConfig(settings: any): CangxuanWorldbookSc
     alwaysNames: mergeSchedulerNames(forcedAlwaysNames, configuredAlwaysNames),
     scheduledNames: removeBlockedConfiguredNames(removeForcedAlwaysNames(configuredScheduledNames)),
     keepEnabledNames: removeBlockedConfiguredNames(removeForcedAlwaysNames(keepEnabledNames)),
-    maxEntries: Math.max(1, Number(settings?.cangxuanWorldbookMaxEntries ?? 12)),
-    maxChars: Math.max(1000, Number(settings?.cangxuanWorldbookMaxChars ?? 16000)),
+    maxEntries: Math.max(1, Number(settings?.cangxuanWorldbookMaxEntries ?? 6)),
+    maxChars: Math.max(1000, Number(settings?.cangxuanWorldbookMaxChars ?? 7000)),
   };
 }
 
@@ -811,6 +811,10 @@ function scoreEntry(entry: CangxuanWorldbookEntryRef, sceneText: string, config:
     return { score: base + scheduledBonus + npcBonus, reason: `场景命中名称/别名: ${aliasHit}` };
   }
 
+  if (entry.isNpc) {
+    return { score: 0, reason: 'NPC条目必须由当前场景直接点名触发' };
+  }
+
   if (keyHit) {
     const base = inScheduledLibrary ? 900 : inAlwaysLibrary ? 620 : 700;
     return { score: base, reason: `场景命中关键字: ${keyHit}` };
@@ -855,11 +859,15 @@ export function buildCangxuanWorldbookInjection(
 
   const selected: typeof scored = [];
   let usedChars = 0;
+  let usedNpcEntries = 0;
+  const maxNpcEntries = Math.min(4, config.maxEntries);
   for (const item of scored) {
     if (selected.length >= config.maxEntries) break;
+    if (item.entry.isNpc && usedNpcEntries >= maxNpcEntries) continue;
     const nextLen = Math.min(item.entry.contentLength, config.maxChars);
     if (usedChars > 0 && usedChars + nextLen > config.maxChars) continue;
     selected.push(item);
+    if (item.entry.isNpc) usedNpcEntries += 1;
     usedChars += nextLen;
   }
   if (selected.length === 0) return null;

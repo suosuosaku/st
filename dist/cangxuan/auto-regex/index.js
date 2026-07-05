@@ -1,17 +1,10 @@
-// 苍玄界：自动正则调度脚本
-// 扫描最新楼层，按内容从正则美化包注册本局需要的角色卡正则。
+// 苍玄界：远端正则美化包调度脚本
+// 只注册/移除 GitHub 远端 regex.json 里的美化规则，不接管酒馆内已有正则。
 $(() => {
-  const BUILD_ID = 'cangxuan-auto-regex-v1.1.0';
+  const BUILD_ID = 'cangxuan-auto-regex-v1.2.0';
   const CHAT_VAR_ENABLED = 'cx_auto_regex_enabled_names';
   const CHAT_VAR_LAST_MESSAGE_ID = 'cx_auto_regex_last_message_id';
-  const CUSTOM_ROLE_STORAGE_KEY = 'cx_status_custom_roles_v1';
-  const USER_AVATAR_STORAGE_KEY = 'cx_status_user_avatar_v1';
-  const CUSTOM_ROLE_SYNC_EVENT = 'cx-status-custom-role-sync';
-  const DIALOGUE_REGEX_NAME = '对话美化（气泡版）';
-  const AVATAR_BLOCK_START = '/* cx-auto-avatar:start */';
-  const AVATAR_BLOCK_END = '/* cx-auto-avatar:end */';
   const SYNC_DELAY_MS = 650;
-  const AVATAR_SYNC_DELAY_MS = 900;
   const INIT_GRACE_MS = 3500;
   const REGEX_PACKAGE_URLS = (() => {
     const fallback = [
@@ -26,19 +19,6 @@ $(() => {
     }
   })();
 
-  const ALWAYS_ON = [
-    '开场白',
-    '对话美化（气泡版）',
-    '心声美化',
-    '[不发送]去除变量更新',
-    '防隐藏状态栏占位',
-    '仅格式思维链',
-    '对 AI 隐藏状态栏',
-    '小索思考完成',
-    '小索思考中',
-    '天道审查美化',
-  ];
-
   const ADAPTIVE_RULES = [
     { name: '悬赏接取美化', quick: ['<赏令接取>'], pattern: /<赏令接取>/ },
     { name: '拍卖购入美化', quick: ['<拍卖购入>'], pattern: /<拍卖购入>/ },
@@ -49,12 +29,7 @@ $(() => {
     { name: '自由开局美化', quick: ['<自由开局>'], pattern: /<自由开局>/ },
   ];
 
-  const LOCAL_ADAPTIVE_RULES = [
-    { name: '插图', quick: ['<插图>'], pattern: /<插图>[^<\n\s]+<\/插图>/ },
-  ];
-
   const ADAPTIVE_NAMES = new Set(ADAPTIVE_RULES.map(rule => rule.name));
-  const STATIC_NAMES = new Set(ALWAYS_ON);
   const INSERT_BEFORE_NAMES = new Set([
     '只发送最新3楼的变量更新',
     '状态栏美化',
@@ -67,6 +42,7 @@ $(() => {
     '[不发送]去除变量更新',
     '防隐藏状态栏占位',
   ]);
+
   let adaptiveRegexPackagePromise = null;
   let adaptiveRegexEntries = [];
   let syncTimer = null;
@@ -74,10 +50,6 @@ $(() => {
   let pending = false;
   let lastRerenderSignature = '';
   let shouldSyncLatest = false;
-  let avatarSyncTimer = null;
-  let avatarSyncing = false;
-  let pendingAvatarSync = false;
-  let lastAvatarSignature = '';
   const queuedMessageIds = new Set();
   const mutedMessageIds = new Map();
   const startedAt = Date.now();
@@ -117,12 +89,15 @@ $(() => {
     }
   }
 
+  function normalizeEnabledNames(names) {
+    return [...new Set(Array.isArray(names) ? names : [])].filter(name => ADAPTIVE_NAMES.has(name));
+  }
+
   function persistEnabledNames(names, messageId) {
-    const unique = [...new Set(names)].filter(name => ADAPTIVE_NAMES.has(name));
+    const unique = normalizeEnabledNames(names);
     const vars = getChatVars();
-    const currentNames = Array.isArray(vars[CHAT_VAR_ENABLED]) ? vars[CHAT_VAR_ENABLED] : [];
-    const sameNames = JSON.stringify([...new Set(currentNames)].filter(name => ADAPTIVE_NAMES.has(name)).sort())
-      === JSON.stringify([...unique].sort());
+    const currentNames = normalizeEnabledNames(vars[CHAT_VAR_ENABLED]);
+    const sameNames = JSON.stringify(currentNames.slice().sort()) === JSON.stringify(unique.slice().sort());
     const sameMessage = messageId === undefined || messageId === null || vars[CHAT_VAR_LAST_MESSAGE_ID] === messageId;
     if (sameNames && sameMessage) return;
     updateChatVars(variables => {
@@ -133,9 +108,7 @@ $(() => {
   }
 
   function getStoredAdaptiveNames() {
-    const vars = getChatVars();
-    const names = Array.isArray(vars[CHAT_VAR_ENABLED]) ? vars[CHAT_VAR_ENABLED] : [];
-    return [...new Set(names)].filter(name => ADAPTIVE_NAMES.has(name));
+    return normalizeEnabledNames(getChatVars()[CHAT_VAR_ENABLED]);
   }
 
   function toFiniteNumber(value) {
@@ -146,9 +119,7 @@ $(() => {
   function normalizeMessage(raw, fallbackId = null) {
     const messageId = toFiniteNumber(fallbackId);
     if (raw === null || raw === undefined) return null;
-    if (typeof raw === 'string') {
-      return { message: raw, message_id: messageId };
-    }
+    if (typeof raw === 'string') return { message: raw, message_id: messageId };
     if (typeof raw === 'object') {
       const rawMessage = raw.message ?? raw.mes ?? raw.text ?? raw.content ?? '';
       const rawId = raw.message_id ?? raw.messageId ?? raw.id ?? raw.mesid ?? fallbackId;
@@ -158,6 +129,12 @@ $(() => {
       };
     }
     return { message: String(raw), message_id: messageId };
+  }
+
+  function normalizeMessageList(messages, fallbackId = null) {
+    return (Array.isArray(messages) ? messages : [])
+      .map(message => normalizeMessage(message, fallbackId))
+      .filter(Boolean);
   }
 
   function getLastMessageIdValue() {
@@ -171,12 +148,6 @@ $(() => {
     }
   }
 
-  function normalizeMessageList(messages, fallbackId = null) {
-    return (Array.isArray(messages) ? messages : [])
-      .map(message => normalizeMessage(message, fallbackId))
-      .filter(Boolean);
-  }
-
   function getMessageById(messageId) {
     const getChatMessagesFn = getGlobal('getChatMessages');
     if (typeof getChatMessagesFn !== 'function') return null;
@@ -184,7 +155,6 @@ $(() => {
       () => getChatMessagesFn(messageId),
       () => getChatMessagesFn(String(messageId)),
       () => getChatMessagesFn(`${messageId}-${messageId}`),
-      () => messageId === 0 ? getChatMessagesFn(1) : null,
       () => getChatMessagesFn(messageId, messageId + 1),
     ];
     let lastError = null;
@@ -196,9 +166,7 @@ $(() => {
         lastError = error;
       }
     }
-    if (lastError) {
-      console.warn('[苍玄界自动正则] 读取指定楼层失败', { messageId, error: lastError });
-    }
+    if (lastError) console.warn('[苍玄界自动正则] 读取指定楼层失败', { messageId, error: lastError });
     return null;
   }
 
@@ -225,30 +193,19 @@ $(() => {
     return String(hash);
   }
 
-  async function rerenderLatestMessageIfNeeded(latest, triggeredRules) {
-    if (!latest || !Number.isFinite(latest.message_id) || !triggeredRules.length) return;
-    const signature = `${latest.message_id}:${triggeredRules.slice().sort().join('|')}:${hashText(latest.message || '')}`;
+  async function rerenderOnceForNewPackageRule(latest, newlyEnabledRules) {
+    if (!latest || !Number.isFinite(latest.message_id) || !newlyEnabledRules.length) return;
+    const signature = `${latest.message_id}:${newlyEnabledRules.slice().sort().join('|')}:${hashText(latest.message || '')}`;
     if (signature === lastRerenderSignature) return;
     lastRerenderSignature = signature;
     mutedMessageIds.set(latest.message_id, Date.now() + 1500);
 
     const setChatMessagesFn = getGlobal('setChatMessages');
-    if (typeof setChatMessagesFn === 'function') {
-      try {
-        await setChatMessagesFn([{ message_id: latest.message_id }], { refresh: 'affected' });
-        return;
-      } catch (error) {
-        console.warn('[苍玄界自动正则] 重渲染当前楼层失败', error);
-      }
-    }
-
-    const reloadAndRenderChatWithoutEventsFn = getGlobal('reloadAndRenderChatWithoutEvents');
-    if (typeof reloadAndRenderChatWithoutEventsFn === 'function') {
-      try {
-        await reloadAndRenderChatWithoutEventsFn();
-      } catch (error) {
-        console.warn('[苍玄界自动正则] 刷新聊天显示失败', error);
-      }
+    if (typeof setChatMessagesFn !== 'function') return;
+    try {
+      await setChatMessagesFn([{ message_id: latest.message_id }], { refresh: 'affected' });
+    } catch (error) {
+      console.warn('[苍玄界自动正则] 首次启用远端美化包后刷新当前楼层失败', error);
     }
   }
 
@@ -260,9 +217,9 @@ $(() => {
     return false;
   }
 
-  function collectTriggeredRules(text, rules = ADAPTIVE_RULES) {
+  function collectTriggeredRules(text) {
     const triggered = [];
-    for (const rule of rules) {
+    for (const rule of ADAPTIVE_RULES) {
       if (rule.quick?.length && !rule.quick.some(token => text.includes(token))) continue;
       if (!rule.pattern || rule.pattern.test(text)) triggered.push(rule.name);
       if (rule.pattern?.global) rule.pattern.lastIndex = 0;
@@ -324,16 +281,16 @@ $(() => {
           const entries = (Array.isArray(json) ? json : [])
             .map(toPackagedTavernRegex)
             .filter(Boolean);
-          if (!entries.length) throw new Error('正则美化包为空');
+          if (!entries.length) throw new Error('远端正则美化包为空');
           adaptiveRegexEntries = entries;
-          console.info('[苍玄界自动正则] 正则美化包加载完成', { build: BUILD_ID, count: entries.length, url });
+          console.info('[苍玄界自动正则] 远端正则美化包加载完成', { build: BUILD_ID, count: entries.length, url });
           return entries;
         } catch (error) {
           lastError = error;
-          console.warn('[苍玄界自动正则] 正则美化包加载失败，尝试备用地址', { url, error });
+          console.warn('[苍玄界自动正则] 远端正则美化包加载失败，尝试备用地址', { url, error });
         }
       }
-      throw lastError || new Error('正则美化包加载失败');
+      throw lastError || new Error('远端正则美化包加载失败');
     })();
     return adaptiveRegexPackagePromise;
   }
@@ -349,247 +306,11 @@ $(() => {
     return false;
   }
 
-  function setRegexEnabled(regex, enabled) {
-    if (!regex) return;
-    if ('disabled' in regex) regex.disabled = !enabled;
-    if ('enabled' in regex) regex.enabled = enabled;
-    if (!('disabled' in regex) && !('enabled' in regex)) regex.disabled = !enabled;
-  }
-
   function getRegexReplaceString(regex) {
     if (!regex) return '';
     if (typeof regex.replace_string === 'string') return regex.replace_string;
     if (typeof regex.replaceString === 'string') return regex.replaceString;
     return '';
-  }
-
-  function setRegexReplaceString(regex, value) {
-    if (!regex) return;
-    if ('replace_string' in regex) regex.replace_string = value;
-    if ('replaceString' in regex) regex.replaceString = value;
-    if (!('replace_string' in regex) && !('replaceString' in regex)) regex.replace_string = value;
-  }
-
-  function readStorageItem(key) {
-    try {
-      const value = localStorage.getItem(key);
-      if (value !== null) return value;
-    } catch (_) {}
-    try {
-      if (window.parent && window.parent !== window) {
-        const value = window.parent.localStorage.getItem(key);
-        if (value !== null) return value;
-      }
-    } catch (_) {}
-    return null;
-  }
-
-  function asCleanText(value, maxLength = 160) {
-    return String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, maxLength);
-  }
-
-  function normalizeImageUrl(value) {
-    const url = asCleanText(value, 1600);
-    if (!url) return '';
-    if (/^(https?:|data:image\/|blob:)/i.test(url)) return url;
-    return '';
-  }
-
-  function normalizeCustomRole(role) {
-    if (!role || typeof role !== 'object') return null;
-    const name = asCleanText(role.name, 40);
-    const defaultImg = normalizeImageUrl(role.defaultImg || role.avatar || role.avatarUrl);
-    if (!name || !defaultImg) return null;
-    return { name, defaultImg };
-  }
-
-  function loadCustomRoles() {
-    try {
-      const parsed = JSON.parse(readStorageItem(CUSTOM_ROLE_STORAGE_KEY) || '[]');
-      if (!Array.isArray(parsed)) return [];
-      const roleMap = new Map();
-      parsed.forEach(role => {
-        const normalized = normalizeCustomRole(role);
-        if (normalized) roleMap.set(normalized.name, normalized);
-      });
-      return [...roleMap.values()];
-    } catch (_) {
-      return [];
-    }
-  }
-
-  function loadUserAvatarUrl() {
-    return normalizeImageUrl(readStorageItem(USER_AVATAR_STORAGE_KEY) || '');
-  }
-
-  function resolvePlayerName() {
-    const candidates = [];
-    try {
-      const macroFn = getGlobal('substitudeMacros');
-      if (typeof macroFn === 'function') candidates.push(macroFn('{{user}}'));
-    } catch (_) {}
-    try {
-      const st = getGlobal('SillyTavern');
-      if (st && typeof st.name1 === 'string') candidates.push(st.name1);
-      if (st && typeof st.getContext === 'function') {
-        const ctx = st.getContext();
-        if (ctx && typeof ctx.name1 === 'string') candidates.push(ctx.name1);
-      }
-    } catch (_) {}
-    try { candidates.push(getGlobal('name1')); } catch (_) {}
-    for (const value of candidates) {
-      const name = asCleanText(value, 40);
-      if (name && name !== '{{user}}' && name !== 'undefined' && name !== 'null') return name;
-    }
-    return '';
-  }
-
-  function cssAttrValue(value) {
-    return String(value ?? '').replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, ' ');
-  }
-
-  function cssUrlValue(value) {
-    return String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r?\n/g, '');
-  }
-
-  function stripAvatarBlock(text) {
-    return String(text || '').replace(/\/\* cx-auto-avatar:start \*\/[\s\S]*?\/\* cx-auto-avatar:end \*\/\s*/g, '');
-  }
-
-  function buildDialogueAvatarCss() {
-    const avatarMap = new Map();
-    loadCustomRoles().forEach(role => avatarMap.set(role.name, role.defaultImg));
-
-    const userAvatar = loadUserAvatarUrl();
-    if (userAvatar) {
-      avatarMap.set('{{user}}', userAvatar);
-      const playerName = resolvePlayerName();
-      if (playerName) avatarMap.set(playerName, userAvatar);
-    }
-
-    if (!avatarMap.size) return '';
-    const emptyAfterSelectors = [];
-    const selectorsByUrl = new Map();
-    for (const [name, url] of avatarMap.entries()) {
-      const selector = `.compact-dialogue[data-name="${cssAttrValue(name)}"] .compact-avatar`;
-      emptyAfterSelectors.push(`${selector}::after`);
-      const selectors = selectorsByUrl.get(url) || [];
-      selectors.push(selector);
-      selectorsByUrl.set(url, selectors);
-    }
-    const imageRules = [...selectorsByUrl.entries()].map(([url, selectors]) =>
-      `${selectors.join(',\n')} { background-image: url('${cssUrlValue(url)}'); }`
-    );
-
-    return [
-      AVATAR_BLOCK_START,
-      `${emptyAfterSelectors.join(',\n')} { content: ""; }`,
-      ...imageRules,
-      AVATAR_BLOCK_END,
-      '',
-    ].join('\n');
-  }
-
-  function mergeDialogueAvatarCss(replaceString) {
-    const clean = stripAvatarBlock(replaceString);
-    const block = buildDialogueAvatarCss();
-    if (!block) return clean;
-    if (clean.includes('</style>')) return clean.replace('</style>', `${block}</style>`);
-    return `${clean}\n<style>\n${block}</style>`;
-  }
-
-  async function syncDialogueAvatarRegex(reason = 'manual') {
-    if (avatarSyncing) {
-      pendingAvatarSync = true;
-      return;
-    }
-    avatarSyncing = true;
-    try {
-      const updateTavernRegexesWithFn = getGlobal('updateTavernRegexesWith');
-      const getTavernRegexesFn = getGlobal('getTavernRegexes');
-      if (typeof updateTavernRegexesWithFn !== 'function') return;
-
-      const customRoles = loadCustomRoles();
-      const signature = JSON.stringify({
-        roles: customRoles.map(role => [role.name, role.defaultImg]),
-        userAvatar: loadUserAvatarUrl(),
-        playerName: resolvePlayerName(),
-      });
-
-      if (signature === lastAvatarSignature && typeof getTavernRegexesFn === 'function') return;
-
-      if (typeof getTavernRegexesFn === 'function') {
-        try {
-          const current = getTavernRegexesFn({ type: 'character', name: 'current' }) || [];
-          const target = current.find(regex => getRegexName(regex) === DIALOGUE_REGEX_NAME);
-          if (target) {
-            const before = getRegexReplaceString(target);
-            const after = mergeDialogueAvatarCss(before);
-            if (before === after) {
-              lastAvatarSignature = signature;
-              return;
-            }
-          }
-        } catch (_) {}
-      }
-
-      await updateTavernRegexesWithFn(regexes => {
-        for (const regex of regexes) {
-          if (getRegexName(regex) !== DIALOGUE_REGEX_NAME) continue;
-          setRegexReplaceString(regex, mergeDialogueAvatarCss(getRegexReplaceString(regex)));
-        }
-        return regexes;
-      }, { type: 'character', name: 'current' });
-      lastAvatarSignature = signature;
-      console.debug?.('[苍玄界自动正则] 已同步对话头像', { reason, build: BUILD_ID });
-    } catch (error) {
-      console.warn('[苍玄界自动正则] 对话头像同步失败', error);
-    } finally {
-      avatarSyncing = false;
-      if (pendingAvatarSync) {
-        pendingAvatarSync = false;
-        scheduleAvatarSync('pending');
-      }
-    }
-  }
-
-  function scheduleAvatarSync(reason = 'event') {
-    if (avatarSyncTimer) clearTimeout(avatarSyncTimer);
-    avatarSyncTimer = setTimeout(() => {
-      avatarSyncTimer = null;
-      syncDialogueAvatarRegex(reason);
-    }, AVATAR_SYNC_DELAY_MS);
-  }
-
-  function installAvatarSyncEvents() {
-    const onSync = () => scheduleAvatarSync('custom-role-event');
-    try { window.addEventListener(CUSTOM_ROLE_SYNC_EVENT, onSync); } catch (_) {}
-    try {
-      if (window.parent && window.parent !== window) window.parent.addEventListener(CUSTOM_ROLE_SYNC_EVENT, onSync);
-    } catch (_) {}
-    try {
-      window.addEventListener('storage', event => {
-        if ([CUSTOM_ROLE_STORAGE_KEY, USER_AVATAR_STORAGE_KEY].includes(event.key)) scheduleAvatarSync('storage');
-      });
-    } catch (_) {}
-  }
-
-  function patchReplaceVariablesWatcher() {
-    const original = getGlobal('replaceVariables');
-    if (typeof original !== 'function' || original.__cxAutoRegexWrapped) return;
-    const wrapped = function wrappedReplaceVariables(...args) {
-      const result = original.apply(this, args);
-      try {
-        const option = args[1] || { type: 'chat' };
-        if (!option || option.type === 'chat') scheduleSync('replaceVariables');
-      } catch (_) {}
-      return result;
-    };
-    Object.defineProperty(wrapped, '__cxAutoRegexWrapped', { value: true });
-    try {
-      window.replaceVariables = wrapped;
-      if (window.parent && window.parent !== window) window.parent.replaceVariables = wrapped;
-    } catch (_) {}
   }
 
   function regexContentSignature(regex) {
@@ -610,7 +331,7 @@ $(() => {
   function buildPackagedRegexList(regexes, entries, enabledNames) {
     const enabledSet = new Set(enabledNames);
     const packageNames = new Set(entries.map(entry => entry.script_name));
-    const next = regexes.filter(regex => !packageNames.has(getRegexName(regex)));
+    const next = (Array.isArray(regexes) ? regexes : []).filter(regex => !packageNames.has(getRegexName(regex)));
     const activeEntries = entries
       .filter(entry => enabledSet.has(entry.script_name))
       .map(entry => ({ ...entry }));
@@ -626,7 +347,7 @@ $(() => {
   }
 
   function needsPackagedRegexUpdate(regexes, entries, enabledNames) {
-    const current = regexes.map(regexContentSignature).join('\n');
+    const current = (Array.isArray(regexes) ? regexes : []).map(regexContentSignature).join('\n');
     const next = buildPackagedRegexList(regexes, entries, enabledNames).map(regexContentSignature).join('\n');
     return current !== next;
   }
@@ -635,12 +356,12 @@ $(() => {
     const updateTavernRegexesWithFn = getGlobal('updateTavernRegexesWith');
     const getTavernRegexesFn = getGlobal('getTavernRegexes');
     if (typeof updateTavernRegexesWithFn !== 'function') {
-      console.warn('[苍玄界自动正则] 未找到 updateTavernRegexesWith，无法注册正则美化包');
+      console.warn('[苍玄界自动正则] 未找到 updateTavernRegexesWith，无法注册远端正则美化包');
       return;
     }
 
     const entries = await loadAdaptiveRegexPackage();
-    const names = [...new Set(enabledNames)].filter(name => ADAPTIVE_NAMES.has(name));
+    const names = normalizeEnabledNames(enabledNames);
     if (typeof getTavernRegexesFn === 'function') {
       try {
         const current = getTavernRegexesFn({ type: 'character', name: 'current' }) || [];
@@ -652,7 +373,7 @@ $(() => {
       type: 'character',
       name: 'current',
     });
-    console.debug?.('[苍玄界自动正则] 已同步正则美化包', { reason, build: BUILD_ID, enabled: names });
+    console.info('[苍玄界自动正则] 已同步远端正则美化包', { reason, build: BUILD_ID, enabled: names });
   }
 
   async function removePackagedRegexes(reason = 'unload') {
@@ -666,59 +387,28 @@ $(() => {
         type: 'character',
         name: 'current',
       });
-      console.debug?.('[苍玄界自动正则] 已卸载正则美化包', { reason, build: BUILD_ID });
+      console.info('[苍玄界自动正则] 已卸载远端正则美化包', { reason, build: BUILD_ID });
     } catch (error) {
-      console.warn('[苍玄界自动正则] 卸载正则美化包失败', error);
+      console.warn('[苍玄界自动正则] 卸载远端正则美化包失败', error);
     }
-  }
-
-  async function applyLocalRegexState(localNames) {
-    const updateTavernRegexesWithFn = getGlobal('updateTavernRegexesWith');
-    const getTavernRegexesFn = getGlobal('getTavernRegexes');
-    if (typeof updateTavernRegexesWithFn !== 'function') {
-      console.warn('[苍玄界自动正则] 未找到 updateTavernRegexesWith，无法同步卡内正则');
-      return;
-    }
-    const enabledSet = new Set([...STATIC_NAMES, ...localNames]);
-    const localNamesSet = new Set([...STATIC_NAMES, ...LOCAL_ADAPTIVE_RULES.map(rule => rule.name)]);
-    if (typeof getTavernRegexesFn === 'function') {
-      try {
-        const current = getTavernRegexesFn({ type: 'character', name: 'current' }) || [];
-        const needsUpdate = current.some(regex => {
-          const name = getRegexName(regex);
-          return localNamesSet.has(name) && getRegexEnabled(regex) !== enabledSet.has(name);
-        });
-        if (!needsUpdate) return;
-      } catch (_) {}
-    }
-    await updateTavernRegexesWithFn(regexes => {
-      for (const regex of regexes) {
-        const name = getRegexName(regex);
-        if (!localNamesSet.has(name)) continue;
-        setRegexEnabled(regex, enabledSet.has(name));
-      }
-      return regexes;
-    }, { type: 'character', name: 'current' });
   }
 
   async function syncMessage(message, reason = 'manual') {
     const text = message?.message || '';
-    const triggeredPackagedRules = collectTriggeredRules(text, ADAPTIVE_RULES);
-    const triggeredLocalRules = collectTriggeredRules(text, LOCAL_ADAPTIVE_RULES);
-    const nextPackagedNames = [
-      ...getStoredAdaptiveNames(),
-      ...triggeredPackagedRules,
-    ];
-    persistEnabledNames(nextPackagedNames, message?.message_id);
-    await syncPackagedRegexes(nextPackagedNames, reason);
-    await applyLocalRegexState(triggeredLocalRules);
-    await rerenderLatestMessageIfNeeded(message, [...triggeredPackagedRules, ...triggeredLocalRules]);
-    console.debug?.('[苍玄界自动正则] 已同步', {
+    const storedNames = getStoredAdaptiveNames();
+    const triggeredNames = collectTriggeredRules(text);
+    const newlyEnabled = triggeredNames.filter(name => !storedNames.includes(name));
+    const nextNames = normalizeEnabledNames([...storedNames, ...triggeredNames]);
+
+    persistEnabledNames(nextNames, message?.message_id);
+    await syncPackagedRegexes(nextNames, reason);
+    await rerenderOnceForNewPackageRule(message, newlyEnabled);
+    console.info('[苍玄界自动正则] 远端包检测完成', {
       reason,
       build: BUILD_ID,
       messageId: message?.message_id,
-      packaged: [...new Set(nextPackagedNames)].filter(name => ADAPTIVE_NAMES.has(name)),
-      local: triggeredLocalRules,
+      enabled: nextNames,
+      newlyEnabled,
     });
   }
 
@@ -784,12 +474,9 @@ $(() => {
   async function init() {
     const eventOnFn = getGlobal('eventOn');
     const tavernEvents = getGlobal('tavern_events');
-    installAvatarSyncEvents();
-    patchReplaceVariablesWatcher();
     if (typeof eventOnFn === 'function' && tavernEvents) {
       [
         tavernEvents.MESSAGE_RECEIVED,
-        tavernEvents.MESSAGE_SENT,
         tavernEvents.MESSAGE_SWIPED,
         tavernEvents.MESSAGE_UPDATED,
         tavernEvents.CHAT_CHANGED,
@@ -800,7 +487,6 @@ $(() => {
       }));
     }
 
-    scheduleAvatarSync('bootstrap');
     scheduleSync('bootstrap');
   }
 
@@ -808,7 +494,6 @@ $(() => {
 
   $(window).on('pagehide', () => {
     if (syncTimer) clearTimeout(syncTimer);
-    if (avatarSyncTimer) clearTimeout(avatarSyncTimer);
     void removePackagedRegexes('pagehide');
   });
 });
