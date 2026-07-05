@@ -1,5 +1,3 @@
-// 苍玄界：远端正则美化包装载器
-// 只同步 GitHub 远端 regex.json 内的规则；不读取/刷新聊天楼层，不接管酒馆内已有正则。
 $(() => {
   const BUILD_ID = 'cangxuan-auto-regex-v1.2.3';
   const PACKAGE_MARKER = 'cx-auto-regex';
