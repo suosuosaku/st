@@ -3,6 +3,7 @@ export type CangxuanWorldbookCategory =
   | 'scheduled'
   | 'suggested_always'
   | 'suggested_scheduled'
+  | 'ignored'
   | 'unused_candidate';
 
 export interface CangxuanWorldbookSchedulerConfig {
@@ -65,6 +66,7 @@ export interface CangxuanWorldbookScan {
     scheduled: number;
     suggestedAlways: number;
     suggestedScheduled: number;
+    ignored: number;
     unusedCandidate: number;
   };
 }
@@ -372,6 +374,7 @@ const CANGXUAN_ALWAYS_NAME_LIST = [
   '====特殊规则设定====_结束 [mvu_plot]',
   '====地标势力与常驻人物====_结束 [mvu_plot]',
   '====节日系统====_开始 [mvu_plot]',
+  '修真界节日',
   '====节日系统====_结束 [mvu_plot]',
   '秘境生成规则',
   'NPC交互规则',
@@ -386,10 +389,15 @@ const CANGXUAN_ALWAYS_NAME_LIST = [
   '====变量设定====_结束',
 ];
 
+export const CANGXUAN_BRAIN_IGNORED_ENTRY_NAMES = [
+  '小索【人设】',
+];
+
 export const CANGXUAN_DEFAULT_ALWAYS_NAMES = CANGXUAN_ALWAYS_NAME_LIST.join('\n');
 
 export const CANGXUAN_DEFAULT_SCHEDULED_NAMES = CANGXUAN_ALL_ENTRY_NAMES
   .filter(name => !CANGXUAN_ALWAYS_NAME_LIST.includes(name))
+  .filter(name => !isBrainIgnoredConfiguredName(name))
   .join('\n');
 
 const ALWAYS_HINTS = [
@@ -510,7 +518,7 @@ const NPC_CONTEXTUAL_KEY_ALIASES: Record<string, string[]> = {
 const CANGXUAN_LOCATION_SCENE_PACKS: Array<{ anchors: string[]; entries: string[] }> = [
   {
     anchors: ['剑临城', '天剑宗', '小寒山·月微居', '祖师祠堂', '洗剑池', '剑冢', '论剑台'],
-    entries: ['剑临城', '天剑宗', '小寒山·月微居', '祖师祠堂', '洗剑池', '剑冢', '论剑台', '江念', '沈慕微', '欧阳诚', '冷小凝', '小索', '红'],
+    entries: ['剑临城', '天剑宗', '小寒山·月微居', '祖师祠堂', '洗剑池', '剑冢', '论剑台', '江念', '沈慕微', '欧阳诚', '冷小凝', '红'],
   },
   {
     anchors: ['后山试验药田', '清平镇', '玄清宗'],
@@ -648,15 +656,31 @@ function removeBlockedConfiguredNames(names: string[]): string[] {
   return names.filter(name => !isBlockedEntryName(name));
 }
 
+function isBrainIgnoredConfiguredName(name: string): boolean {
+  const normalizedName = comparableName(name);
+  if (!normalizedName || normalizedName.length < 2) return false;
+  return CANGXUAN_BRAIN_IGNORED_ENTRY_NAMES.some(ignored => {
+    const normalizedIgnored = comparableName(ignored);
+    return normalizedName === normalizedIgnored
+      || normalizedName.includes(normalizedIgnored)
+      || normalizedIgnored.includes(normalizedName);
+  });
+}
+
+function removeBrainIgnoredConfiguredNames(names: string[]): string[] {
+  return names.filter(name => !isBrainIgnoredConfiguredName(name));
+}
+
 function isForcedAlwaysName(name: string): boolean {
   const trimmed = name.trim();
   if (!trimmed) return false;
+  if (isBrainIgnoredConfiguredName(trimmed)) return false;
   if (CANGXUAN_FORCED_ALWAYS_NAME_SET.has(trimmed)) return true;
   return CANGXUAN_FORCED_ALWAYS_NAME_PATTERNS.some(pattern => pattern.test(trimmed));
 }
 
 function mergeSchedulerNames(...groups: string[][]): string[] {
-  return removeBlockedConfiguredNames(uniq(groups.flat()));
+  return removeBrainIgnoredConfiguredNames(removeBlockedConfiguredNames(uniq(groups.flat())));
 }
 
 function removeForcedAlwaysNames(names: string[]): string[] {
@@ -678,8 +702,8 @@ export function buildCangxuanSchedulerConfig(settings: any): CangxuanWorldbookSc
 
   return {
     alwaysNames: mergeSchedulerNames(forcedAlwaysNames, configuredAlwaysNames),
-    scheduledNames: removeBlockedConfiguredNames(removeForcedAlwaysNames(configuredScheduledNames)),
-    keepEnabledNames: removeBlockedConfiguredNames(removeForcedAlwaysNames(keepEnabledNames)),
+    scheduledNames: removeBrainIgnoredConfiguredNames(removeBlockedConfiguredNames(removeForcedAlwaysNames(configuredScheduledNames))),
+    keepEnabledNames: removeBrainIgnoredConfiguredNames(removeBlockedConfiguredNames(removeForcedAlwaysNames(keepEnabledNames))),
     maxEntries: clampNumber(settings?.cangxuanWorldbookMaxEntries, 18, 4, 30),
     maxChars: clampNumber(settings?.cangxuanWorldbookMaxChars, 14000, 3000, 24000),
   };
@@ -776,6 +800,10 @@ function configuredNamesIncludeEntry(names: string[], entry: CangxuanWorldbookEn
   return configuredNameIndex(names, entry) !== -1;
 }
 
+function isBrainIgnoredEntry(entry: Pick<CangxuanWorldbookEntryRef, 'name' | 'displayName' | 'aliases' | 'isNpc'>): boolean {
+  return CANGXUAN_BRAIN_IGNORED_ENTRY_NAMES.some(name => entryMatchesConfiguredName(name, entry));
+}
+
 function normalizeEntry(raw: any, worldbookName: string, sectionPath: string[] = []): CangxuanWorldbookEntryRef {
   const name = entryName(raw);
   const strategy = raw?.strategy || {};
@@ -815,6 +843,10 @@ function getBoundaryMarker(name: string): { section: string; kind: '开始' | '�
 }
 
 function classifyEntry(entry: CangxuanWorldbookEntryRef, config: CangxuanWorldbookSchedulerConfig): CangxuanWorldbookEntryRef {
+  if (isBrainIgnoredEntry(entry)) {
+    return { ...entry, category: 'ignored', reasons: ['智脑忽略条目，由开场白/世界书开关控制'] };
+  }
+
   if (isBlockedEntryName(entry.name)) {
     return { ...entry, category: 'unused_candidate', reasons: ['无效或变量初始化条目保持禁用'] };
   }
@@ -870,6 +902,7 @@ function countCategories(entries: CangxuanWorldbookEntryRef[], bindings: Cangxua
     scheduled: entries.filter(entry => entry.category === 'scheduled').length,
     suggestedAlways: entries.filter(entry => entry.category === 'suggested_always').length,
     suggestedScheduled: entries.filter(entry => entry.category === 'suggested_scheduled').length,
+    ignored: entries.filter(entry => entry.category === 'ignored').length,
     unusedCandidate: entries.filter(entry => entry.category === 'unused_candidate').length,
   };
 }
@@ -1067,7 +1100,11 @@ function extractSceneEvidence(sceneText: string): CangxuanSceneEvidence {
 
 function buildScenePackNames(evidence: CangxuanSceneEvidence): string[] {
   const collect = (text: string) => CANGXUAN_LOCATION_SCENE_PACKS.flatMap(pack => (
-    text && [...pack.anchors, ...pack.entries].some(anchor => sceneContainsName(text, anchor)) ? pack.entries : []
+    text && [...pack.anchors, ...pack.entries]
+      .filter(name => !isBrainIgnoredConfiguredName(name))
+      .some(anchor => sceneContainsName(text, anchor))
+      ? pack.entries.filter(name => !isBrainIgnoredConfiguredName(name))
+      : []
   ));
   return uniq([
     ...collect(evidence.locationText),
@@ -1141,6 +1178,7 @@ function scoreEntry(
   evidence: CangxuanSceneEvidence,
   scenePackNames: string[],
 ): { score: number; reason: string } {
+  if (isBrainIgnoredEntry(entry)) return { score: 0, reason: '智脑忽略条目，由开场白/世界书开关控制' };
   if (isBlockedEntryName(entry.name)) return { score: 0, reason: '无效或变量初始化条目保持禁用' };
   if (isStructuralBoundaryEntryName(entry.name)) return { score: 0, reason: '结构分段条目不进入本轮注入' };
   if (isCgEntry(entry) && !sceneExplicitlyRequestsCg(sceneText)) {
@@ -1397,7 +1435,7 @@ export async function applyCangxuanWorldbookEnablePlan(config: CangxuanWorldbook
         const display = inferNpcDisplayName(name, content, keys);
         const entryRef = { name, displayName: display.displayName, aliases: display.aliases, isNpc: display.isNpc } as CangxuanWorldbookEntryRef;
         const from = normalizeEnabled(rawEntry);
-        const to = isForcedAlwaysName(name) || configuredNamesIncludeEntry(keepConfigNames, entryRef);
+        const to = isBrainIgnoredEntry(entryRef) ? from : isForcedAlwaysName(name) || configuredNamesIncludeEntry(keepConfigNames, entryRef);
         if (from !== to) changed.push({ worldbookName, uid, name, from, to });
         return { ...rawEntry, enabled: to };
       });

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useMainStore } from '../stores/mainStore';
 import {
+  CANGXUAN_BRAIN_IGNORED_ENTRY_NAMES,
   CANGXUAN_DEFAULT_ALWAYS_NAMES,
   CANGXUAN_DEFAULT_SCHEDULED_NAMES,
   applyCangxuanWorldbookEnablePlan,
@@ -50,6 +51,7 @@ const maxChars = computed({
 const effectiveConfig = computed(() => buildCangxuanSchedulerConfig(store.settings));
 const alwaysPreview = computed(() => effectiveConfig.value.alwaysNames.join('\n'));
 const scheduledPreview = computed(() => effectiveConfig.value.scheduledNames.join('\n'));
+const ignoredPreview = computed(() => CANGXUAN_BRAIN_IGNORED_ENTRY_NAMES.join('\n'));
 
 const filteredEntries = computed(() => {
   const q = search.value.trim().toLowerCase();
@@ -148,6 +150,7 @@ function categoryLabel(category: CangxuanWorldbookEntryRef['category']): string 
     scheduled: '调度',
     suggested_always: '常驻候选',
     suggested_scheduled: '调度候选',
+    ignored: '智脑忽略',
     unused_candidate: '关闭候选',
   };
   return map[category] || category;
@@ -185,6 +188,7 @@ onMounted(() => {
         <div class="cangxuan-plan-summary">
           <span>常驻底座 {{ effectiveConfig.alwaysNames.length }}</span>
           <span>脚本调度库 {{ effectiveConfig.scheduledNames.length }}</span>
+          <span>智脑忽略 {{ CANGXUAN_BRAIN_IGNORED_ENTRY_NAMES.length }}</span>
           <span>额外保留 {{ effectiveConfig.keepEnabledNames.length }}</span>
         </div>
         <div class="cangxuan-field">
@@ -194,6 +198,10 @@ onMounted(() => {
         <div class="cangxuan-field">
           <label>脚本调度库</label>
           <textarea :value="scheduledPreview" rows="5" readonly />
+        </div>
+        <div class="cangxuan-field">
+          <label>智脑忽略</label>
+          <textarea :value="ignoredPreview" rows="2" readonly />
         </div>
         <div class="cangxuan-field">
           <label>额外保留启用</label>
@@ -222,6 +230,7 @@ onMounted(() => {
             <span>世界书 {{ scan.counts.books }}</span>
             <span>条目 {{ scan.counts.entries }}</span>
             <span>已启用 {{ scan.counts.enabled }}</span>
+            <span>智脑忽略 {{ scan.counts.ignored || 0 }}</span>
             <span>重名 {{ scan.duplicates.length }}</span>
           </div>
           <div class="cangxuan-bindings">
