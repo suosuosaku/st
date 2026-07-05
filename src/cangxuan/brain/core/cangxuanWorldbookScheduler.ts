@@ -429,6 +429,7 @@ const BLOCKED_ENTRY_NAME_PATTERNS = [
 
 const CODE_LIKE_TEXT_PATTERNS = [
   /\b(?:string|number|boolean|unknown|any)\)\s*:\s*\{/i,
+  /\b(?:string|number|boolean|unknown|any)\]\s*:\s*\{/i,
   /\[[^\]\n]{1,80}:\s*(?:string|number|boolean|unknown|any)\]/i,
   /^\s*[A-Za-z_$][\w$]*\s*:\s*(?:string|number|boolean|unknown|any|Record|Array)\b/,
   /\b(?:interface|type|function|const|let|var)\s+[A-Za-z_$]/,
@@ -461,6 +462,36 @@ const ACTION_TYPE_RULES: Array<{ label: string; patterns: RegExp[] }> = [
   { label: '地图/移动', patterns: [/地点|地图|前往|赶路|传送|路线|距离|山门|城门|港口|驿站|边界/] },
   { label: '宗门/势力', patterns: [/宗门|势力|长老|弟子|掌门|皇朝|书院|联盟|妖族|鬼域|魔道/] },
 ];
+
+const WEAK_CONTEXT_KEYS = new Set([
+  '丹炉',
+  '炼丹',
+  '炼药',
+  '药材',
+  '丹药',
+  '修炼',
+  '修为',
+  '境界',
+  '灵石',
+  '钱包',
+  '地点',
+  '地图',
+  '位置',
+  '路线',
+  '距离',
+  '传送',
+  '交易',
+  '拍卖',
+  '任务',
+  '悬赏',
+  '道友',
+  '好感',
+  '关系',
+]);
+
+const NPC_CONTEXTUAL_KEY_ALIASES: Record<string, string[]> = {
+  贰叁捌: ['试药'],
+};
 
 function uniq(values: Array<string | null | undefined>): string[] {
   return [...new Set(values.filter((value): value is string => !!value && value.trim().length > 0).map(value => value.trim()))];
@@ -619,7 +650,7 @@ function nameFragments(name: string): string[] {
   return name
     .split(/[·•\-—_：:（）()[\]【】\s]+/)
     .map(item => item.trim())
-    .filter(item => item.length >= 2);
+    .filter(item => item.length >= 2 && /[\u4e00-\u9fff]/.test(item));
 }
 
 function entryMatchesConfiguredName(name: string, entry: Pick<CangxuanWorldbookEntryRef, 'name' | 'displayName' | 'aliases' | 'isNpc'>): boolean {
@@ -834,7 +865,12 @@ function sceneContainsName(sceneText: string, name: string): boolean {
 }
 
 function entrySceneHit(entry: CangxuanWorldbookEntryRef, sceneText: string): string | undefined {
-  const aliases = uniq([entry.name, entry.displayName, ...entry.aliases, ...entry.keys, ...entry.secondaryKeys]);
+  const keySet = new Set([...entry.keys, ...entry.secondaryKeys]);
+  const contextualAliases = Object.entries(NPC_CONTEXTUAL_KEY_ALIASES)
+    .filter(([name]) => entryMatchesConfiguredName(name, entry))
+    .flatMap(([, aliases]) => aliases)
+    .filter(alias => keySet.has(alias));
+  const aliases = uniq([entry.name, entry.displayName, ...entry.aliases.filter(alias => !keySet.has(alias)), ...contextualAliases]);
   return aliases.find(alias => alias.length >= 2 && sceneContainsName(sceneText, alias));
 }
 
@@ -849,8 +885,20 @@ function usefulKeyHit(entry: CangxuanWorldbookEntryRef, sceneText: string): stri
   return [...entry.keys, ...entry.secondaryKeys].find(key => {
     const normalizedKey = comparableName(key);
     if (normalizedKey.length < 2) return false;
+    if (WEAK_CONTEXT_KEYS.has(key.trim()) || WEAK_CONTEXT_KEYS.has(normalizedKey)) return false;
     return lower.includes(key.toLowerCase()) || sceneContainsName(sceneText, key);
   });
+}
+
+function extractActionEvidence(sceneText: string): string {
+  const userMatch = sceneText.match(/<user_input>([\s\S]*?)<\/user_input>/);
+  if (userMatch) return userMatch[1];
+  const mvuStart = sceneText.indexOf('<mvu_scene_signal>');
+  const withoutMvu = mvuStart === -1 ? sceneText : sceneText.slice(0, mvuStart);
+  return withoutMvu
+    .split('\n')
+    .filter(line => !/^summary\//.test(line.trim()))
+    .join('\n');
 }
 
 function isCgEntry(entry: CangxuanWorldbookEntryRef): boolean {
@@ -872,7 +920,8 @@ function scoreEntry(entry: CangxuanWorldbookEntryRef, sceneText: string, config:
   const inScheduledLibrary = scheduledIndex !== -1;
   const inAlwaysLibrary = configuredNamesIncludeEntry(config.alwaysNames, entry);
   const keepOnly = configuredNamesIncludeEntry(config.keepEnabledNames, entry) && !inScheduledLibrary;
-  const actionHit = detectActionTypes(sceneText).find(actionType => entryMatchesActionType(entry, actionType));
+  const actionText = extractActionEvidence(sceneText);
+  const actionHit = detectActionTypes(actionText).find(actionType => entryMatchesActionType(entry, actionType));
   const aliasHit = entrySceneHit(entry, sceneText);
   const keyHit = usefulKeyHit(entry, sceneText);
 
@@ -1013,7 +1062,7 @@ export function buildCangxuanWorldbookInjection(
     sceneSignals: {
       locations: extractNameHits(scan.entries.filter(entry => /城|镇|宗|山|谷|海|域|市|集|港|洲|驿|宫|堂|塔|池|禁/.test(entry.name)), sceneText),
       characters: extractNameHits(scan.entries.filter(entry => entry.isNpc), sceneText),
-      actionTypes: detectActionTypes(sceneText),
+      actionTypes: detectActionTypes(extractActionEvidence(sceneText)),
     },
     warnings,
   };

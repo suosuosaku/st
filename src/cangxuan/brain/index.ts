@@ -487,7 +487,7 @@ $(() => {
       const lastUserText = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : '';
       const variableSceneHints = await collectCangxuanVariableSceneHints(store);
       const sceneText = [
-        lastUserText,
+        `<user_input>${lastUserText}</user_input>`,
         variableSceneHints,
       ].join('\n').slice(-6000);
       const injection = buildCangxuanWorldbookInjection(
