@@ -2,6 +2,7 @@
 import { useMainStore } from '../stores/mainStore';
 import {
   CANGXUAN_BRAIN_IGNORED_ENTRY_NAMES,
+  CANGXUAN_BRAIN_SCHEDULER_VERSION,
   CANGXUAN_DEFAULT_ALWAYS_NAMES,
   CANGXUAN_DEFAULT_SCHEDULED_NAMES,
   applyCangxuanWorldbookEnablePlan,
@@ -52,6 +53,21 @@ const effectiveConfig = computed(() => buildCangxuanSchedulerConfig(store.settin
 const alwaysPreview = computed(() => effectiveConfig.value.alwaysNames.join('\n'));
 const scheduledPreview = computed(() => effectiveConfig.value.scheduledNames.join('\n'));
 const ignoredPreview = computed(() => CANGXUAN_BRAIN_IGNORED_ENTRY_NAMES.join('\n'));
+const lastInjectionTime = computed(() => {
+  const value = lastInjection.value?.injectedAt;
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+});
+const lastInjectionReasons = computed(() => {
+  const report = lastInjection.value;
+  if (!report) return [];
+  return (report.entryIds || []).map((id: string, index: number) => ({
+    id,
+    name: report.entryNames?.[index] || id,
+    reason: report.reasonById?.[id] || '无调度原因记录',
+  }));
+});
 
 const filteredEntries = computed(() => {
   const q = search.value.trim().toLowerCase();
@@ -254,8 +270,18 @@ onMounted(() => {
             <span>{{ lastInjection.entryNames.length }} 条</span>
             <span>{{ lastInjection.estimatedTokens }} token估算</span>
           </div>
+          <div v-if="lastInjectionTime" class="cangxuan-bindings">
+            注入时间：{{ lastInjectionTime }}
+            <br />智脑版本：{{ lastInjection.schedulerVersion || '旧记录/无版本' }} / 当前 {{ CANGXUAN_BRAIN_SCHEDULER_VERSION }}
+          </div>
           <div class="cangxuan-injection-list">
             <span v-for="name in lastInjection.entryNames" :key="name">{{ name }}</span>
+          </div>
+          <div v-if="lastInjectionReasons.length" class="cangxuan-reason-list">
+            <div v-for="item in lastInjectionReasons" :key="item.id" class="cangxuan-reason-row">
+              <span>{{ item.name }}</span>
+              <em>{{ item.reason }}</em>
+            </div>
           </div>
           <div v-if="lastInjection.sceneSignals?.actionTypes?.length" class="cangxuan-bindings">
             行动线索：{{ lastInjection.sceneSignals.actionTypes.join('、') }}
@@ -464,6 +490,30 @@ button:disabled {
 }
 .cangxuan-entry-state.on {
   color: rgba(74, 222, 128, 0.94);
+}
+.cangxuan-reason-list {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+.cangxuan-reason-row {
+  display: grid;
+  grid-template-columns: minmax(64px, max-content) minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 5px 7px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.045);
+  color: rgba(255, 255, 255, 0.58);
+}
+.cangxuan-reason-row span {
+  color: rgba(186, 230, 253, 0.9);
+  font-weight: 700;
+}
+.cangxuan-reason-row em {
+  min-width: 0;
+  font-style: normal;
+  overflow-wrap: anywhere;
 }
 .cangxuan-entry-meta,
 .cangxuan-entry-reason {

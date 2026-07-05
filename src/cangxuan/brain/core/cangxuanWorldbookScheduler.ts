@@ -72,6 +72,7 @@ export interface CangxuanWorldbookScan {
 }
 
 export interface CangxuanWorldbookInjectionReport {
+  schedulerVersion?: string;
   injectedAt: string;
   entryIds: string[];
   entryNames: string[];
@@ -106,6 +107,8 @@ interface CangxuanSceneEvidence {
   contactText: string;
   directText: string;
 }
+
+export const CANGXUAN_BRAIN_SCHEDULER_VERSION = '0.1.16';
 
 const CANGXUAN_CHARACTER_NAMES = [
   '江念',
@@ -1361,6 +1364,7 @@ export function buildCangxuanWorldbookInjection(
 
   const content = parts.join('\n').trim();
   const report: CangxuanWorldbookInjectionReport = {
+    schedulerVersion: CANGXUAN_BRAIN_SCHEDULER_VERSION,
     injectedAt: new Date().toISOString(),
     entryIds: selected.map(item => item.entry.id),
     entryNames: selected.map(item => entryReportName(item.entry)),
