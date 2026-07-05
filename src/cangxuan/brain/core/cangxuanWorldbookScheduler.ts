@@ -321,6 +321,7 @@ const CANGXUAN_ALL_ENTRY_NAMES = [
   '白夜裂谷',
   '====地标势力与常驻人物====_结束 [mvu_plot]',
   '====节日系统====_开始 [mvu_plot]',
+  '修真界节日',
   '====节日系统====_结束 [mvu_plot]',
   '====CG系统====_开始 [mvu_plot]',
   '[mvu_plot]插画强调',
@@ -605,6 +606,7 @@ const CANGXUAN_FORCED_ALWAYS_NAME_PATTERNS = [
   /^变量列表$/,
   /^好感度驱动法则$/,
   /^\[mvu_plot\]插画强调$/,
+  /(?:规则|体系|法则|格式|引擎|总览|基调|地图与距离|传送阵开销与购买力|修真界节日)$/,
 ];
 
 function isBlockedEntryName(name: string): boolean {
@@ -1064,14 +1066,46 @@ function extractSceneEvidence(sceneText: string): CangxuanSceneEvidence {
 }
 
 function buildScenePackNames(evidence: CangxuanSceneEvidence): string[] {
-  if (!evidence.locationText) return [];
-  return uniq(CANGXUAN_LOCATION_SCENE_PACKS.flatMap(pack => (
-    pack.anchors.some(anchor => sceneContainsName(evidence.locationText, anchor)) ? pack.entries : []
-  )));
+  const collect = (text: string) => CANGXUAN_LOCATION_SCENE_PACKS.flatMap(pack => (
+    text && pack.anchors.some(anchor => sceneContainsName(text, anchor)) ? pack.entries : []
+  ));
+  return uniq([
+    ...collect(evidence.locationText),
+    ...collect(evidence.userInput),
+  ]);
 }
 
 function scenePackHit(entry: CangxuanWorldbookEntryRef, scenePackNames: string[]): string | undefined {
   return scenePackNames.find(name => entryMatchesIdentityName(name, entry));
+}
+
+function scenePackIndex(entry: CangxuanWorldbookEntryRef, scenePackNames: string[]): number {
+  return scenePackNames.findIndex(name => entryMatchesIdentityName(name, entry));
+}
+
+function currentContactIndex(entry: CangxuanWorldbookEntryRef, evidence: CangxuanSceneEvidence): number {
+  return evidence.currentContacts.findIndex(contact => entrySceneHit(entry, contact));
+}
+
+function userInputNameHit(entry: CangxuanWorldbookEntryRef, evidence: CangxuanSceneEvidence): boolean {
+  return Boolean(entrySceneHit(entry, evidence.userInput));
+}
+
+function dispatchRank(
+  entry: CangxuanWorldbookEntryRef,
+  evidence: CangxuanSceneEvidence,
+  scenePackNames: string[],
+): { layer: number; order: number } {
+  const packIndex = scenePackIndex(entry, scenePackNames);
+  const hasScenePack = scenePackNames.length > 0;
+  if (packIndex !== -1) return { layer: 0, order: packIndex };
+
+  const contactIndex = isNpcSceneEntry(entry) ? currentContactIndex(entry, evidence) : -1;
+  if (contactIndex !== -1) return { layer: hasScenePack ? 1 : 0, order: contactIndex };
+
+  if (userInputNameHit(entry, evidence)) return { layer: hasScenePack ? 2 : 1, order: 0 };
+  if (isLocationLikeEntry(entry)) return { layer: hasScenePack ? 3 : 2, order: 0 };
+  return { layer: hasScenePack ? 4 : 3, order: 0 };
 }
 
 function isCgEntry(entry: CangxuanWorldbookEntryRef): boolean {
@@ -1099,7 +1133,8 @@ function scoreEntry(
   const inScheduledLibrary = scheduledIndex !== -1;
   const inAlwaysLibrary = configuredNamesIncludeEntry(config.alwaysNames, entry);
   const keepOnly = configuredNamesIncludeEntry(config.keepEnabledNames, entry) && !inScheduledLibrary;
-  if (inAlwaysLibrary || keepOnly) {
+  const forcedAlways = isForcedAlwaysName(entry.name);
+  if (forcedAlways || inAlwaysLibrary || keepOnly) {
     return { score: 0, reason: '常驻/保留启用条目不重复进入本轮动态调度' };
   }
   const actionText = extractActionEvidence(sceneText);
@@ -1175,20 +1210,30 @@ export function buildCangxuanWorldbookInjection(
   const scored = scan.entries
     .map(entry => ({ entry, ...scoreEntry(entry, sceneText, config, evidence, scenePackNames) }))
     .filter(item => item.score > 0)
-    .sort((a, b) => b.score - a.score || scheduledOrder(a.entry) - scheduledOrder(b.entry) || b.entry.contentLength - a.entry.contentLength);
+    .sort((a, b) => {
+      const ar = dispatchRank(a.entry, evidence, scenePackNames);
+      const br = dispatchRank(b.entry, evidence, scenePackNames);
+      return ar.layer - br.layer
+        || ar.order - br.order
+        || b.score - a.score
+        || scheduledOrder(a.entry) - scheduledOrder(b.entry)
+        || b.entry.contentLength - a.entry.contentLength;
+    });
 
   const selected: typeof scored = [];
   const selectedDisplayNames = new Set<string>();
   let usedChars = 0;
   let usedNpcEntries = 0;
-  const maxNpcEntries = Math.min(10, config.maxEntries);
+  const entryLimit = Math.min(40, Math.max(config.maxEntries, scenePackNames.length > 0 ? scenePackNames.length + 6 : config.maxEntries));
+  const charLimit = Math.min(24000, Math.max(config.maxChars, scenePackNames.length > 0 ? Math.max(18000, scenePackNames.length * 1200) : config.maxChars));
+  const maxNpcEntries = Math.min(16, entryLimit);
   for (const item of scored) {
-    if (selected.length >= config.maxEntries) break;
+    if (selected.length >= entryLimit) break;
     if (isNpcSceneEntry(item.entry) && usedNpcEntries >= maxNpcEntries) continue;
     const displayKey = comparableName(entryReportName(item.entry));
     if (displayKey && selectedDisplayNames.has(displayKey)) continue;
-    const nextLen = Math.min(item.entry.contentLength, config.maxChars);
-    if (usedChars > 0 && usedChars + nextLen > config.maxChars) continue;
+    const nextLen = Math.min(item.entry.contentLength, charLimit);
+    if (usedChars > 0 && usedChars + nextLen > charLimit) continue;
     selected.push(item);
     if (displayKey) selectedDisplayNames.add(displayKey);
     if (isNpcSceneEntry(item.entry)) usedNpcEntries += 1;
