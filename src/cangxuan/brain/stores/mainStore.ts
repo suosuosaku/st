@@ -446,8 +446,8 @@ const ScriptSettingsSchema = z
         cangxuanWorldbookAlwaysNames: z.string().prefault(CANGXUAN_DEFAULT_ALWAYS_NAMES),
         cangxuanWorldbookScheduledNames: z.string().prefault(CANGXUAN_DEFAULT_SCHEDULED_NAMES),
         cangxuanWorldbookKeepEnabledNames: z.string().prefault(''),
-        cangxuanWorldbookMaxEntries: z.coerce.number().prefault(18),
-        cangxuanWorldbookMaxChars: z.coerce.number().prefault(14000),
+        cangxuanWorldbookMaxEntries: z.coerce.number().prefault(12),
+        cangxuanWorldbookMaxChars: z.coerce.number().prefault(9000),
         // 小总结独立API（廉价模型，如DS）
         smallSummaryApiEnabled: z.boolean().prefault(false),
         smallSummaryApiUrl: z.string().prefault(''),

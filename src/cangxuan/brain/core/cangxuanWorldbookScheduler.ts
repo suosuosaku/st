@@ -426,6 +426,28 @@ const BLOCKED_ENTRY_NAME_PATTERNS = [
   /变量初始化勿开/,
 ];
 
+const CODE_LIKE_TEXT_PATTERNS = [
+  /\b(?:string|number|boolean|unknown|any)\)\s*:\s*\{/i,
+  /\[[^\]\n]{1,80}:\s*(?:string|number|boolean|unknown|any)\]/i,
+  /^\s*[A-Za-z_$][\w$]*\s*:\s*(?:string|number|boolean|unknown|any|Record|Array)\b/,
+  /\b(?:interface|type|function|const|let|var)\s+[A-Za-z_$]/,
+  /=>/,
+  /[{};]/,
+];
+
+const ACTION_RULE_ENTRY_NAMES: Record<string, string[]> = {
+  '修炼/突破': ['战力体系规则'],
+  '战斗/切磋': ['战力体系规则', '交互事件美化输出规则'],
+  '交易/拍卖': ['经济体系规则', '传送阵开销与购买力'],
+  '秘境/探索': ['秘境生成规则', '苍玄界全域地图与距离'],
+  '道友/好感': ['NPC交互规则', '好感度驱动法则'],
+  '飞剑传书': ['交互事件美化输出规则'],
+  'CG/插图': ['[mvu_plot]插画强调'],
+  '悬赏/任务': ['交互事件美化输出规则'],
+  '地图/移动': ['苍玄界全域地图与距离', '传送阵开销与购买力'],
+  '宗门/势力': [],
+};
+
 const ACTION_TYPE_RULES: Array<{ label: string; patterns: RegExp[] }> = [
   { label: '修炼/突破', patterns: [/修炼|突破|境界|筑基|金丹|元婴|化神|渡劫|灵气|功法|瓶颈|闭关|指点/] },
   { label: '战斗/切磋', patterns: [/战斗|切磋|斗法|出手|剑招|法术|攻击|防御|受伤|妖兽|魔修|追杀|伏击/] },
@@ -438,19 +460,6 @@ const ACTION_TYPE_RULES: Array<{ label: string; patterns: RegExp[] }> = [
   { label: '地图/移动', patterns: [/地点|地图|前往|赶路|传送|路线|距离|山门|城门|港口|驿站|边界/] },
   { label: '宗门/势力', patterns: [/宗门|势力|长老|弟子|掌门|皇朝|书院|联盟|妖族|鬼域|魔道/] },
 ];
-
-const ACTION_ENTRY_HINTS: Record<string, string[]> = {
-  '修炼/突破': ['战力体系规则', '世界引擎', '好感度驱动法则', '指点', '修为', '境界', '功法'],
-  '战斗/切磋': ['战力体系规则', '交互事件美化输出规则', '斗法', '切磋', '妖兽', '魔道'],
-  '交易/拍卖': ['经济体系规则', '传送阵开销与购买力', '落星坊市', '拍卖', '坊市', '灵石', '交易'],
-  '秘境/探索': ['秘境生成规则', '苍玄界全域地图与距离', '秘境', '遗迹', '禁域', '归墟潮眼', '白夜裂谷'],
-  '道友/好感': ['NPC交互规则', '好感度驱动法则', '道友', '主要NPC', '角色设定', '收录'],
-  '飞剑传书': ['交互事件美化输出规则', '飞剑', '传书', '回信', '听风楼'],
-  'CG/插图': ['[mvu_plot]插画强调', 'CG触发', '插画', '相册'],
-  '悬赏/任务': ['交互事件美化输出规则', '赏令', '委托', '任务', '报酬', '散修联盟'],
-  '地图/移动': ['苍玄界全域地图与距离', '传送阵开销与购买力', '地图', '距离', '路线', '驿'],
-  '宗门/势力': ['天剑宗', '玄清宗', '太虚观', '丹霞谷', '万器山', '阵道阁', '御兽宗', '魔道六门', '散修联盟'],
-};
 
 function uniq(values: Array<string | null | undefined>): string[] {
   return [...new Set(values.filter((value): value is string => !!value && value.trim().length > 0).map(value => value.trim()))];
@@ -483,7 +492,38 @@ const CANGXUAN_FORCED_ALWAYS_NAME_PATTERNS = [
 ];
 
 function isBlockedEntryName(name: string): boolean {
-  return BLOCKED_ENTRY_NAME_PATTERNS.some(pattern => pattern.test(name));
+  return BLOCKED_ENTRY_NAME_PATTERNS.some(pattern => pattern.test(name)) || looksLikeCodeText(name);
+}
+
+function isStructuralBoundaryEntryName(name: string): boolean {
+  return /^====[^=\n]+====_(?:开始|结束)(?:\s+\[mvu_plot\])?$/.test(name.trim());
+}
+
+function looksLikeCodeText(value: string): boolean {
+  const text = value.trim();
+  if (!text) return false;
+  if (/^(?:string|number|boolean|unknown|any|object|array|record)$/i.test(text)) return true;
+  if (text.length > 80 && /^[A-Za-z0-9_$:[\]{}()<>,.\s|&?;=-]+$/.test(text)) return true;
+  return CODE_LIKE_TEXT_PATTERNS.some(pattern => pattern.test(text));
+}
+
+function isUsableTriggerText(value: string): boolean {
+  const text = value.trim();
+  if (!text || text.length > 64 || /[\r\n]/.test(text)) return false;
+  return !looksLikeCodeText(text);
+}
+
+function cleanEntryNameCandidate(value: unknown): string | null {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const text = String(value).trim();
+  if (!isUsableTriggerText(text)) return null;
+  return text;
+}
+
+function clampNumber(value: unknown, fallback: number, min: number, max: number): number {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.min(max, Math.max(min, Math.floor(num)));
 }
 
 function removeBlockedConfiguredNames(names: string[]): string[] {
@@ -522,15 +562,18 @@ export function buildCangxuanSchedulerConfig(settings: any): CangxuanWorldbookSc
     alwaysNames: mergeSchedulerNames(forcedAlwaysNames, configuredAlwaysNames),
     scheduledNames: removeBlockedConfiguredNames(removeForcedAlwaysNames(configuredScheduledNames)),
     keepEnabledNames: removeBlockedConfiguredNames(removeForcedAlwaysNames(keepEnabledNames)),
-    maxEntries: Math.max(18, Number(settings?.cangxuanWorldbookMaxEntries ?? 18)),
-    maxChars: Math.max(14000, Number(settings?.cangxuanWorldbookMaxChars ?? 14000)),
+    maxEntries: clampNumber(settings?.cangxuanWorldbookMaxEntries, 12, 4, 18),
+    maxChars: clampNumber(settings?.cangxuanWorldbookMaxChars, 9000, 3000, 14000),
   };
 }
 
 function entryName(entry: any): string {
   const rawKey = entry?.key ?? entry?.keys ?? entry?.strategy?.keys;
   const keys = normalizeKeys(rawKey);
-  return String(entry?.comment || entry?.name || keys[0] || `未命名条目${entry?.uid ?? ''}`).trim();
+  return cleanEntryNameCandidate(entry?.comment)
+    || cleanEntryNameCandidate(entry?.name)
+    || keys.map(cleanEntryNameCandidate).find((name): name is string => Boolean(name))
+    || `未命名条目${entry?.uid ?? ''}`;
 }
 
 function normalizeKeys(value: unknown): string[] {
@@ -558,14 +601,15 @@ function comparableName(value: string): string {
 
 function inferNpcDisplayName(name: string, content: string, keys: string[]): { displayName: string; aliases: string[]; isNpc: boolean } {
   const contentName = content.match(/(?:姓名|角色名|道号|称呼)[:：]\s*([^\n，,。；;]{1,20})/)?.[1]?.trim();
-  const keyName = keys.find(key => key.length >= 2 && key.length <= 16);
+  const usefulKeys = keys.filter(isUsableTriggerText);
+  const keyName = usefulKeys.find(key => key.length >= 2 && key.length <= 16);
   const exactCharacter = CANGXUAN_CHARACTER_NAMES.includes(name) || CANGXUAN_CHARACTER_NAMES.includes(keyName || '');
   const looksLikeNpc = /身份|性格|修为|境界|口吻|台词|好感|道友|NPC|主要人物|立绘|头像/.test(content.slice(0, 1000));
   const isNpc = exactCharacter || Boolean(contentName) || (/^[\u4e00-\u9fff]{1,4}$/.test(name) && looksLikeNpc);
   const displayName = isNpc ? (contentName || keyName || name) : name;
   return {
     displayName,
-    aliases: uniq([displayName, contentName, keyName, name, ...keys, ...nameFragments(name)]),
+    aliases: uniq([displayName, contentName, keyName, name, ...usefulKeys, ...nameFragments(name)]),
     isNpc,
   };
 }
@@ -610,8 +654,8 @@ function normalizeEntry(raw: any, worldbookName: string): CangxuanWorldbookEntry
   const name = entryName(raw);
   const strategy = raw?.strategy || {};
   const position = raw?.position || {};
-  const keys = normalizeKeys(strategy.keys ?? raw?.key ?? raw?.keys);
-  const secondaryKeys = normalizeKeys(strategy.keys_secondary?.keys ?? raw?.keysecondary);
+  const keys = normalizeKeys(strategy.keys ?? raw?.key ?? raw?.keys).filter(isUsableTriggerText);
+  const secondaryKeys = normalizeKeys(strategy.keys_secondary?.keys ?? raw?.keysecondary).filter(isUsableTriggerText);
   const content = typeof raw?.content === 'string' ? raw.content : String(raw?.content || '');
   const display = inferNpcDisplayName(name, content, keys);
   return {
@@ -639,7 +683,7 @@ function normalizeEntry(raw: any, worldbookName: string): CangxuanWorldbookEntry
 
 function classifyEntry(entry: CangxuanWorldbookEntryRef, config: CangxuanWorldbookSchedulerConfig): CangxuanWorldbookEntryRef {
   if (isBlockedEntryName(entry.name)) {
-    return { ...entry, category: 'unused_candidate', reasons: ['变量初始化条目保持禁用，不进入常驻或调度'] };
+    return { ...entry, category: 'unused_candidate', reasons: ['无效或变量初始化条目保持禁用'] };
   }
 
   const exactAlways = configuredNamesIncludeEntry(config.alwaysNames, entry);
@@ -778,10 +822,9 @@ function entrySceneHit(entry: CangxuanWorldbookEntryRef, sceneText: string): str
 }
 
 function entryMatchesActionType(entry: CangxuanWorldbookEntryRef, actionType: string): boolean {
-  const hints = ACTION_ENTRY_HINTS[actionType] || [];
-  if (hints.length === 0) return false;
-  const haystack = `${entry.name}\n${entry.displayName}\n${entry.aliases.join('\n')}\n${entry.keys.join('\n')}\n${entry.secondaryKeys.join('\n')}\n${entry.content.slice(0, 1800)}`;
-  return hints.some(hint => haystack.includes(hint));
+  const names = ACTION_RULE_ENTRY_NAMES[actionType] || [];
+  if (names.length === 0) return false;
+  return names.some(name => entryMatchesConfiguredName(name, entry));
 }
 
 function usefulKeyHit(entry: CangxuanWorldbookEntryRef, sceneText: string): string | undefined {
@@ -794,15 +837,16 @@ function usefulKeyHit(entry: CangxuanWorldbookEntryRef, sceneText: string): stri
 }
 
 function isCgEntry(entry: CangxuanWorldbookEntryRef): boolean {
-  return /^\[mvu_plot\].*CG触发$/.test(entry.name) || /CG触发|插画强调/.test(entry.name);
+  return /^\[mvu_plot\].*CG触发$/.test(entry.name) || /CG系统|CG触发|插画强调/.test(entry.name);
 }
 
 function sceneExplicitlyRequestsCg(sceneText: string): boolean {
-  return /<插图>|<\/插图>|插图标签|输出插图|触发CG|CG触发|相册解锁|立绘|特写画面/.test(sceneText);
+  return /<插图>|<\/插图>|插图标签|输出插图|触发CG|CG触发|相册解锁/.test(sceneText);
 }
 
 function scoreEntry(entry: CangxuanWorldbookEntryRef, sceneText: string, config: CangxuanWorldbookSchedulerConfig): { score: number; reason: string } {
-  if (isBlockedEntryName(entry.name)) return { score: 0, reason: '变量初始化条目保持禁用' };
+  if (isBlockedEntryName(entry.name)) return { score: 0, reason: '无效或变量初始化条目保持禁用' };
+  if (isStructuralBoundaryEntryName(entry.name)) return { score: 0, reason: '结构分段条目不进入本轮注入' };
   if (isCgEntry(entry) && !sceneExplicitlyRequestsCg(sceneText)) {
     return { score: 0, reason: 'CG条目仅在明确插图/CG请求时调度' };
   }

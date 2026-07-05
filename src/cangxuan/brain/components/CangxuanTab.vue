@@ -200,8 +200,8 @@ onMounted(() => {
           <textarea v-model="keepEnabledNames" rows="3" placeholder="特殊情况下必须保持原生开启的条目名。" />
         </div>
         <div class="cangxuan-limits">
-          <label>最多条目 <input v-model.number="maxEntries" type="number" min="1" max="30" /></label>
-          <label>最多字符 <input v-model.number="maxChars" type="number" min="1000" step="500" /></label>
+          <label>最多条目 <input v-model.number="maxEntries" type="number" min="4" max="18" /></label>
+          <label>最多字符 <input v-model.number="maxChars" type="number" min="3000" max="14000" step="500" /></label>
         </div>
         <div class="cangxuan-actions">
           <button class="cangxuan-btn" :disabled="scanning" @click="resetSchedulerDefaults">重置推荐底座</button>

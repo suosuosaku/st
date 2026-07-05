@@ -216,13 +216,6 @@ $(() => {
     for (const event of latestSummary?.timeline?.slice(-1) || []) {
       pushLine(`summary/${event.time || ''}/${event.event || ''}`, `${event.detail || ''}`);
     }
-    for (const content of store.capturedContents.slice(-2)) {
-      pushLine(`captured/${content.messageId}`, content.content || '');
-    }
-    for (const record of store.userInputRecords.slice(-2)) {
-      pushLine(`user/${record.messageId}`, record.userInput || '');
-    }
-
     try {
       const snapshot = await readLatestCangxuanMvuSnapshot();
       pushLine('mvu_snapshot', flattenCangxuanMvuForScene(snapshot));
@@ -490,13 +483,11 @@ $(() => {
         await refreshCangxuanWorldbookScan(store);
       }
       const messages = (completion as any).messages as Array<{ role?: string; content?: unknown }>;
-      const latestCaptured = store.capturedContents[store.capturedContents.length - 1];
       const lastUserMsg = [...messages].reverse().find(message => message.role === 'user');
       const lastUserText = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : '';
       const variableSceneHints = await collectCangxuanVariableSceneHints(store);
       const sceneText = [
         lastUserText,
-        latestCaptured?.content || '',
         variableSceneHints,
       ].join('\n').slice(-6000);
       const injection = buildCangxuanWorldbookInjection(
