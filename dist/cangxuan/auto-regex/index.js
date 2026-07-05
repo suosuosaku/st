@@ -1,7 +1,9 @@
 // 苍玄界：远端正则美化包调度脚本
-// 只注册/移除 GitHub 远端 regex.json 里的美化规则，不接管酒馆内已有正则。
+// 只注册 GitHub 远端 regex.json 里的美化规则，不接管酒馆内已有正则。
 $(() => {
-  const BUILD_ID = 'cangxuan-auto-regex-v1.2.0';
+  const BUILD_ID = 'cangxuan-auto-regex-v1.2.1';
+  const PACKAGE_MARKER = 'cx-auto-regex';
+  const PACKAGE_ID_PREFIX = 'cx-auto-regex:';
   const CHAT_VAR_ENABLED = 'cx_auto_regex_enabled_names';
   const CHAT_VAR_LAST_MESSAGE_ID = 'cx_auto_regex_last_message_id';
   const SYNC_DELAY_MS = 650;
@@ -49,6 +51,7 @@ $(() => {
   let syncing = false;
   let pending = false;
   let lastRerenderSignature = '';
+  let lastProcessedSignature = '';
   let shouldSyncLatest = false;
   const queuedMessageIds = new Set();
   const mutedMessageIds = new Map();
@@ -242,8 +245,15 @@ $(() => {
     if (!ADAPTIVE_NAMES.has(name)) return null;
     const markdownOnly = raw.markdownOnly === true;
     const promptOnly = raw.promptOnly === true;
+    const legacyId = String(raw.id || '');
     return {
-      id: String(raw.id || `cx-${name}`),
+      id: `${PACKAGE_ID_PREFIX}${legacyId || name}`,
+      legacy_id: legacyId,
+      cangxuan_auto_regex: true,
+      metadata: {
+        owner: PACKAGE_MARKER,
+        build: BUILD_ID,
+      },
       script_name: name,
       enabled: true,
       find_regex: String(raw.find_regex ?? raw.findRegex ?? ''),
@@ -313,6 +323,20 @@ $(() => {
     return '';
   }
 
+  function isPackagedRegex(regex, entries = adaptiveRegexEntries) {
+    const id = String(regex?.id || '');
+    if (id.startsWith(PACKAGE_ID_PREFIX)) return true;
+    if (regex?.cangxuan_auto_regex === true) return true;
+    if (regex?.metadata?.owner === PACKAGE_MARKER) return true;
+
+    const legacyIds = new Set((entries || []).map(entry => entry.legacy_id).filter(Boolean));
+    if (legacyIds.has(id) && ADAPTIVE_NAMES.has(getRegexName(regex))) return true;
+
+    const replace = getRegexReplaceString(regex);
+    return ADAPTIVE_NAMES.has(getRegexName(regex))
+      && /cx-(event-card|daoist-new-card|complete-card|mail-reply-card|free-start-card)/.test(replace);
+  }
+
   function regexContentSignature(regex) {
     return JSON.stringify({
       id: regex?.id || '',
@@ -330,8 +354,7 @@ $(() => {
 
   function buildPackagedRegexList(regexes, entries, enabledNames) {
     const enabledSet = new Set(enabledNames);
-    const packageNames = new Set(entries.map(entry => entry.script_name));
-    const next = (Array.isArray(regexes) ? regexes : []).filter(regex => !packageNames.has(getRegexName(regex)));
+    const next = (Array.isArray(regexes) ? regexes : []).filter(regex => !isPackagedRegex(regex, entries));
     const activeEntries = entries
       .filter(entry => enabledSet.has(entry.script_name))
       .map(entry => ({ ...entry }));
@@ -347,8 +370,15 @@ $(() => {
   }
 
   function needsPackagedRegexUpdate(regexes, entries, enabledNames) {
-    const current = (Array.isArray(regexes) ? regexes : []).map(regexContentSignature).join('\n');
-    const next = buildPackagedRegexList(regexes, entries, enabledNames).map(regexContentSignature).join('\n');
+    const current = (Array.isArray(regexes) ? regexes : [])
+      .filter(regex => isPackagedRegex(regex, entries))
+      .map(regexContentSignature)
+      .join('\n');
+    const enabledSet = new Set(normalizeEnabledNames(enabledNames));
+    const next = entries
+      .filter(entry => enabledSet.has(entry.script_name))
+      .map(regexContentSignature)
+      .join('\n');
     return current !== next;
   }
 
@@ -376,29 +406,15 @@ $(() => {
     console.info('[苍玄界自动正则] 已同步远端正则美化包', { reason, build: BUILD_ID, enabled: names });
   }
 
-  async function removePackagedRegexes(reason = 'unload') {
-    try {
-      const updateTavernRegexesWithFn = getGlobal('updateTavernRegexesWith');
-      if (typeof updateTavernRegexesWithFn !== 'function') return;
-      const entries = adaptiveRegexEntries.length ? adaptiveRegexEntries : await loadAdaptiveRegexPackage();
-      const packageNames = new Set(entries.map(entry => entry.script_name));
-      if (!packageNames.size) return;
-      await updateTavernRegexesWithFn(regexes => (regexes || []).filter(regex => !packageNames.has(getRegexName(regex))), {
-        type: 'character',
-        name: 'current',
-      });
-      console.info('[苍玄界自动正则] 已卸载远端正则美化包', { reason, build: BUILD_ID });
-    } catch (error) {
-      console.warn('[苍玄界自动正则] 卸载远端正则美化包失败', error);
-    }
-  }
-
   async function syncMessage(message, reason = 'manual') {
     const text = message?.message || '';
     const storedNames = getStoredAdaptiveNames();
     const triggeredNames = collectTriggeredRules(text);
     const newlyEnabled = triggeredNames.filter(name => !storedNames.includes(name));
     const nextNames = normalizeEnabledNames([...storedNames, ...triggeredNames]);
+    const signature = `${message?.message_id ?? 'none'}:${hashText(text)}:${nextNames.slice().sort().join('|')}`;
+    if (signature === lastProcessedSignature && !newlyEnabled.length) return;
+    lastProcessedSignature = signature;
 
     persistEnabledNames(nextNames, message?.message_id);
     await syncPackagedRegexes(nextNames, reason);
@@ -478,7 +494,6 @@ $(() => {
       [
         tavernEvents.MESSAGE_RECEIVED,
         tavernEvents.MESSAGE_SWIPED,
-        tavernEvents.MESSAGE_UPDATED,
         tavernEvents.CHAT_CHANGED,
       ].filter(Boolean).forEach(eventName => eventOnFn(eventName, (...args) => {
         if (Date.now() - startedAt < INIT_GRACE_MS && eventName === tavernEvents.CHAT_CHANGED) return;
@@ -494,6 +509,5 @@ $(() => {
 
   $(window).on('pagehide', () => {
     if (syncTimer) clearTimeout(syncTimer);
-    void removePackagedRegexes('pagehide');
   });
 });
