@@ -193,32 +193,13 @@ $(() => {
     }
   }
 
-  async function collectCangxuanVariableSceneHints(store: ReturnType<typeof useMainStore>): Promise<string> {
+  async function collectCangxuanVariableSceneHints(): Promise<string> {
     const lines: string[] = [];
 
-    function pushLine(path: string, value: unknown) {
-      if (lines.length >= 40) return;
-      let text = '';
-      if (typeof value === 'string') {
-        text = value;
-      } else {
-        try {
-          text = JSON.stringify(value);
-        } catch {
-          text = String(value ?? '');
-        }
-      }
-      if (!text) return;
-      lines.push(`${path}: ${text.replace(/\s+/g, ' ').trim().slice(0, 220)}`);
-    }
-
-    const latestSummary = store.getLatestSummary();
-    for (const event of latestSummary?.timeline?.slice(-1) || []) {
-      pushLine(`summary/${event.time || ''}/${event.event || ''}`, `${event.detail || ''}`);
-    }
     try {
       const snapshot = await readLatestCangxuanMvuSnapshot();
-      pushLine('mvu_snapshot', flattenCangxuanMvuForScene(snapshot));
+      const scene = flattenCangxuanMvuForScene(snapshot);
+      if (scene) lines.push(scene);
     } catch (error) {
       console.warn('[智脑-苍玄界] 读取 MVU 场景线索失败:', error);
     }
@@ -485,7 +466,7 @@ $(() => {
       const messages = (completion as any).messages as Array<{ role?: string; content?: unknown }>;
       const lastUserMsg = [...messages].reverse().find(message => message.role === 'user');
       const lastUserText = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : '';
-      const variableSceneHints = await collectCangxuanVariableSceneHints(store);
+      const variableSceneHints = await collectCangxuanVariableSceneHints();
       const sceneText = [
         `<user_input>${lastUserText}</user_input>`,
         variableSceneHints,

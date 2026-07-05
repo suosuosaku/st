@@ -95,6 +95,16 @@ export interface CangxuanWorldbookEnableBackup {
   }>;
 }
 
+interface CangxuanSceneEvidence {
+  userInput: string;
+  mvuText: string;
+  currentLocations: string[];
+  currentContacts: string[];
+  locationText: string;
+  contactText: string;
+  directText: string;
+}
+
 const CANGXUAN_CHARACTER_NAMES = [
   '江念',
   '沈慕微',
@@ -493,6 +503,73 @@ const NPC_CONTEXTUAL_KEY_ALIASES: Record<string, string[]> = {
   贰叁捌: ['试药'],
 };
 
+const CANGXUAN_LOCATION_SCENE_PACKS: Array<{ anchors: string[]; entries: string[] }> = [
+  {
+    anchors: ['剑临城', '天剑宗', '小寒山·月微居', '后山试验药田', '清平镇', '玄清宗'],
+    entries: ['剑临城', '天剑宗', '小寒山·月微居', '后山试验药田', '清平镇', '玄清宗', '云鹤', '祝雨晴', '归尘'],
+  },
+  {
+    anchors: ['落星坊市', '太虚观'],
+    entries: ['落星坊市', '太虚观', '玉斫璜'],
+  },
+  {
+    anchors: ['百草城', '丹霞谷'],
+    entries: ['百草城', '丹霞谷', '贰叁捌', '金不换', '地狱火'],
+  },
+  {
+    anchors: ['铁骨城', '万器山'],
+    entries: ['铁骨城', '铁娇娇', '万器山'],
+  },
+  {
+    anchors: ['潮音港', '东海海域', '归墟潮眼', '鲛珠礁市', '迷阵海市', '阵道阁'],
+    entries: ['潮音港', '东海海域', '范达克', '归墟潮眼', '鲛珠礁市', '迷阵海市', '线头', '阵道阁'],
+  },
+  {
+    anchors: ['百兽镇', '御兽宗', '万兽堂', '育兽塔', '百兽斗场', '化妖池'],
+    entries: ['百兽镇', '毛绒绒', '御兽宗', '万兽堂', '育兽塔', '百兽斗场', '化妖池'],
+  },
+  {
+    anchors: ['魔道六门', '血煞门', '合欢宗', '炼尸宗', '万魂谷', '五毒教', '极乐阁', '枯骨集市'],
+    entries: ['骨小宝', '花怜', '枯骨集市', '苗小青', '魔道六门', '血煞门', '合欢宗', '炼尸宗', '万魂谷', '五毒教', '极乐阁', '王阿牛', '幽魂子'],
+  },
+  {
+    anchors: ['散修联盟', '边界走私营地'],
+    entries: ['杜子成', '贾道学', '散修联盟', '边界走私营地', '苟活', '太白'],
+  },
+  {
+    anchors: ['妖族', '万妖王庭', '化形雷池', '先祖祭坛', '万兽集市'],
+    entries: ['妖族', '万妖王庭', '化形雷池', '先祖祭坛', '万兽集市'],
+  },
+  {
+    anchors: ['半阴客栈'],
+    entries: ['半阴客栈', '常笑'],
+  },
+  {
+    anchors: ['承安皇朝'],
+    entries: ['承安皇朝'],
+  },
+  {
+    anchors: ['鬼域', '听风楼'],
+    entries: ['鬼域', '听风楼', '挽歌', '张铁柱', '丹心火', '拂袖', '花非花', '剑不语', '蓝甜药', '林雪鹿', '沙知返', '乌滴墨', '休别离', '依依兮', '袁分罡', '运蔚'],
+  },
+  {
+    anchors: ['桃李书院'],
+    entries: ['桃李书院'],
+  },
+  {
+    anchors: ['沧溟海阙', '星罗阵市'],
+    entries: ['沧溟海阙', '沧无涯', '贝三娘', '陆潮生', '星罗阵市', '慕泽'],
+  },
+  {
+    anchors: ['赤铃沙海', '百蛊绿洲', '鸣沙驿', '赤沙禁域'],
+    entries: ['裴不归', '师长夷', '赤铃沙海', '百蛊绿洲', '银摇枝', '鸣沙驿', '赤沙禁域'],
+  },
+  {
+    anchors: ['冰原雪域', '玄霜宫', '风雪堂', '寒渊冰市', '白夜裂谷', '北境', '雪域'],
+    entries: ['冰原雪域', '凌长霜', '玄霜宫', '白炉生', '风雪堂', '寒渊冰市', '宋听雪', '白夜裂谷'],
+  },
+];
+
 function uniq(values: Array<string | null | undefined>): string[] {
   return [...new Set(values.filter((value): value is string => !!value && value.trim().length > 0).map(value => value.trim()))];
 }
@@ -890,6 +967,15 @@ function usefulKeyHit(entry: CangxuanWorldbookEntryRef, sceneText: string): stri
   });
 }
 
+function isLocationLikeEntry(entry: CangxuanWorldbookEntryRef): boolean {
+  if (CANGXUAN_CHARACTER_NAMES.includes(entry.name) || CANGXUAN_CHARACTER_NAMES.includes(entry.displayName)) return false;
+  return /城|镇|宗|山|谷|海|域|市|集|港|洲|驿|宫|堂|塔|池|禁|观|阁|门|朝|院|境|坊|店|铺|楼|府|庭/.test(entry.name);
+}
+
+function isNpcSceneEntry(entry: CangxuanWorldbookEntryRef): boolean {
+  return entry.isNpc && !isLocationLikeEntry(entry);
+}
+
 function extractActionEvidence(sceneText: string): string {
   const userMatch = sceneText.match(/<user_input>([\s\S]*?)<\/user_input>/);
   if (userMatch) return userMatch[1];
@@ -901,6 +987,68 @@ function extractActionEvidence(sceneText: string): string {
     .join('\n');
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function taggedText(sceneText: string, tag: string): string {
+  const match = sceneText.match(new RegExp(`<${escapeRegExp(tag)}>([\\s\\S]*?)<\\/${escapeRegExp(tag)}>`));
+  return match?.[1]?.trim() || '';
+}
+
+const SCENE_FIELD_LABELS = ['当前时间', '当前地点', '主角修为', '灵石/钱包', '当前接触'];
+
+function extractSceneFieldValues(mvuText: string, labels: string[]): string[] {
+  if (!mvuText) return [];
+  const allLabels = SCENE_FIELD_LABELS.map(escapeRegExp).join('|');
+  const wanted = new Set(labels);
+  const normalized = mvuText
+    .replace(/<[^>]+>/g, ' ')
+    .replace(new RegExp(`\\s+((?:${allLabels})\\s*[:：])`, 'g'), '\n$1');
+  return normalized
+    .split(/\n+/)
+    .map(line => line.trim())
+    .map(line => line.match(/^([^:：]{1,24})[:：]\s*([\s\S]+)$/))
+    .filter((match): match is RegExpMatchArray => Boolean(match && wanted.has(match[1].trim())))
+    .map(match => match[2].replace(new RegExp(`\\s+(?:${allLabels})\\s*[:：][\\s\\S]*$`), '').trim())
+    .filter(Boolean);
+}
+
+function splitSceneValues(values: string[]): string[] {
+  return values.flatMap(value => String(value || '')
+    .replace(/等\d+项/g, '')
+    .replace(/[<>{}"'“”‘’]/g, '')
+    .split(/[、,，;；\n]+/)
+    .map(item => item.trim())
+    .filter(item => item.length >= 2 && item.length <= 30));
+}
+
+function expandSceneNames(values: string[]): string[] {
+  return uniq(splitSceneValues(values).flatMap(value => [value, ...nameFragments(value)]));
+}
+
+function extractSceneEvidence(sceneText: string): CangxuanSceneEvidence {
+  const userInput = taggedText(sceneText, 'user_input') || extractActionEvidence(sceneText);
+  const mvuText = taggedText(sceneText, 'mvu_scene_signal');
+  const currentLocations = expandSceneNames(extractSceneFieldValues(mvuText, ['当前地点']));
+  const currentContacts = expandSceneNames(extractSceneFieldValues(mvuText, ['当前接触']));
+  const locationText = currentLocations.join('\n');
+  const contactText = currentContacts.join('\n');
+  const directText = [userInput, locationText, contactText].filter(Boolean).join('\n');
+  return { userInput, mvuText, currentLocations, currentContacts, locationText, contactText, directText };
+}
+
+function buildScenePackNames(evidence: CangxuanSceneEvidence): string[] {
+  if (!evidence.locationText) return [];
+  return uniq(CANGXUAN_LOCATION_SCENE_PACKS.flatMap(pack => (
+    pack.anchors.some(anchor => sceneContainsName(evidence.locationText, anchor)) ? pack.entries : []
+  )));
+}
+
+function scenePackHit(entry: CangxuanWorldbookEntryRef, scenePackNames: string[]): string | undefined {
+  return scenePackNames.find(name => entryMatchesConfiguredName(name, entry) || entryHasConfiguredAlias(name, entry));
+}
+
 function isCgEntry(entry: CangxuanWorldbookEntryRef): boolean {
   return /^\[mvu_plot\].*CG触发$/.test(entry.name) || /CG系统|CG触发|插画强调/.test(entry.name);
 }
@@ -909,7 +1057,13 @@ function sceneExplicitlyRequestsCg(sceneText: string): boolean {
   return /<插图>|<\/插图>|插图标签|输出插图|触发CG|CG触发|相册解锁/.test(sceneText);
 }
 
-function scoreEntry(entry: CangxuanWorldbookEntryRef, sceneText: string, config: CangxuanWorldbookSchedulerConfig): { score: number; reason: string } {
+function scoreEntry(
+  entry: CangxuanWorldbookEntryRef,
+  sceneText: string,
+  config: CangxuanWorldbookSchedulerConfig,
+  evidence: CangxuanSceneEvidence,
+  scenePackNames: string[],
+): { score: number; reason: string } {
   if (isBlockedEntryName(entry.name)) return { score: 0, reason: '无效或变量初始化条目保持禁用' };
   if (isStructuralBoundaryEntryName(entry.name)) return { score: 0, reason: '结构分段条目不进入本轮注入' };
   if (isCgEntry(entry) && !sceneExplicitlyRequestsCg(sceneText)) {
@@ -922,18 +1076,29 @@ function scoreEntry(entry: CangxuanWorldbookEntryRef, sceneText: string, config:
   const keepOnly = configuredNamesIncludeEntry(config.keepEnabledNames, entry) && !inScheduledLibrary;
   const actionText = extractActionEvidence(sceneText);
   const actionHit = detectActionTypes(actionText).find(actionType => entryMatchesActionType(entry, actionType));
-  const aliasHit = entrySceneHit(entry, sceneText);
-  const keyHit = usefulKeyHit(entry, sceneText);
+  const npcSceneEntry = isNpcSceneEntry(entry);
+  const aliasText = npcSceneEntry ? [evidence.userInput, evidence.contactText].filter(Boolean).join('\n') : evidence.directText;
+  const aliasHit = entrySceneHit(entry, aliasText);
+  const keyHit = npcSceneEntry ? undefined : usefulKeyHit(entry, evidence.directText);
+  const packHit = scenePackHit(entry, scenePackNames);
 
   if (aliasHit) {
     const base = inScheduledLibrary ? 1200 : inAlwaysLibrary ? 760 : 820;
     const scheduledBonus = inScheduledLibrary ? Math.max(80, 220 - scheduledIndex * 4) : 0;
-    const npcBonus = entry.isNpc ? 120 : 0;
+    const npcBonus = npcSceneEntry ? 120 : 0;
     return { score: base + scheduledBonus + npcBonus, reason: `场景命中名称/别名: ${aliasHit}` };
   }
 
-  if (entry.isNpc) {
-    return { score: 0, reason: 'NPC条目必须由当前场景直接点名触发' };
+  if (packHit) {
+    const packIndex = scenePackNames.indexOf(packHit);
+    const base = inScheduledLibrary ? 860 : inAlwaysLibrary ? 620 : keepOnly ? 600 : 680;
+    const npcBonus = npcSceneEntry ? 80 : 0;
+    const orderBonus = Math.max(0, 160 - packIndex * 4);
+    return { score: base + npcBonus + orderBonus, reason: `当前地点场景包: ${packHit}` };
+  }
+
+  if (npcSceneEntry) {
+    return { score: 0, reason: 'NPC条目必须由当前接触、玩家输入或当前地点场景包触发' };
   }
 
   if (keyHit) {
@@ -969,12 +1134,14 @@ export function buildCangxuanWorldbookInjection(
 ): { content: string; report: CangxuanWorldbookInjectionReport } | null {
   if (!scan || scan.entries.length === 0) return null;
 
+  const evidence = extractSceneEvidence(sceneText);
+  const scenePackNames = buildScenePackNames(evidence);
   const scheduledOrder = (entry: CangxuanWorldbookEntryRef) => {
     const index = configuredNameIndex(config.scheduledNames, entry);
     return index === -1 ? Number.MAX_SAFE_INTEGER : index;
   };
   const scored = scan.entries
-    .map(entry => ({ entry, ...scoreEntry(entry, sceneText, config) }))
+    .map(entry => ({ entry, ...scoreEntry(entry, sceneText, config, evidence, scenePackNames) }))
     .filter(item => item.score > 0)
     .sort((a, b) => b.score - a.score || scheduledOrder(a.entry) - scheduledOrder(b.entry) || b.entry.contentLength - a.entry.contentLength);
 
@@ -982,17 +1149,17 @@ export function buildCangxuanWorldbookInjection(
   const selectedDisplayNames = new Set<string>();
   let usedChars = 0;
   let usedNpcEntries = 0;
-  const maxNpcEntries = Math.min(6, config.maxEntries);
+  const maxNpcEntries = Math.min(10, config.maxEntries);
   for (const item of scored) {
     if (selected.length >= config.maxEntries) break;
-    if (item.entry.isNpc && usedNpcEntries >= maxNpcEntries) continue;
+    if (isNpcSceneEntry(item.entry) && usedNpcEntries >= maxNpcEntries) continue;
     const displayKey = comparableName(item.entry.displayName);
     if (displayKey && selectedDisplayNames.has(displayKey)) continue;
     const nextLen = Math.min(item.entry.contentLength, config.maxChars);
     if (usedChars > 0 && usedChars + nextLen > config.maxChars) continue;
     selected.push(item);
     if (displayKey) selectedDisplayNames.add(displayKey);
-    if (item.entry.isNpc) usedNpcEntries += 1;
+    if (isNpcSceneEntry(item.entry)) usedNpcEntries += 1;
     usedChars += nextLen;
   }
   if (selected.length === 0) return null;
@@ -1034,9 +1201,10 @@ export function buildCangxuanWorldbookInjection(
         `uid="${entry.uid}"`,
         `reason="${escapeXml(item.reason)}"`,
       ];
-      if (entry.isNpc) attrs.push(`aliases="${escapeXml(entry.aliases.join('、'))}"`);
+      const npcSceneEntry = isNpcSceneEntry(entry);
+      if (npcSceneEntry) attrs.push(`aliases="${escapeXml(entry.aliases.join('、'))}"`);
       parts.push(`<worldbook_entry ${attrs.join(' ')}>`);
-      if (entry.isNpc && entry.displayName !== entry.name) {
+      if (npcSceneEntry && entry.displayName !== entry.name) {
         parts.push(`角色显示名: ${entry.displayName}`);
         parts.push(`条目名: ${entry.name}`);
         parts.push(`写作约束: 正文发言使用【${entry.displayName}】：“台词”。`);
@@ -1060,8 +1228,14 @@ export function buildCangxuanWorldbookInjection(
     totalChars: content.length,
     estimatedTokens: Math.ceil(content.length / 1.7),
     sceneSignals: {
-      locations: extractNameHits(scan.entries.filter(entry => /城|镇|宗|山|谷|海|域|市|集|港|洲|驿|宫|堂|塔|池|禁/.test(entry.name)), sceneText),
-      characters: extractNameHits(scan.entries.filter(entry => entry.isNpc), sceneText),
+      locations: uniq([
+        ...evidence.currentLocations,
+        ...extractNameHits(scan.entries.filter(entry => /城|镇|宗|山|谷|海|域|市|集|港|洲|驿|宫|堂|塔|池|禁/.test(entry.name)), evidence.directText),
+      ]).slice(0, 16),
+      characters: uniq([
+        ...evidence.currentContacts,
+        ...selected.filter(item => isNpcSceneEntry(item.entry)).map(item => item.entry.displayName),
+      ]).slice(0, 16),
       actionTypes: detectActionTypes(extractActionEvidence(sceneText)),
     },
     warnings,
