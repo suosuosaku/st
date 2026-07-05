@@ -34,6 +34,7 @@ export interface CangxuanWorldbookEntryRef {
   strategyType: string;
   keys: string[];
   secondaryKeys: string[];
+  sectionPath: string[];
   positionType: string;
   depth: number | null;
   order: number;
@@ -229,12 +230,22 @@ const CANGXUAN_ALL_ENTRY_NAMES = [
   '百兽镇',
   '毛绒绒',
   '御兽宗',
+  '万兽堂',
+  '育兽塔',
+  '百兽斗场',
+  '化妖池',
   '====世界基础规则====_结束 [mvu_plot]',
   '骨小宝',
   '花怜',
   '枯骨集市',
   '苗小青',
   '魔道六门',
+  '血煞门',
+  '合欢宗',
+  '炼尸宗',
+  '万魂谷',
+  '五毒教',
+  '极乐阁',
   '王阿牛',
   '幽魂子',
   '====地标势力与常驻人物====_开始 [mvu_plot]',
@@ -245,6 +256,10 @@ const CANGXUAN_ALL_ENTRY_NAMES = [
   '苟活',
   '太白',
   '妖族',
+  '万妖王庭',
+  '化形雷池',
+  '先祖祭坛',
+  '万兽集市',
   '半阴客栈',
   '常笑',
   '承安皇朝',
@@ -283,6 +298,8 @@ const CANGXUAN_ALL_ENTRY_NAMES = [
   '赤沙禁域',
   '====特殊规则设定====_开始 [mvu_plot]',
   '交互事件美化输出规则',
+  '秘境生成规则',
+  'NPC交互规则',
   '====特殊规则设定====_结束 [mvu_plot]',
   '冰原雪域',
   '凌长霜',
@@ -295,8 +312,6 @@ const CANGXUAN_ALL_ENTRY_NAMES = [
   '====地标势力与常驻人物====_结束 [mvu_plot]',
   '====节日系统====_开始 [mvu_plot]',
   '====节日系统====_结束 [mvu_plot]',
-  '秘境生成规则',
-  'NPC交互规则',
   '====CG系统====_开始 [mvu_plot]',
   '[mvu_plot]插画强调',
   '[mvu_plot]沈慕微CG触发',
@@ -319,20 +334,6 @@ const CANGXUAN_ALL_ENTRY_NAMES = [
   '变量列表',
   '好感度驱动法则',
   '====变量设定====_结束',
-  '万兽堂',
-  '育兽塔',
-  '百兽斗场',
-  '化妖池',
-  '万妖王庭',
-  '化形雷池',
-  '先祖祭坛',
-  '万兽集市',
-  '血煞门',
-  '合欢宗',
-  '炼尸宗',
-  '万魂谷',
-  '五毒教',
-  '极乐阁',
 ];
 
 const CANGXUAN_ALWAYS_NAME_LIST = [
@@ -562,8 +563,8 @@ export function buildCangxuanSchedulerConfig(settings: any): CangxuanWorldbookSc
     alwaysNames: mergeSchedulerNames(forcedAlwaysNames, configuredAlwaysNames),
     scheduledNames: removeBlockedConfiguredNames(removeForcedAlwaysNames(configuredScheduledNames)),
     keepEnabledNames: removeBlockedConfiguredNames(removeForcedAlwaysNames(keepEnabledNames)),
-    maxEntries: clampNumber(settings?.cangxuanWorldbookMaxEntries, 12, 4, 18),
-    maxChars: clampNumber(settings?.cangxuanWorldbookMaxChars, 9000, 3000, 14000),
+    maxEntries: clampNumber(settings?.cangxuanWorldbookMaxEntries, 18, 4, 30),
+    maxChars: clampNumber(settings?.cangxuanWorldbookMaxChars, 14000, 3000, 24000),
   };
 }
 
@@ -650,7 +651,7 @@ function configuredNamesIncludeEntry(names: string[], entry: CangxuanWorldbookEn
   return configuredNameIndex(names, entry) !== -1;
 }
 
-function normalizeEntry(raw: any, worldbookName: string): CangxuanWorldbookEntryRef {
+function normalizeEntry(raw: any, worldbookName: string, sectionPath: string[] = []): CangxuanWorldbookEntryRef {
   const name = entryName(raw);
   const strategy = raw?.strategy || {};
   const position = raw?.position || {};
@@ -670,6 +671,7 @@ function normalizeEntry(raw: any, worldbookName: string): CangxuanWorldbookEntry
     strategyType: String(strategy.type || (raw?.constant ? 'constant' : raw?.selective ? 'selective' : 'unknown')),
     keys,
     secondaryKeys,
+    sectionPath,
     positionType: String(position.type || raw?.position || 'unknown'),
     depth: typeof position.depth === 'number' ? position.depth : typeof raw?.depth === 'number' ? raw.depth : null,
     order: Number(position.order ?? raw?.order ?? 0),
@@ -679,6 +681,12 @@ function normalizeEntry(raw: any, worldbookName: string): CangxuanWorldbookEntry
     category: 'unused_candidate',
     reasons: [],
   };
+}
+
+function getBoundaryMarker(name: string): { section: string; kind: '开始' | '结束' } | null {
+  const match = name.trim().match(/^====([^=\n]+)====_(开始|结束)(?:\s+\[mvu_plot\])?$/);
+  if (!match) return null;
+  return { section: match[1], kind: match[2] as '开始' | '结束' };
 }
 
 function classifyEntry(entry: CangxuanWorldbookEntryRef, config: CangxuanWorldbookSchedulerConfig): CangxuanWorldbookEntryRef {
@@ -776,8 +784,17 @@ export async function scanCangxuanWorldbooks(config: CangxuanWorldbookSchedulerC
   for (const worldbookName of bindings.scanned) {
     try {
       const worldbook = await Promise.resolve(api.getWorldbook(worldbookName) as any[]);
+      const sectionStack: string[] = [];
       for (const rawEntry of worldbook || []) {
-        entries.push(classifyEntry(normalizeEntry(rawEntry, worldbookName), config));
+        const normalized = normalizeEntry(rawEntry, worldbookName, [...sectionStack]);
+        entries.push(classifyEntry(normalized, config));
+        const marker = getBoundaryMarker(normalized.name);
+        if (marker?.kind === '开始') {
+          sectionStack.push(marker.section);
+        } else if (marker?.kind === '结束') {
+          const index = sectionStack.lastIndexOf(marker.section);
+          if (index !== -1) sectionStack.splice(index, 1);
+        }
       }
     } catch (error) {
       console.warn(`[智脑-苍玄界] 扫描世界书失败: ${worldbookName}`, error);
@@ -947,26 +964,40 @@ export function buildCangxuanWorldbookInjection(
   parts.push('- 未命中合法 CG 候选时不要输出插图标签。');
   parts.push('</strict_reminders>');
   parts.push('<worldbook_hits>');
+  const grouped: Array<{ section: string; items: typeof selected }> = [];
   for (const item of selected) {
-    const entry = item.entry;
-    const attrs = [
-      `name="${escapeXml(entry.name)}"`,
-      `display_name="${escapeXml(entry.displayName)}"`,
-      `source="${escapeXml(entry.worldbookName)}"`,
-      `uid="${entry.uid}"`,
-      `reason="${escapeXml(item.reason)}"`,
-    ];
-    if (entry.isNpc) attrs.push(`aliases="${escapeXml(entry.aliases.join('、'))}"`);
-    parts.push(`<worldbook_entry ${attrs.join(' ')}>`);
-    if (entry.isNpc && entry.displayName !== entry.name) {
-      parts.push(`角色显示名: ${entry.displayName}`);
-      parts.push(`条目名: ${entry.name}`);
-      parts.push(`写作约束: 正文发言使用【${entry.displayName}】：“台词”。`);
-      parts.push('');
+    const section = item.entry.sectionPath.join(' / ') || '未归组条目';
+    let group = grouped.find(group => group.section === section);
+    if (!group) {
+      group = { section, items: [] };
+      grouped.push(group);
     }
-    const remaining = Math.max(500, config.maxChars - parts.join('\n').length);
-    parts.push(entry.content.slice(0, remaining));
-    parts.push('</worldbook_entry>');
+    group.items.push(item);
+  }
+  for (const group of grouped) {
+    parts.push(`<worldbook_section path="${escapeXml(group.section)}">`);
+    for (const item of group.items) {
+      const entry = item.entry;
+      const attrs = [
+        `name="${escapeXml(entry.name)}"`,
+        `display_name="${escapeXml(entry.displayName)}"`,
+        `source="${escapeXml(entry.worldbookName)}"`,
+        `uid="${entry.uid}"`,
+        `reason="${escapeXml(item.reason)}"`,
+      ];
+      if (entry.isNpc) attrs.push(`aliases="${escapeXml(entry.aliases.join('、'))}"`);
+      parts.push(`<worldbook_entry ${attrs.join(' ')}>`);
+      if (entry.isNpc && entry.displayName !== entry.name) {
+        parts.push(`角色显示名: ${entry.displayName}`);
+        parts.push(`条目名: ${entry.name}`);
+        parts.push(`写作约束: 正文发言使用【${entry.displayName}】：“台词”。`);
+        parts.push('');
+      }
+      const remaining = Math.max(500, config.maxChars - parts.join('\n').length);
+      parts.push(entry.content.slice(0, remaining));
+      parts.push('</worldbook_entry>');
+    }
+    parts.push('</worldbook_section>');
   }
   parts.push('</worldbook_hits>');
   parts.push('</cangxuan_brain_context>');
@@ -1041,7 +1072,7 @@ export async function applyCangxuanWorldbookEnablePlan(config: CangxuanWorldbook
         const display = inferNpcDisplayName(name, content, keys);
         const entryRef = { name, displayName: display.displayName, aliases: display.aliases, isNpc: display.isNpc } as CangxuanWorldbookEntryRef;
         const from = normalizeEnabled(rawEntry);
-        const to = configuredNamesIncludeEntry(keepConfigNames, entryRef);
+        const to = isForcedAlwaysName(name) || configuredNamesIncludeEntry(keepConfigNames, entryRef);
         if (from !== to) changed.push({ worldbookName, uid, name, from, to });
         return { ...rawEntry, enabled: to };
       });
