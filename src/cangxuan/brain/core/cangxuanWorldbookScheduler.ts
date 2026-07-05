@@ -1067,7 +1067,7 @@ function extractSceneEvidence(sceneText: string): CangxuanSceneEvidence {
 
 function buildScenePackNames(evidence: CangxuanSceneEvidence): string[] {
   const collect = (text: string) => CANGXUAN_LOCATION_SCENE_PACKS.flatMap(pack => (
-    text && pack.anchors.some(anchor => sceneContainsName(text, anchor)) ? pack.entries : []
+    text && [...pack.anchors, ...pack.entries].some(anchor => sceneContainsName(text, anchor)) ? pack.entries : []
   ));
   return uniq([
     ...collect(evidence.locationText),
@@ -1115,10 +1115,10 @@ function dispatchRank(
   const hasScenePack = scenePackNames.length > 0;
   const contactIndex = isNpcSceneEntry(entry) ? currentContactIndex(entry, evidence) : -1;
 
+  if (isNpcSceneEntry(entry) && userInputNameHit(entry, evidence)) return { layer: 0, order: 0 };
   if (isNpcSceneEntry(entry) && packIndex !== -1) return { layer: 0, order: packIndex };
   if (residentIndex !== -1) return { layer: 0, order: 500 + residentIndex };
   if (contactIndex !== -1) return { layer: 0, order: 800 + contactIndex };
-  if (isNpcSceneEntry(entry) && userInputNameHit(entry, evidence)) return { layer: 0, order: 900 };
 
   if (packIndex !== -1) return { layer: 1, order: packIndex };
   if (userInputNameHit(entry, evidence)) return { layer: hasScenePack ? 2 : 1, order: 0 };
