@@ -337,6 +337,8 @@ const CANGXUAN_ALL_ENTRY_NAMES = [
   '[mvu_plot]红CG触发',
   '[mvu_plot]潮听澜CG触发',
   '[mvu_plot]雪照宁CG触发',
+  '[mvu_plot]凌长霜CG触发',
+  '[mvu_plot]银摇枝CG触发',
   '====CG系统====_结束 [mvu_plot]',
   '====变量设定====_开始',
   '[mvu_update]变量更新规则',
@@ -742,6 +744,14 @@ function entryMatchesConfiguredName(name: string, entry: Pick<CangxuanWorldbookE
   return entry.isNpc && normalizedDisplayName.length >= 2 && normalizedName.includes(normalizedDisplayName);
 }
 
+function entryMatchesIdentityName(name: string, entry: Pick<CangxuanWorldbookEntryRef, 'name' | 'displayName'>): boolean {
+  const rawName = name.trim();
+  if (!rawName) return false;
+  const normalizedName = comparableName(rawName);
+  if (!normalizedName) return false;
+  return uniq([entry.name, entry.displayName]).some(identity => identity === rawName || comparableName(identity) === normalizedName);
+}
+
 function entryHasConfiguredAlias(name: string, entry: Pick<CangxuanWorldbookEntryRef, 'aliases'>): boolean {
   const rawName = name.trim();
   if (!rawName) return false;
@@ -967,12 +977,22 @@ function usefulKeyHit(entry: CangxuanWorldbookEntryRef, sceneText: string): stri
   });
 }
 
+function isLowSignalUserInput(value: string): boolean {
+  const cleaned = String(value || '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/[\s"'“”‘’。！？!?….,，、~～\-—_]/g, '')
+    .trim();
+  if (!cleaned || cleaned.length > 8) return false;
+  return /^(好|好的|好吧|可以|可以的|行|行吧|嗯|嗯嗯|哦|噢|啊|知道|知道了|明白|明白了|了解|了解了|没问题|继续|来吧|对|是|是的)$/.test(cleaned);
+}
+
 function isLocationLikeEntry(entry: CangxuanWorldbookEntryRef): boolean {
   if (CANGXUAN_CHARACTER_NAMES.includes(entry.name) || CANGXUAN_CHARACTER_NAMES.includes(entry.displayName)) return false;
   return /城|镇|宗|山|谷|海|域|市|集|港|洲|驿|宫|堂|塔|池|禁|观|阁|门|朝|院|境|坊|店|铺|楼|府|庭/.test(entry.name);
 }
 
 function isNpcSceneEntry(entry: CangxuanWorldbookEntryRef): boolean {
+  if (isCgEntry(entry)) return false;
   return entry.isNpc && !isLocationLikeEntry(entry);
 }
 
@@ -1046,7 +1066,7 @@ function buildScenePackNames(evidence: CangxuanSceneEvidence): string[] {
 }
 
 function scenePackHit(entry: CangxuanWorldbookEntryRef, scenePackNames: string[]): string | undefined {
-  return scenePackNames.find(name => entryMatchesConfiguredName(name, entry) || entryHasConfiguredAlias(name, entry));
+  return scenePackNames.find(name => entryMatchesIdentityName(name, entry));
 }
 
 function isCgEntry(entry: CangxuanWorldbookEntryRef): boolean {
@@ -1074,12 +1094,18 @@ function scoreEntry(
   const inScheduledLibrary = scheduledIndex !== -1;
   const inAlwaysLibrary = configuredNamesIncludeEntry(config.alwaysNames, entry);
   const keepOnly = configuredNamesIncludeEntry(config.keepEnabledNames, entry) && !inScheduledLibrary;
+  if (inAlwaysLibrary || keepOnly) {
+    return { score: 0, reason: '常驻/保留启用条目不重复进入本轮动态调度' };
+  }
   const actionText = extractActionEvidence(sceneText);
-  const actionHit = detectActionTypes(actionText).find(actionType => entryMatchesActionType(entry, actionType));
+  const lowSignalUserInput = isLowSignalUserInput(evidence.userInput);
+  const actionHit = lowSignalUserInput ? undefined : detectActionTypes(actionText).find(actionType => entryMatchesActionType(entry, actionType));
   const npcSceneEntry = isNpcSceneEntry(entry);
-  const aliasText = npcSceneEntry ? [evidence.userInput, evidence.contactText].filter(Boolean).join('\n') : evidence.directText;
+  const aliasText = npcSceneEntry
+    ? (lowSignalUserInput ? evidence.contactText : [evidence.userInput, evidence.contactText].filter(Boolean).join('\n'))
+    : (lowSignalUserInput ? [evidence.locationText, evidence.contactText].filter(Boolean).join('\n') : evidence.directText);
   const aliasHit = entrySceneHit(entry, aliasText);
-  const keyHit = npcSceneEntry ? undefined : usefulKeyHit(entry, evidence.directText);
+  const keyHit = lowSignalUserInput || npcSceneEntry ? undefined : usefulKeyHit(entry, evidence.directText);
   const packHit = scenePackHit(entry, scenePackNames);
 
   if (aliasHit) {
@@ -1111,9 +1137,6 @@ function scoreEntry(
     return { score: base, reason: `行动类型触发关联规则: ${actionHit}` };
   }
 
-  if (inAlwaysLibrary) {
-    return { score: 0, reason: '常驻底座未被本轮场景直接触发，跳过重复注入' };
-  }
   if (config.scheduledNames.length > 0 && !inScheduledLibrary) {
     return { score: 0, reason: '不在苍玄界调度准入库' };
   }
@@ -1125,6 +1148,10 @@ function extractNameHits(entries: CangxuanWorldbookEntryRef[], text: string): st
     .filter(entry => Boolean(entrySceneHit(entry, text)))
     .map(entry => entry.displayName)
     .slice(0, 16);
+}
+
+function entryReportName(entry: CangxuanWorldbookEntryRef): string {
+  return isCgEntry(entry) ? entry.name : entry.displayName;
 }
 
 export function buildCangxuanWorldbookInjection(
@@ -1153,7 +1180,7 @@ export function buildCangxuanWorldbookInjection(
   for (const item of scored) {
     if (selected.length >= config.maxEntries) break;
     if (isNpcSceneEntry(item.entry) && usedNpcEntries >= maxNpcEntries) continue;
-    const displayKey = comparableName(item.entry.displayName);
+    const displayKey = comparableName(entryReportName(item.entry));
     if (displayKey && selectedDisplayNames.has(displayKey)) continue;
     const nextLen = Math.min(item.entry.contentLength, config.maxChars);
     if (usedChars > 0 && usedChars + nextLen > config.maxChars) continue;
@@ -1172,7 +1199,7 @@ export function buildCangxuanWorldbookInjection(
   const parts: string[] = [];
   parts.push('<cangxuan_brain_context>');
   parts.push(`<调度时间>${new Date().toISOString()}</调度时间>`);
-  parts.push(`<调度条目>${selected.map(item => item.entry.displayName).join('、')}</调度条目>`);
+  parts.push(`<调度条目>${selected.map(item => entryReportName(item.entry)).join('、')}</调度条目>`);
   parts.push('<strict_reminders>');
   parts.push('- 正文角色发言必须使用【角色名】：“台词”。');
   parts.push('- 道友收录必须来自首次正式同场互动，传闻和公告不能当作结识。');
@@ -1223,7 +1250,7 @@ export function buildCangxuanWorldbookInjection(
   const report: CangxuanWorldbookInjectionReport = {
     injectedAt: new Date().toISOString(),
     entryIds: selected.map(item => item.entry.id),
-    entryNames: selected.map(item => item.entry.displayName),
+    entryNames: selected.map(item => entryReportName(item.entry)),
     reasonById: Object.fromEntries(selected.map(item => [item.entry.id, item.reason])),
     totalChars: content.length,
     estimatedTokens: Math.ceil(content.length / 1.7),
