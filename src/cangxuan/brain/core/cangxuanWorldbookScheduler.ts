@@ -542,7 +542,7 @@ const CANGXUAN_LOCATION_SCENE_PACKS: Array<{ anchors: string[]; entries: string[
   },
   {
     anchors: ['散修联盟', '边界走私营地'],
-    entries: ['杜子成', '贾道学', '散修联盟', '边界走私营地', '苟活', '太白'],
+    entries: ['裴不归', '杜子成', '贾道学', '苟活', '太白', '散修联盟', '边界走私营地'],
   },
   {
     anchors: ['妖族', '万妖王庭', '化形雷池', '先祖祭坛', '万兽集市'],
@@ -558,11 +558,11 @@ const CANGXUAN_LOCATION_SCENE_PACKS: Array<{ anchors: string[]; entries: string[
   },
   {
     anchors: ['鬼域', '听风楼'],
-    entries: ['鬼域', '听风楼', '挽歌', '张铁柱', '丹心火', '拂袖', '花非花', '剑不语', '蓝甜药', '林雪鹿', '沙知返', '乌滴墨', '休别离', '依依兮', '袁分罡', '运蔚', '阎冥'],
+    entries: ['阎冥', '挽歌', '张铁柱', '鬼域', '听风楼'],
   },
   {
     anchors: ['桃李书院'],
-    entries: ['桃李书院'],
+    entries: ['师长夷', '丹心火', '拂袖', '花非花', '剑不语', '林雪鹿', '休别离', '依依兮', '袁分罡', '运蔚', '桃李书院'],
   },
   {
     anchors: ['沧溟海阙', '星罗阵市'],
@@ -570,7 +570,7 @@ const CANGXUAN_LOCATION_SCENE_PACKS: Array<{ anchors: string[]; entries: string[
   },
   {
     anchors: ['赤铃沙海', '百蛊绿洲', '鸣沙驿', '赤沙禁域'],
-    entries: ['裴不归', '师长夷', '赤铃沙海', '百蛊绿洲', '银摇枝', '鸣沙驿', '赤沙禁域'],
+    entries: ['银摇枝', '蓝甜药', '沙知返', '乌滴墨', '赤铃沙海', '百蛊绿洲', '鸣沙驿', '赤沙禁域'],
   },
   {
     anchors: ['冰原雪域', '玄霜宫', '风雪堂', '寒渊冰市', '白夜裂谷', '北境', '雪域'],
@@ -995,7 +995,7 @@ function isLowSignalUserInput(value: string): boolean {
 
 function isLocationLikeEntry(entry: CangxuanWorldbookEntryRef): boolean {
   if (CANGXUAN_CHARACTER_NAMES.includes(entry.name) || CANGXUAN_CHARACTER_NAMES.includes(entry.displayName)) return false;
-  return /城|镇|宗|山|谷|海|域|市|集|港|洲|驿|宫|堂|塔|池|禁|观|阁|门|朝|院|境|坊|店|铺|楼|府|庭/.test(entry.name);
+  return /城|镇|宗|山|谷|海|域|市|集|港|洲|驿|宫|堂|塔|池|禁|观|阁|门|朝|院|境|坊|店|铺|楼|府|庭|场|坞|圃|田/.test(entry.name);
 }
 
 function isNpcSceneEntry(entry: CangxuanWorldbookEntryRef): boolean {
@@ -1083,6 +1083,20 @@ function scenePackIndex(entry: CangxuanWorldbookEntryRef, scenePackNames: string
   return scenePackNames.findIndex(name => entryMatchesIdentityName(name, entry));
 }
 
+function scenePackLocationNames(scenePackNames: string[]): string[] {
+  return scenePackNames.filter(name => !CANGXUAN_CHARACTER_NAMES.includes(name));
+}
+
+function residentLocationText(entry: CangxuanWorldbookEntryRef): string {
+  return entry.content.match(/常驻位置[:：]\s*([^\n]+)/)?.[1]?.trim() || '';
+}
+
+function residentLocationIndex(entry: CangxuanWorldbookEntryRef, scenePackNames: string[]): number {
+  const residentText = residentLocationText(entry);
+  if (!residentText) return -1;
+  return scenePackLocationNames(scenePackNames).findIndex(name => sceneContainsName(residentText, name));
+}
+
 function currentContactIndex(entry: CangxuanWorldbookEntryRef, evidence: CangxuanSceneEvidence): number {
   return evidence.currentContacts.findIndex(contact => entrySceneHit(entry, contact));
 }
@@ -1097,12 +1111,16 @@ function dispatchRank(
   scenePackNames: string[],
 ): { layer: number; order: number } {
   const packIndex = scenePackIndex(entry, scenePackNames);
+  const residentIndex = isNpcSceneEntry(entry) ? residentLocationIndex(entry, scenePackNames) : -1;
   const hasScenePack = scenePackNames.length > 0;
-  if (packIndex !== -1) return { layer: 0, order: packIndex };
-
   const contactIndex = isNpcSceneEntry(entry) ? currentContactIndex(entry, evidence) : -1;
-  if (contactIndex !== -1) return { layer: hasScenePack ? 1 : 0, order: contactIndex };
 
+  if (isNpcSceneEntry(entry) && packIndex !== -1) return { layer: 0, order: packIndex };
+  if (residentIndex !== -1) return { layer: 0, order: 500 + residentIndex };
+  if (contactIndex !== -1) return { layer: 0, order: 800 + contactIndex };
+  if (isNpcSceneEntry(entry) && userInputNameHit(entry, evidence)) return { layer: 0, order: 900 };
+
+  if (packIndex !== -1) return { layer: 1, order: packIndex };
   if (userInputNameHit(entry, evidence)) return { layer: hasScenePack ? 2 : 1, order: 0 };
   if (isLocationLikeEntry(entry)) return { layer: hasScenePack ? 3 : 2, order: 0 };
   return { layer: hasScenePack ? 4 : 3, order: 0 };
@@ -1147,6 +1165,7 @@ function scoreEntry(
   const aliasHit = entrySceneHit(entry, aliasText);
   const keyHit = lowSignalUserInput || npcSceneEntry ? undefined : usefulKeyHit(entry, evidence.directText);
   const packHit = scenePackHit(entry, scenePackNames);
+  const residentHit = npcSceneEntry ? residentLocationIndex(entry, scenePackNames) : -1;
 
   if (aliasHit) {
     const base = inScheduledLibrary ? 1200 : inAlwaysLibrary ? 760 : 820;
@@ -1161,6 +1180,11 @@ function scoreEntry(
     const npcBonus = npcSceneEntry ? 80 : 0;
     const orderBonus = Math.max(0, 160 - packIndex * 4);
     return { score: base + npcBonus + orderBonus, reason: `当前地点场景包: ${packHit}` };
+  }
+
+  if (residentHit !== -1) {
+    const names = scenePackLocationNames(scenePackNames);
+    return { score: inScheduledLibrary ? 900 : 760, reason: `常驻位置归属当前地点: ${names[residentHit]}` };
   }
 
   if (npcSceneEntry) {
