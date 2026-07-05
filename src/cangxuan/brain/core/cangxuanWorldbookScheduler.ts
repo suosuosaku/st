@@ -108,7 +108,7 @@ interface CangxuanSceneEvidence {
   directText: string;
 }
 
-export const CANGXUAN_BRAIN_SCHEDULER_VERSION = '0.1.16';
+export const CANGXUAN_BRAIN_SCHEDULER_VERSION = '0.1.17';
 
 const CANGXUAN_CHARACTER_NAMES = [
   '江念',
@@ -512,6 +512,7 @@ const WEAK_CONTEXT_KEYS = new Set([
   '好感',
   '关系',
   '御兽宗',
+  '幼兽',
 ]);
 
 const NPC_CONTEXTUAL_KEY_ALIASES: Record<string, string[]> = {
