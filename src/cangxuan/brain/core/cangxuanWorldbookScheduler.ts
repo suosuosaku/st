@@ -522,8 +522,8 @@ export function buildCangxuanSchedulerConfig(settings: any): CangxuanWorldbookSc
     alwaysNames: mergeSchedulerNames(forcedAlwaysNames, configuredAlwaysNames),
     scheduledNames: removeBlockedConfiguredNames(removeForcedAlwaysNames(configuredScheduledNames)),
     keepEnabledNames: removeBlockedConfiguredNames(removeForcedAlwaysNames(keepEnabledNames)),
-    maxEntries: Math.max(1, Number(settings?.cangxuanWorldbookMaxEntries ?? 6)),
-    maxChars: Math.max(1000, Number(settings?.cangxuanWorldbookMaxChars ?? 7000)),
+    maxEntries: Math.max(18, Number(settings?.cangxuanWorldbookMaxEntries ?? 18)),
+    maxChars: Math.max(14000, Number(settings?.cangxuanWorldbookMaxChars ?? 14000)),
   };
 }
 
@@ -793,8 +793,19 @@ function usefulKeyHit(entry: CangxuanWorldbookEntryRef, sceneText: string): stri
   });
 }
 
+function isCgEntry(entry: CangxuanWorldbookEntryRef): boolean {
+  return /^\[mvu_plot\].*CG触发$/.test(entry.name) || /CG触发|插画强调/.test(entry.name);
+}
+
+function sceneExplicitlyRequestsCg(sceneText: string): boolean {
+  return /<插图>|<\/插图>|插图标签|输出插图|触发CG|CG触发|相册解锁|立绘|特写画面/.test(sceneText);
+}
+
 function scoreEntry(entry: CangxuanWorldbookEntryRef, sceneText: string, config: CangxuanWorldbookSchedulerConfig): { score: number; reason: string } {
   if (isBlockedEntryName(entry.name)) return { score: 0, reason: '变量初始化条目保持禁用' };
+  if (isCgEntry(entry) && !sceneExplicitlyRequestsCg(sceneText)) {
+    return { score: 0, reason: 'CG条目仅在明确插图/CG请求时调度' };
+  }
 
   const scheduledIndex = configuredNameIndex(config.scheduledNames, entry);
   const inScheduledLibrary = scheduledIndex !== -1;
@@ -858,15 +869,19 @@ export function buildCangxuanWorldbookInjection(
     .sort((a, b) => b.score - a.score || scheduledOrder(a.entry) - scheduledOrder(b.entry) || b.entry.contentLength - a.entry.contentLength);
 
   const selected: typeof scored = [];
+  const selectedDisplayNames = new Set<string>();
   let usedChars = 0;
   let usedNpcEntries = 0;
-  const maxNpcEntries = Math.min(4, config.maxEntries);
+  const maxNpcEntries = Math.min(6, config.maxEntries);
   for (const item of scored) {
     if (selected.length >= config.maxEntries) break;
     if (item.entry.isNpc && usedNpcEntries >= maxNpcEntries) continue;
+    const displayKey = comparableName(item.entry.displayName);
+    if (displayKey && selectedDisplayNames.has(displayKey)) continue;
     const nextLen = Math.min(item.entry.contentLength, config.maxChars);
     if (usedChars > 0 && usedChars + nextLen > config.maxChars) continue;
     selected.push(item);
+    if (displayKey) selectedDisplayNames.add(displayKey);
     if (item.entry.isNpc) usedNpcEntries += 1;
     usedChars += nextLen;
   }
