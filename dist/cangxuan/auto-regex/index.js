@@ -1,7 +1,7 @@
 const REGEX_URLS = [
-  'https://cdn.jsdelivr.net/gh/suosuosaku/st@sillytavern%2Fcangxuan-correct-auto-regex/dist/cangxuan/auto-regex/regex.json',
-  'https://gcore.jsdelivr.net/gh/suosuosaku/st@sillytavern%2Fcangxuan-correct-auto-regex/dist/cangxuan/auto-regex/regex.json',
-  'https://testingcf.jsdelivr.net/gh/suosuosaku/st@sillytavern%2Fcangxuan-correct-auto-regex/dist/cangxuan/auto-regex/regex.json',
+  'https://cdn.jsdelivr.net/gh/suosuosaku/st@184496040de99523aa5823420dc3e80a4d6c0a22/dist/cangxuan/auto-regex/regex.json',
+  'https://gcore.jsdelivr.net/gh/suosuosaku/st@184496040de99523aa5823420dc3e80a4d6c0a22/dist/cangxuan/auto-regex/regex.json',
+  'https://testingcf.jsdelivr.net/gh/suosuosaku/st@184496040de99523aa5823420dc3e80a4d6c0a22/dist/cangxuan/auto-regex/regex.json',
 ];
 
 $(async () => {
