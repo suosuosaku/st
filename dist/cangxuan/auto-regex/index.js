@@ -51,6 +51,7 @@ $(async () => {
   const DEFAULT_SOURCE = { user_input: false, ai_output: true, slash_command: false, world_info: false };
   const DEFAULT_DESTINATION = { display: true, prompt: false };
   const RECENT_SCAN_DEPTH = 8;
+  const PRELOAD_RULE_NAMES = ['自由开局美化'];
 
   let syncing = false;
   let chatId = null;
@@ -158,6 +159,25 @@ $(async () => {
       console.info(`苍玄界自动正则: 已保存 ${sortedNames.length} 个正则名称到聊天变量`);
     } catch (error) {
       console.warn('苍玄界自动正则: 保存正则名称失败:', error);
+    }
+  };
+
+  const ensurePreloadedRegexes = () => {
+    const managedNameSet = new Set(getManagedTavernRules().map(rule => rule.script_name));
+    const preloadNames = PRELOAD_RULE_NAMES.filter(name => managedNameSet.has(name));
+
+    if (preloadNames.length === 0) {
+      return;
+    }
+
+    const storedNames = getStoredNames();
+    const mergedNames = [...new Set([...preloadNames, ...storedNames])];
+    const storedKey = [...storedNames].sort().join(',');
+    const mergedKey = [...mergedNames].sort().join(',');
+
+    if (storedKey !== mergedKey) {
+      saveStoredNames(mergedNames);
+      console.info(`苍玄界自动正则: 已预装 ${preloadNames.join(', ')}`);
     }
   };
 
@@ -438,6 +458,7 @@ $(async () => {
       }
 
       debounceTimer = setTimeout(async () => {
+        ensurePreloadedRegexes();
         await syncRegexes();
         await scanRecentMessages();
       }, 500);
@@ -456,6 +477,7 @@ $(async () => {
   });
 
   console.info('苍玄界自动正则: 启动初始化');
+  ensurePreloadedRegexes();
   await syncRegexes();
   await scanRecentMessages();
 
