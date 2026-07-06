@@ -108,7 +108,7 @@ interface CangxuanSceneEvidence {
   directText: string;
 }
 
-export const CANGXUAN_BRAIN_SCHEDULER_VERSION = '0.1.17';
+export const CANGXUAN_BRAIN_SCHEDULER_VERSION = '0.1.18';
 
 const CANGXUAN_CHARACTER_NAMES = [
   '江念',
@@ -745,6 +745,14 @@ function comparableName(value: string): string {
     .trim();
 }
 
+
+const CANGXUAN_ALLOWED_ENTRY_NAME_SET = new Set(CANGXUAN_ALL_ENTRY_NAMES.map(comparableName).filter(Boolean));
+
+function isAllowedCangxuanEntryName(name: string): boolean {
+  const normalizedName = comparableName(name);
+  return Boolean(normalizedName) && CANGXUAN_ALLOWED_ENTRY_NAME_SET.has(normalizedName);
+}
+
 function inferNpcDisplayName(name: string, content: string, keys: string[]): { displayName: string; aliases: string[]; isNpc: boolean } {
   const contentName = content.match(/(?:姓名|角色名|道号|称呼)[:：]\s*([^\n，,。；;]{1,20})/)?.[1]?.trim();
   const usefulKeys = keys.filter(isUsableTriggerText);
@@ -949,6 +957,7 @@ export async function scanCangxuanWorldbooks(config: CangxuanWorldbookSchedulerC
       const sectionStack: string[] = [];
       for (const rawEntry of worldbook || []) {
         const normalized = normalizeEntry(rawEntry, worldbookName, [...sectionStack]);
+        if (!isAllowedCangxuanEntryName(normalized.name)) continue;
         entries.push(classifyEntry(normalized, config));
         const marker = getBoundaryMarker(normalized.name);
         if (marker?.kind === '开始') {
@@ -1434,6 +1443,7 @@ export async function applyCangxuanWorldbookEnablePlan(config: CangxuanWorldbook
     await api.updateWorldbookWith(worldbookName, (worldbook: any[]) => {
       return worldbook.map(rawEntry => {
         const name = entryName(rawEntry);
+        if (!isAllowedCangxuanEntryName(name)) return rawEntry;
         const uid = Number(rawEntry?.uid ?? 0);
         const keys = normalizeKeys(rawEntry?.strategy?.keys ?? rawEntry?.key ?? rawEntry?.keys);
         const content = typeof rawEntry?.content === 'string' ? rawEntry.content : String(rawEntry?.content || '');
