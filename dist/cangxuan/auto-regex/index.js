@@ -1,7 +1,7 @@
 const REGEX_URLS = [
-  'https://cdn.jsdelivr.net/gh/suosuosaku/st@184496040de99523aa5823420dc3e80a4d6c0a22/dist/cangxuan/auto-regex/regex.json',
-  'https://gcore.jsdelivr.net/gh/suosuosaku/st@184496040de99523aa5823420dc3e80a4d6c0a22/dist/cangxuan/auto-regex/regex.json',
-  'https://testingcf.jsdelivr.net/gh/suosuosaku/st@184496040de99523aa5823420dc3e80a4d6c0a22/dist/cangxuan/auto-regex/regex.json',
+  'https://cdn.jsdelivr.net/gh/suosuosaku/st@master/dist/cangxuan/auto-regex/regex.json',
+  'https://gcore.jsdelivr.net/gh/suosuosaku/st@master/dist/cangxuan/auto-regex/regex.json',
+  'https://testingcf.jsdelivr.net/gh/suosuosaku/st@master/dist/cangxuan/auto-regex/regex.json',
 ];
 
 $(async () => {
@@ -17,7 +17,7 @@ $(async () => {
       const url = REGEX_URLS[index];
 
       try {
-        console.info(`苍玄界自动正则: 尝试从第 ${index + 1} 个 URL 加载: ${url}`);
+        console.info(`苍玄界自动正则: 尝试从第 ${index + 1} 个URL加载: ${url}`);
         const response = await fetch(url);
 
         if (!response.ok) {
@@ -25,20 +25,20 @@ $(async () => {
         }
 
         rawRules = await response.json();
-        console.info(`苍玄界自动正则: 成功从第 ${index + 1} 个 URL 加载 ${rawRules.length} 条规则`);
+        console.info(`苍玄界自动正则: 成功从第 ${index + 1} 个URL加载 ${rawRules.length} 条规则`);
         loaded = true;
         break;
       } catch (error) {
-        console.warn(`苍玄界自动正则: 第 ${index + 1} 个 URL 加载失败:`, error);
+        console.warn(`苍玄界自动正则: 第 ${index + 1} 个URL加载失败:`, error);
 
         if (index < REGEX_URLS.length - 1) {
-          console.info('苍玄界自动正则: 尝试下一个备用 URL...');
+          console.info('苍玄界自动正则: 尝试下一个备用URL...');
         }
       }
     }
 
     if (!loaded) {
-      throw new Error('所有 CDN URL 均加载失败');
+      throw new Error('所有CDN URL均加载失败');
     }
   } catch (error) {
     console.error('苍玄界自动正则: 从网络加载失败:', error);
@@ -48,16 +48,13 @@ $(async () => {
 
   const NAMES_VAR = 'cangxuan_regex_names';
   const LAST_MESSAGE_VAR = 'cangxuan_regex_last_message_id';
-  const DEFAULT_SOURCE = { user_input: false, ai_output: true, slash_command: false, world_info: false };
-  const DEFAULT_DESTINATION = { display: true, prompt: false };
-  const RECENT_SCAN_DEPTH = 8;
-  const PRELOAD_RULE_NAMES = ['自由开局美化'];
-
   let syncing = false;
   let chatId = null;
   let debounceTimer = null;
   let compiledTriggers = null;
   let tavernRules = null;
+
+  console.info(`苍玄界自动正则: 成功加载 ${rawRules.length} 条规则`);
 
   const getManagedTavernRules = () => {
     if (tavernRules !== null) {
@@ -66,28 +63,20 @@ $(async () => {
 
     tavernRules = rawRules
       .filter(rule => !rule.disabled)
-      .map(rule => {
-        const source =
-          rule.source ??
-          (rule.scriptName === '自由开局美化'
-            ? { user_input: true, ai_output: true, slash_command: false, world_info: false }
-            : DEFAULT_SOURCE);
-
-        return {
-          id: rule.id,
-          script_name: rule.scriptName,
-          enabled: true,
-          scope: 'character',
-          find_regex: rule.findRegex,
-          replace_string: rule.replaceString,
-          trim_strings: Array.isArray(rule.trimStrings) ? rule.trimStrings.join('\n') : '',
-          source,
-          destination: rule.destination ?? DEFAULT_DESTINATION,
-          run_on_edit: rule.runOnEdit ?? true,
-          min_depth: rule.minDepth ?? null,
-          max_depth: rule.maxDepth ?? 10,
-        };
-      });
+      .map(rule => ({
+        id: rule.id,
+        script_name: rule.scriptName,
+        enabled: true,
+        scope: 'character',
+        find_regex: rule.findRegex,
+        replace_string: rule.replaceString,
+        trim_strings: Array.isArray(rule.trimStrings) ? rule.trimStrings.join('\n') : '',
+        source: { user_input: false, ai_output: true, slash_command: false, world_info: false },
+        destination: { display: true, prompt: false },
+        run_on_edit: rule.runOnEdit ?? true,
+        min_depth: rule.minDepth ?? null,
+        max_depth: rule.maxDepth ?? 10,
+      }));
 
     return tavernRules;
   };
@@ -122,6 +111,9 @@ $(async () => {
             quickCheck = '(';
           } else if (patternText.startsWith('>')) {
             quickCheck = '>';
+          } else if (patternText.startsWith('<')) {
+            const tagMatch = patternText.match(/<(\w+)/);
+            quickCheck = tagMatch ? `<${tagMatch[1]}` : '<';
           } else {
             quickCheck = patternText.substring(0, Math.min(15, patternText.length));
           }
@@ -135,150 +127,6 @@ $(async () => {
       .filter(Boolean);
 
     return compiledTriggers;
-  };
-
-  const getStoredNames = () => {
-    try {
-      const variables = getVariables({ type: 'chat' });
-      const names = variables?.[NAMES_VAR];
-
-      if (Array.isArray(names)) {
-        return names.filter(name => typeof name === 'string');
-      }
-    } catch (error) {
-      console.warn('苍玄界自动正则: 获取已存储正则名称失败:', error);
-    }
-
-    return [];
-  };
-
-  const saveStoredNames = names => {
-    try {
-      const sortedNames = [...new Set(names)].sort();
-      insertOrAssignVariables({ [NAMES_VAR]: sortedNames }, { type: 'chat' });
-      console.info(`苍玄界自动正则: 已保存 ${sortedNames.length} 个正则名称到聊天变量`);
-    } catch (error) {
-      console.warn('苍玄界自动正则: 保存正则名称失败:', error);
-    }
-  };
-
-  const ensurePreloadedRegexes = () => {
-    const managedNameSet = new Set(getManagedTavernRules().map(rule => rule.script_name));
-    const preloadNames = PRELOAD_RULE_NAMES.filter(name => managedNameSet.has(name));
-
-    if (preloadNames.length === 0) {
-      return;
-    }
-
-    const storedNames = getStoredNames();
-    const mergedNames = [...new Set([...preloadNames, ...storedNames])];
-    const storedKey = [...storedNames].sort().join(',');
-    const mergedKey = [...mergedNames].sort().join(',');
-
-    if (storedKey !== mergedKey) {
-      saveStoredNames(mergedNames);
-      console.info(`苍玄界自动正则: 已预装 ${preloadNames.join(', ')}`);
-    }
-  };
-
-  const addRegex = async rule => {
-    try {
-      await updateTavernRegexesWith(regexes => [
-        ...regexes.filter(regex => regex.script_name !== rule.script_name),
-        rule,
-      ]);
-    } catch (error) {
-      console.warn(`苍玄界自动正则: 注册正则失败: ${rule.script_name}`, error);
-    }
-  };
-
-  const removeRegexes = async names => {
-    if (names.length === 0) {
-      return;
-    }
-
-    try {
-      await updateTavernRegexesWith(regexes => regexes.filter(regex => !names.includes(regex.script_name)));
-      console.info(`苍玄界自动正则: 已移除 ${names.length} 条规则`);
-    } catch (error) {
-      console.warn('苍玄界自动正则: 移除正则失败:', error);
-    }
-  };
-
-  const getExistingRegexNames = async () => {
-    const names = new Set();
-
-    try {
-      await updateTavernRegexesWith(regexes => {
-        regexes.forEach(regex => names.add(regex.script_name));
-        return regexes;
-      });
-    } catch (error) {
-      console.warn('苍玄界自动正则: 获取角色卡正则列表失败:', error);
-    }
-
-    return names;
-  };
-
-  const syncRegexes = async () => {
-    if (syncing) {
-      console.info('苍玄界自动正则: 正在同步中，跳过本次调用');
-      return;
-    }
-
-    try {
-      syncing = true;
-      const storedNames = getStoredNames();
-      const storedNameSet = new Set(storedNames);
-      const existingNames = await getExistingRegexNames();
-      const managedRules = getManagedTavernRules();
-      const managedNameSet = new Set(managedRules.map(rule => rule.script_name));
-      const namesToRemove = [];
-
-      for (const existingName of existingNames) {
-        if (managedNameSet.has(existingName) && !storedNameSet.has(existingName)) {
-          namesToRemove.push(existingName);
-        }
-      }
-
-      const namesToAdd = [];
-      for (const storedName of storedNames) {
-        if (managedNameSet.has(storedName) && !existingNames.has(storedName)) {
-          namesToAdd.push(storedName);
-        }
-      }
-
-      if (namesToRemove.length > 0) {
-        await removeRegexes(namesToRemove);
-        console.info(`苍玄界自动正则: 已移除 ${namesToRemove.length} 条不在变量列表中的规则: ${namesToRemove.join(', ')}`);
-      }
-
-      if (namesToAdd.length > 0) {
-        let addedCount = 0;
-
-        for (const name of namesToAdd) {
-          const rule = managedRules.find(item => item.script_name === name);
-
-          if (rule) {
-            await addRegex(rule);
-            addedCount += 1;
-            console.info(`苍玄界自动正则: 已注册 ${name}`);
-          }
-        }
-
-        if (addedCount > 0) {
-          console.info(`苍玄界自动正则: 共注册了 ${addedCount} 条规则`);
-        }
-      }
-
-      if (namesToRemove.length === 0 && namesToAdd.length === 0) {
-        console.info('苍玄界自动正则: 变量列表与角色卡正则列表已同步，无需更新');
-      }
-    } catch (error) {
-      console.error('苍玄界自动正则: 同步正则列表失败:', error);
-    } finally {
-      syncing = false;
-    }
   };
 
   const detectRegexNames = (text, existingNames = []) => {
@@ -313,76 +161,140 @@ $(async () => {
     return detectedNames;
   };
 
-  const readMessageText = message => {
-    if (!message) {
-      return '';
-    }
-
-    if (typeof message === 'string') {
-      return message;
-    }
-
-    return message.message ?? message.mes ?? message.content ?? '';
-  };
-
-  const collectMessagesForIds = ids => {
-    const seen = new Set();
-    const messages = [];
-
-    for (const id of ids) {
-      if (!Number.isFinite(id)) {
-        continue;
-      }
-
-      for (const role of [undefined, 'assistant', 'user']) {
-        try {
-          const result = role === undefined ? getChatMessages(id) : getChatMessages(id, { role });
-
-          for (const message of result ?? []) {
-            const text = readMessageText(message);
-            const dedupeKey = `${id}:${role ?? 'any'}:${text}`;
-
-            if (text && !seen.has(dedupeKey)) {
-              seen.add(dedupeKey);
-              messages.push(text);
-            }
-          }
-        } catch {
-          // Some SillyTavern helper builds do not support every getChatMessages signature.
-        }
-      }
-    }
-
-    return messages;
-  };
-
-  const collectRecentMessages = () => {
-    const messages = [];
-    const seenTexts = new Set();
-
-    for (let offset = -1; offset >= -RECENT_SCAN_DEPTH; offset -= 1) {
-      try {
-        const result = getChatMessages(offset) ?? [];
-
-        for (const message of result) {
-          const text = readMessageText(message);
-
-          if (text && !seenTexts.has(text)) {
-            seenTexts.add(text);
-            messages.push(text);
-          }
-        }
-      } catch {
-        // Negative offsets are best-effort; exact ids are handled on message events.
-      }
-    }
-
-    return messages;
-  };
-
-  const scanTexts = async texts => {
+  const getStoredNames = () => {
     try {
-      const joinedText = texts.filter(Boolean).join('\n\n');
+      const variables = getVariables({ type: 'chat' });
+      const names = variables?.[NAMES_VAR];
+
+      if (Array.isArray(names)) {
+        return names.filter(name => typeof name === 'string');
+      }
+    } catch (error) {
+      console.warn('获取存储的正则名称失败:', error);
+    }
+
+    return [];
+  };
+
+  const saveStoredNames = names => {
+    try {
+      const sortedNames = [...new Set(names)].sort();
+      insertOrAssignVariables({ [NAMES_VAR]: sortedNames }, { type: 'chat' });
+      console.info(`苍玄界自动正则: 已保存 ${sortedNames.length} 个正则名称到聊天变量`);
+    } catch (error) {
+      console.warn('保存正则名称失败:', error);
+    }
+  };
+
+  const addRegex = async rule => {
+    try {
+      await updateTavernRegexesWith(regexes => [
+        ...regexes.filter(regex => regex.script_name !== rule.script_name),
+        rule,
+      ]);
+    } catch (error) {
+      console.warn(`注册正则失败: ${rule.script_name}`, error);
+    }
+  };
+
+  const removeRegexes = async names => {
+    if (names.length === 0) {
+      return;
+    }
+
+    try {
+      await updateTavernRegexesWith(regexes => regexes.filter(regex => !names.includes(regex.script_name)));
+      console.info(`苍玄界自动正则: 已移除 ${names.length} 条规则`);
+    } catch (error) {
+      console.warn('移除正则失败:', error);
+    }
+  };
+
+  const getExistingRegexNames = async () => {
+    const names = new Set();
+
+    try {
+      await updateTavernRegexesWith(regexes => {
+        regexes.forEach(regex => names.add(regex.script_name));
+        return regexes;
+      });
+    } catch (error) {
+      console.warn('获取角色卡正则列表失败:', error);
+    }
+
+    return names;
+  };
+
+  const syncRegexes = async () => {
+    if (syncing) {
+      console.info('苍玄界自动正则: 正在同步中，跳过本次调用');
+      return;
+    }
+
+    try {
+      syncing = true;
+      const storedNames = getStoredNames();
+      const storedNameSet = new Set(storedNames);
+      const existingNames = await getExistingRegexNames();
+      const existingNameSet = new Set(existingNames);
+      const managedRules = getManagedTavernRules();
+      const managedNameSet = new Set(managedRules.map(rule => rule.script_name));
+      const namesToRemove = [];
+
+      for (const existingName of existingNames) {
+        if (managedNameSet.has(existingName) && !storedNameSet.has(existingName)) {
+          namesToRemove.push(existingName);
+        }
+      }
+
+      const namesToAdd = [];
+      for (const storedName of storedNames) {
+        if (managedNameSet.has(storedName) && !existingNameSet.has(storedName)) {
+          namesToAdd.push(storedName);
+        }
+      }
+
+      if (namesToRemove.length > 0) {
+        await removeRegexes(namesToRemove);
+        console.info(`苍玄界自动正则: 已移除 ${namesToRemove.length} 条不在变量列表中的规则: ${namesToRemove.join(', ')}`);
+      }
+
+      if (namesToAdd.length > 0) {
+        let addedCount = 0;
+
+        for (const name of namesToAdd) {
+          const rule = managedRules.find(item => item.script_name === name);
+
+          if (rule) {
+            await addRegex(rule);
+            addedCount += 1;
+            console.info(`苍玄界自动正则: 已注册 ${name}`);
+          }
+        }
+
+        if (addedCount > 0) {
+          console.info(`苍玄界自动正则: 共注册了 ${addedCount} 条规则`);
+        }
+      }
+
+      if (namesToRemove.length === 0 && namesToAdd.length === 0) {
+        console.info('苍玄界自动正则: 变量列表与角色卡正则列表已同步，无需更新');
+      }
+    } catch (error) {
+      console.error('同步正则列表失败:', error);
+    } finally {
+      syncing = false;
+    }
+  };
+
+  const scanLatestMessage = async () => {
+    try {
+      console.info('苍玄界自动正则: 开始扫描最后一层消息');
+      const messages = getChatMessages(-1) ?? [];
+      const joinedText = messages
+        .map(message => (typeof message === 'string' ? message : message?.message ?? message?.mes ?? message?.content ?? ''))
+        .filter(Boolean)
+        .join('\n\n');
 
       if (!joinedText) {
         console.info('苍玄界自动正则: 没有找到可扫描消息，返回');
@@ -403,31 +315,7 @@ $(async () => {
         console.info('苍玄界自动正则: 无变化，不更新');
       }
     } catch (error) {
-      console.error('苍玄界自动正则: 扫描消息更新变量失败:', error);
-    }
-  };
-
-  const scanRecentMessages = async () => {
-    console.info('苍玄界自动正则: 扫描最近消息');
-    await scanTexts(collectRecentMessages());
-  };
-
-  const scanMessagePair = async messageId => {
-    const numericMessageId = Number(messageId);
-
-    if (!Number.isFinite(numericMessageId)) {
-      await scanRecentMessages();
-      return;
-    }
-
-    console.info(`苍玄界自动正则: 扫描消息 ${numericMessageId} 及其前一层`);
-    await scanTexts(collectMessagesForIds([numericMessageId, numericMessageId - 1]));
-
-    try {
-      insertOrAssignVariables({ [LAST_MESSAGE_VAR]: numericMessageId }, { type: 'chat' });
-      console.info(`苍玄界自动正则: 已更新最后处理的消息 ID 为 ${numericMessageId}`);
-    } catch (error) {
-      console.warn('苍玄界自动正则: 更新最后处理的消息 ID 失败:', error);
+      console.error('扫描消息更新变量失败:', error);
     }
   };
 
@@ -435,16 +323,18 @@ $(async () => {
     const lastMessageId = getVariables({ type: 'chat' })[LAST_MESSAGE_VAR];
 
     if (lastMessageId == null || String(lastMessageId) !== String(messageId)) {
-      console.info(`苍玄界自动正则: 收到新消息 ${messageId}`);
-      await scanMessagePair(messageId);
+      console.info(`苍玄界自动正则: 收到新消息 ${messageId}，扫描最新楼层`);
+      await scanLatestMessage();
+
+      try {
+        insertOrAssignVariables({ [LAST_MESSAGE_VAR]: messageId }, { type: 'chat' });
+        console.info(`苍玄界自动正则: 已更新最后处理的消息ID为 ${messageId}`);
+      } catch (error) {
+        console.warn('更新最后处理的消息ID失败:', error);
+      }
     } else {
       console.info(`苍玄界自动正则: 消息 ${messageId} 已处理过，跳过`);
     }
-  });
-
-  eventOn(tavern_events.MESSAGE_SENT, async messageId => {
-    console.info(`苍玄界自动正则: 捕获用户消息 ${messageId}`);
-    await scanMessagePair(messageId);
   });
 
   eventOn(tavern_events.CHAT_CHANGED, async newChatId => {
@@ -458,9 +348,9 @@ $(async () => {
       }
 
       debounceTimer = setTimeout(async () => {
-        ensurePreloadedRegexes();
-        await syncRegexes();
-        await scanRecentMessages();
+        if (!syncing) {
+          await syncRegexes();
+        }
       }, 500);
     }
   });
@@ -477,9 +367,41 @@ $(async () => {
   });
 
   console.info('苍玄界自动正则: 启动初始化');
-  ensurePreloadedRegexes();
-  await syncRegexes();
-  await scanRecentMessages();
+
+  const storedNames = getStoredNames();
+  if (storedNames.length > 0) {
+    console.info(`苍玄界自动正则: 初始化，从变量加载 ${storedNames.length} 个正则`);
+    await syncRegexes();
+  } else {
+    console.info('苍玄界自动正则: 变量为空，扫描当前消息');
+    await scanLatestMessage();
+  }
+
+  let lastNames = getStoredNames();
+  const originalReplaceVariables = window.replaceVariables;
+
+  window.replaceVariables = function replaceVariablesProxy(text, options) {
+    const result = originalReplaceVariables.call(this, text, options);
+
+    if (!(syncing || (options?.type !== 'chat' && options))) {
+      const currentNames = getStoredNames();
+      if ([...currentNames].sort().join(',') !== [...lastNames].sort().join(',')) {
+        console.info('苍玄界自动正则: 变量发生变化，刷新正则列表');
+
+        if (debounceTimer) {
+          clearTimeout(debounceTimer);
+        }
+
+        debounceTimer = setTimeout(() => {
+          syncRegexes().then(() => {
+            lastNames = getStoredNames();
+          });
+        }, 500);
+      }
+    }
+
+    return result;
+  };
 
   const usableRuleCount = rawRules.filter(rule => !rule.disabled).length;
   console.info(`苍玄界自动正则: 准备了 ${usableRuleCount} 条规则用于检测`);
